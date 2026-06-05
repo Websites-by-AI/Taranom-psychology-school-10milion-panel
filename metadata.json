@@ -1,0 +1,8 @@
+{
+  "name": "4 miion for  Taranom mehr based of :  Arq teb efaf جی اس Remix: Taranom Mehr AI Education Hub",
+  "description": "An AI-powered educational platform featuring smart report card analysis, personalized study planning, and psychological performance tracking for students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
