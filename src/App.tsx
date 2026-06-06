@@ -27,7 +27,7 @@ import ProfileSettingsView from "./components/ProfileSettingsView";
 import CounselorDashboardView from "./components/CounselorDashboardView";
 import TeacherDashboardView from "./components/TeacherDashboardView";
 import { Brain, Settings, Database } from "lucide-react";
-import SmartNotifications from "./components/SmartNotifications";
+import SmartNotifications, { getRoleBannerAlert } from "./components/SmartNotifications";
 import FocusChallengeOverlay from "./components/FocusChallengeOverlay";
 
 export default function App() {
@@ -52,6 +52,7 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isFocusChallengeOpen, setIsFocusChallengeOpen] = useState(false);
+  const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
 
   const navigationItems = {
     student: [
@@ -273,7 +274,7 @@ export default function App() {
 
             {/* Right side: User Profile & Theme switcher & Logout */}
             <div className="flex items-center gap-4 relative">
-              <SmartNotifications onAction={(type) => {
+              <SmartNotifications role={role} onAction={(type) => {
                 if (type === "challenge") setIsFocusChallengeOpen(true);
                 if (type === "nudge") setView("quiz");
               }} />
@@ -432,7 +433,13 @@ export default function App() {
                          <div className="w-full h-px bg-gradient-to-r from-transparent via-indigo-500/15 to-transparent"></div>
                        </div>
                        <div className="relative flex justify-center">
-                         <span className="bg-slate-900 px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] backdrop-blur-sm border border-white/5 rounded-full py-1">منوی هوشمند داوطلب</span>
+                         <span className="bg-slate-900 px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] backdrop-blur-sm border border-white/5 rounded-full py-1">
+                           {role === "student" && "منوی هوشمند داوطلب"}
+                           {role === "parent" && "منوی هوشمند والدین"}
+                           {role === "counselor" && "میزکار مانیتورینگ مشاور"}
+                           {role === "teacher" && "منوی دبیر طراح"}
+                           {role === "admin" && "پنل مدیریت برند SaaS"}
+                         </span>
                        </div>
                     </div>
 
@@ -508,6 +515,67 @@ export default function App() {
 
       {/* Main View Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full" id="main-content-layout">
+        {/* Dynamic, Role-Relevant Alert Banner Board */}
+        {role && !dismissedAlerts[role] && (() => {
+          const alertInfo = getRoleBannerAlert(role, BRAND_CONFIG.name);
+          const getBannerStyles = (type: string) => {
+            switch (type) {
+              case "warning":
+                return "bg-amber-50/95 border-amber-200/80 text-amber-900 ring-amber-500/10";
+              case "critical":
+                return "bg-rose-50/95 border-rose-200/80 text-rose-900 ring-rose-500/10";
+              case "success":
+                return "bg-emerald-50/95 border-emerald-200/80 text-emerald-900 ring-emerald-500/10";
+              default:
+                return "bg-blue-50/95 border-blue-200/80 text-blue-900 ring-blue-500/10";
+            }
+          };
+          const getBannerBadgeStyles = (type: string) => {
+            switch (type) {
+              case "warning":
+                return "bg-amber-100 text-amber-800 border-amber-200";
+              case "critical":
+                return "bg-rose-100 text-rose-800 border-rose-200";
+              case "success":
+                return "bg-emerald-100 text-emerald-800 border-emerald-200";
+              default:
+                return "bg-blue-100 text-blue-800 border-blue-200";
+            }
+          };
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12, scale: 0.98 }}
+              className={`mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm relative overflow-hidden font-sans ring-2 ${getBannerStyles(alertInfo.type)}`}
+              id="role-specific-banner-alert"
+            >
+              <div className="flex items-start sm:items-center gap-3">
+                <div className={`px-2.5 py-1 rounded-xl text-[10px] font-black border uppercase shrink-0 ${getBannerBadgeStyles(alertInfo.type)}`}>
+                  {alertInfo.badge}
+                </div>
+                <div className="text-right">
+                  <h4 className="text-xs font-black tracking-tight flex items-center gap-1.5 justify-start text-right">
+                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-ping" />
+                    <span>{alertInfo.title}</span>
+                  </h4>
+                  <p className="text-[10px] mt-1 opacity-90 leading-relaxed font-bold text-right">{alertInfo.message}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                <button
+                  onClick={() => {
+                    setDismissedAlerts(prev => ({ ...prev, [role]: true }));
+                  }}
+                  className="bg-black/5 hover:bg-black/10 text-current px-3 py-1.5 rounded-xl transition cursor-pointer text-[10px] font-black border border-current/10 active:scale-95"
+                >
+                  فهمیدم، بستن
+                </button>
+              </div>
+            </motion.div>
+          );
+        })()}
+
         {role === "student" && (
           <>
             {view === "dashboard" && <DashboardView student={student} onNavigate={(target) => setView(target)} />}
