@@ -4,6 +4,7 @@ import {
   AlertCircle, Sparkles, CheckCircle2, Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { BRAND_CONFIG } from "../constants";
 
 type TimerMode = "work" | "shortBreak" | "longBreak";
 
@@ -135,7 +136,7 @@ export default function PomodoroTimer() {
       <div className={`p-6 sm:p-8 w-full md:w-1/2 flex flex-col items-center justify-center text-white relative transition-all duration-500 ${modeConfig[mode].bg}`}>
         <div className="absolute top-4 right-6 flex items-center gap-2 opacity-60">
             <Clock size={14} />
-            <span className="text-[10px] font-bold">سیستم پومودورو ترنم مهر</span>
+            <span className="text-[10px] font-bold">سیستم پومودورو {BRAND_CONFIG.name}</span>
         </div>
 
         <div className="text-5xl sm:text-6xl font-black font-mono mb-6 tracking-widest drop-shadow-sm select-none">
@@ -255,7 +256,7 @@ export default function PomodoroTimer() {
                     <span className="text-xs font-black">تشخیص افت عمیق تمرکز!</span>
                 </div>
                 <p className="text-[11px] text-rose-600 leading-relaxed font-bold">
-                    داوطلب گرامی، هوش مصنوعی ترنم مهر متوجه کاهش سطح هوشیاری و تمرکز شما شده است. پیشنهاد می‌شود ۵ دقیقه استراحت چشم یا تنفس کایزنی انجام دهید.
+                    داوطلب گرامی، هوش مصنوعی {BRAND_CONFIG.name} متوجه کاهش سطح هوشیاری و تمرکز شما شده است. پیشنهاد می‌شود ۵ دقیقه استراحت چشم یا تنفس کایزنی انجام دهید.
                 </p>
                 <div className="flex gap-2">
                     <button 

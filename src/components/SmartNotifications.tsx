@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SmartNotification } from "../types";
+import { BRAND_CONFIG } from "../constants";
 
 interface SmartNotificationsProps {
   onAction?: (action: string) => void;
@@ -58,7 +59,7 @@ export default function SmartNotifications({ onAction }: SmartNotificationsProps
         id: "n3",
         type: "nudge",
         title: "کایزن: تشخیص افت تمرکز",
-        message: "سیستم پایش ترنم مهر متوجه شد که مدتی است تست نزدی. ۲۰ تست سریع از 'مشتق' می‌تونه ذهنت رو بیدار کنه!",
+        message: `سیستم پایش ${BRAND_CONFIG.name} متوجه شد که مدتی است تست نزدی. ۲۰ تست سریع از 'مشتق' می‌تونه ذهنت رو بیدار کنه!`,
         actionLabel: "بزن بریم!",
         timestamp: "الان",
         read: false

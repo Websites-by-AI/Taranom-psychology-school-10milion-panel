@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { addSystemLog } from "../lib/syslogs";
+import { BRAND_CONFIG } from "../constants";
 
 // Core interface for logged mock exams
 interface CustomExamPoint {
@@ -260,7 +261,7 @@ export default function ProgressView() {
               <div className="text-right">
                 <span className="font-black text-slate-800 text-sm flex items-center gap-1.5">
                   <BarChart3 className="text-blue-900" size={18} />
-                  <span>آمار توزیع تراز در آزمون‌های شبیه‌ساز ترنم مهر (مبتنی بر استانداردهای کنکور)</span>
+                  <span>آمار توزیع تراز در آزمون‌های شبیه‌ساز {BRAND_CONFIG.name} (مبتنی بر استانداردهای کنکور)</span>
                 </span>
                 <p className="text-[10px] text-slate-400 mt-1">ترازهای شما بین {toPersianNum(minTraz + 300)} تا {toPersianNum(maxTraz - 300)} در نوسان است. نقاط را کلیک یا لمس کنید.</p>
               </div>
@@ -462,7 +463,7 @@ export default function ProgressView() {
             </div>
             <span className="text-xs font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 justify-start">
               <Sparkles size={14} className="animate-spin-slow" />
-              <span>تخمین و پیش‌بینی هوش مصنوعی ترنم مهر</span>
+              <span>تخمین و پیش‌بینی هوش مصنوعی {BRAND_CONFIG.name}</span>
             </span>
             <h3 className="text-base font-black mt-2 font-sans">
               برآورد اهداف ارتقاء تراز: هدف {historyData.length > 0 ? toPersianNum(historyData[historyData.length - 1].traz + 250) : toPersianNum(7200)}

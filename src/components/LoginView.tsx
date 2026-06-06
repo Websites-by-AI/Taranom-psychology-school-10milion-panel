@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, Activity, Wallet, CreditCard } from "lucide-react";
 import { motion } from "motion/react";
 import { Student } from "../types";
+import { BRAND_CONFIG } from "../constants";
 
 interface LoginViewProps {
-  onLogin: (student: Student, role: "student" | "parent" | "admin") => void;
+  onLogin: (student: Student, role: "student" | "parent" | "admin" | "counselor" | "teacher") => void;
 }
 
 export default function LoginView({ onLogin }: LoginViewProps) {
-  const [activeTab, setActiveTab] = useState<"student" | "parent" | "admin">("student");
+  const [activeTab, setActiveTab] = useState<"student" | "parent" | "admin" | "counselor" | "teacher">("student");
   const [mobileNumber, setMobileNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [kanoonCode, setKanoonCode] = useState("");
@@ -71,7 +72,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
     const amount = isOrg ? 10000000 : 450000;
     const description = isOrg 
       ? `درخواست پنل اختصاصی برای موسسه ${regName}` 
-      : `ثبت‌نام داوطلب ${regName} در سیستم هوشمند ترنم مهر`;
+      : `ثبت‌نام داوطلب ${regName} در سیستم هوشمند ${BRAND_CONFIG.name}`;
 
     try {
       const response = await fetch("/api/payment/request", {
@@ -177,6 +178,18 @@ export default function LoginView({ onLogin }: LoginViewProps) {
                         localRegs.find(s => s.code === kanoonCode) || 
                         mockStudents[0];
         onLogin(matched, "parent");
+      } else if (activeTab === "counselor") {
+        const localRegs = getLocalRegistrations();
+        const matched = mockStudents.find(s => s.code === kanoonCode) || 
+                        localRegs.find(s => s.code === kanoonCode) || 
+                        mockStudents[0];
+        onLogin(matched, "counselor");
+      } else if (activeTab === "teacher") {
+        const localRegs = getLocalRegistrations();
+        const matched = mockStudents.find(s => s.code === kanoonCode) || 
+                        localRegs.find(s => s.code === kanoonCode) || 
+                        mockStudents[0];
+        onLogin(matched, "teacher");
       } else {
         onLogin(mockStudents[0], "admin");
       }
@@ -199,13 +212,13 @@ export default function LoginView({ onLogin }: LoginViewProps) {
           <div className="mx-auto w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mb-4 backdrop-blur-md border border-white/20">
             <Sparkles size={36} className="text-amber-400" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight mb-2">ترنم مهر</h1>
+          <h1 className="text-2xl font-black tracking-tight mb-2">{BRAND_CONFIG.name}</h1>
           <p className="text-blue-200/90 text-xs">سامانه هوشمند مانیتورینگ تراز، کایزن درسی و آمادگی کنکور سراسری</p>
         </div>
 
         {/* Roles Tabs */}
-        <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-1" id="login-role-tabs">
-          {(["student", "parent", "admin"] as const).map((tab) => (
+        <div className="flex border-b border-slate-100 bg-slate-50/50 p-2 gap-1 overflow-x-auto whitespace-nowrap" id="login-role-tabs">
+          {(["student", "parent", "counselor", "teacher", "admin"] as const).map((tab) => (
             <motion.button
               key={tab}
               whileHover={{ scale: 1.01 }}
@@ -215,7 +228,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
                 setOtpSent(false);
                 setOtpCode("");
               }}
-              className={`flex-1 py-3 text-[10px] sm:text-xs font-black rounded-xl transition-all duration-300 cursor-pointer relative overflow-hidden flex items-center justify-center ${
+              className={`flex-1 py-3 px-2 text-[10px] sm:text-xs font-black rounded-xl transition-all duration-300 cursor-pointer relative overflow-hidden flex items-center justify-center ${
                 activeTab === tab
                   ? "text-white shadow-lg shadow-indigo-600/20"
                   : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/30"
@@ -225,6 +238,8 @@ export default function LoginView({ onLogin }: LoginViewProps) {
               <span className="relative z-10">
                 {tab === "student" && "🎓 داوطلب"}
                 {tab === "parent" && "👥 والدین"}
+                {tab === "counselor" && "👔 مشاور"}
+                {tab === "teacher" && "👨‍🏫 معلم"}
                 {tab === "admin" && "📐 ادمین"}
               </span>
               {activeTab === tab && (
@@ -258,7 +273,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
           {isRegistering ? (
             <div className="space-y-6 animate-fade-in" id="registration-plans-container">
               <div className="text-center mb-6">
-                <h3 className="text-sm font-black text-slate-800">انتخاب پکیج هوشمند اشتراک ترنم مهر</h3>
+                <h3 className="text-sm font-black text-slate-800">انتخاب پکیج هوشمند اشتراک {BRAND_CONFIG.name}</h3>
                 <p className="text-[10px] text-slate-500 font-bold mt-1">تخمین هزینه و فعال‌سازی خدمات بر اساس نقش کاربری</p>
               </div>
 
@@ -560,7 +575,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
 
               {activeTab === "student" && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">کد داوطلب / شناسه کارنامه ترنم مهر (اختیاری)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">کد داوطلب / شناسه کارنامه {BRAND_CONFIG.name} (اختیاری)</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
                       <Hash size={18} />
@@ -689,7 +704,21 @@ export default function LoginView({ onLogin }: LoginViewProps) {
                 onClick={() => onLogin(mockStudents[0], "parent")}
                 className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-lg transition border border-amber-100 cursor-pointer"
               >
-                پورتال نظارتی والدین ترنم مهر
+                پورتال نظارتی والدین {BRAND_CONFIG.name}
+              </button>
+              <button 
+                type="button"
+                onClick={() => onLogin(mockStudents[0], "counselor")}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-150 text-rose-700 font-bold text-xs rounded-lg transition border border-rose-100 cursor-pointer"
+              >
+                👔 پورتال مشاور ارشد کایزن
+              </button>
+              <button 
+                type="button"
+                onClick={() => onLogin(mockStudents[0], "teacher")}
+                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-150 text-indigo-700 font-bold text-xs rounded-lg transition border border-indigo-105 cursor-pointer"
+              >
+                👨‍🏫 پورتال اختصاصی معلمین کنکور
               </button>
               <button 
                 type="button"

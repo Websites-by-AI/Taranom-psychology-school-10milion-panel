@@ -933,7 +933,10 @@ export default function StudyPlanView({ student, onNavigate }: StudyPlanViewProp
                بر اساس اشتباهات آزمون‌های اخیر، ۱۲ تله متداول در زیست‌شناسی و عروض فشرده برای شما کالیبره شده است.
             </p>
           </div>
-          <button className="w-full py-3 bg-white/20 hover:bg-white/30 rounded-xl text-[10px] font-black transition backdrop-blur-sm border border-white/10 cursor-pointer">
+          <button 
+            onClick={() => onNavigate?.("traps")}
+            className="w-full py-3 bg-white/20 hover:bg-white/30 rounded-xl text-[10px] font-black transition backdrop-blur-sm border border-white/10 cursor-pointer active:scale-95"
+          >
             ورود مستقیم به بانک تله تستی
           </button>
         </div>
@@ -948,7 +951,10 @@ export default function StudyPlanView({ student, onNavigate }: StudyPlanViewProp
                سطح فرسودگی ذهنی و استرس آزمون شما به همراه راه‌حل‌های علمی افزایش سرعت پاسخ‌گویی در این بخش ردیابی می‌شود.
             </p>
           </div>
-          <button className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black transition shadow-md cursor-pointer">
+          <button 
+            onClick={() => onNavigate?.("psychology")}
+            className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black transition shadow-md cursor-pointer active:scale-95"
+          >
             مشاهده رادار استرس و عارضه شناختی
           </button>
         </div>
@@ -963,7 +969,10 @@ export default function StudyPlanView({ student, onNavigate }: StudyPlanViewProp
                نزديک‌ترین وبینار ارزیابی استراتژیک رتبه‌ها و آمادگی روحی پایش کایزن، فردا ساعت ۱۸:۳۰ برگزار می‌گردد.
             </p>
           </div>
-          <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-[10px] font-black transition border border-slate-700 cursor-pointer">
+          <button 
+            onClick={() => onNavigate?.("counselor")}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-[10px] font-black transition border border-slate-700 cursor-pointer active:scale-95"
+          >
             مشاهده جزئیات وبینار پشتیبانی
           </button>
         </div>

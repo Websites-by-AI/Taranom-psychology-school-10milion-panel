@@ -763,6 +763,67 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
         </div>
       </motion.div>
 
+      {/* Real Counselor & Teacher Feedback Card Grid */}
+      {(() => {
+        const cachedComment = localStorage.getItem(`taranom_advisor_comment_${student.id}`) || 
+           "داوطلب کایزن درسی مناسبی دارد؛ اما برای فائق آمدن بر تله‌های مفهومی زیست، افزایش تحلیل پاسخ تشریحی ضروری است.";
+        const cachedPrescription = localStorage.getItem(`taranom_teacher_prescription_${student.id}`) || 
+           "مطالعه مستمر درسنامه فصل سنتز پروتئین زیست‌شناسی و تمرکز بر جزئیات غشای هسته برای مهار تله‌های زمان‌بر اکیداً پیشنهاد می‌شود.";
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="counselor-teacher-student-interaction">
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-amber-50/50 border border-amber-200/50 rounded-[28px] p-6 text-right space-y-3 flex flex-col justify-between"
+              id="counselor-student-interaction-board"
+            >
+              <div className="space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-amber-200/30">
+                  <span className="flex items-center gap-2 text-amber-900 font-black text-xs">
+                    <Users size={16} className="text-amber-600" />
+                    <span>👔 آخرین توصیه‌نامه مشاور ارشد کایزن برای داوطلب</span>
+                  </span>
+                  <span className="text-[9px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-black">فعال و همگام</span>
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed font-semibold">
+                  « {cachedComment} »
+                </p>
+              </div>
+              <div className="text-[10px] text-slate-400 font-extrabold flex gap-4 mt-2 justify-start pt-2 border-t border-amber-200/20">
+                <span>روانشناس: {BRAND_CONFIG.name} مرکزی</span>
+                <span>•</span>
+                <span>متد: پایش مانیتورینگ کارایی</span>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-teal-50/40 border border-teal-200/50 rounded-[28px] p-6 text-right space-y-3 flex flex-col justify-between"
+              id="teacher-student-interaction-board"
+            >
+              <div className="space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-teal-200/30">
+                  <span className="flex items-center gap-2 text-teal-900 font-black text-xs">
+                    <BookOpen size={16} className="text-teal-600 animate-pulse" />
+                    <span>👨‍🏫 طرح درس صادرشده و تکالیف هفتگی طراح کنکور</span>
+                  </span>
+                  <span className="text-[9px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-black">جدید</span>
+                </div>
+                <p className="text-xs text-slate-705 leading-relaxed font-semibold">
+                  « {cachedPrescription} »
+                </p>
+              </div>
+              <div className="text-[10px] text-slate-400 font-extrabold flex gap-4 mt-2 justify-start pt-2 border-t border-teal-200/10">
+                <span>مدرس: دپارتمان تستی {BRAND_CONFIG.name}</span>
+                <span>•</span>
+                <span>پروتکل: کایزن مطالعاتی نوین</span>
+              </div>
+            </motion.div>
+          </div>
+        );
+      })()}
+
       {/* AI Exam Predictor Widget */}
       <AIExamPredictor student={student} />
 

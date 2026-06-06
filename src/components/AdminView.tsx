@@ -6,13 +6,14 @@ import {
 } from "lucide-react";
 import { getSystemLogs, addSystemLog } from "../lib/syslogs";
 import { Student } from "../types";
+import { getInstitutionsList, updateCustomBrandData, BRAND_CONFIG } from "../constants";
 
 import InvestmentView from "./InvestmentView";
 import ContentAuditModule from "./ContentAuditModule";
 
 import SaaSContractView from "./SaaSContractView";
 
-export default function AdminView({ student }: { student: Student }) {
+export default function AdminView({ student, onUpdateBrand }: { student?: Student | null; onUpdateBrand?: () => void }) {
   const [activeTab, setActiveTab] = useState<"students" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "investment" | "audit" | "zarinpal" | "diagnostics" | "contract">("roadmap");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterField, setFilterField] = useState("all");
@@ -32,6 +33,25 @@ export default function AdminView({ student }: { student: Student }) {
   
   // --- INTEGRATIONS STATE ---
   const [geminiKey, setGeminiKey] = useState("");
+
+  // --- CUSTOM BRAND MANAGEMENT STATE ---
+  const [editingBrandId, setEditingBrandId] = useState("taranom");
+  const [bName, setBName] = useState("");
+  const [bFullName, setBFullName] = useState("");
+  const [bSlogan, setBSlogan] = useState("");
+  const [bExamP, setBExamP] = useState("");
+
+  // Initialize brand editor inputs
+  React.useEffect(() => {
+    const list = getInstitutionsList();
+    const active = list.find(l => l.id === editingBrandId);
+    if (active) {
+      setBName(active.name);
+      setBFullName(active.fullName);
+      setBSlogan(active.slogan);
+      setBExamP(active.examProvider);
+    }
+  }, [editingBrandId]);
   const [geminiEndpoint, setGeminiEndpoint] = useState("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent");
   const [dbApiKey, setDbApiKey] = useState("");
   const [dbEndpoint, setDbEndpoint] = useState("https://firestore.googleapis.com/v1/projects/taranom-mehr-app/databases/(default)/documents");
@@ -513,8 +533,8 @@ export default function AdminView({ student }: { student: Student }) {
     setTimeout(() => {
       setUploadedFiles((prev) => [file.name, ...prev]);
       setIsUploading(false);
-      addSystemLog("آپلود کارنامه", student.name, `فایل کارنامه با نام ${file.name} در دیتابیس مرکزی بارگذاری و موتور RAG برای آن فعال شد.`);
-      alert(`✅ کارنامه تراز '${file.name}' با موفقیت در سامانه ترنم مهر آپلود شد و موتور تحلیل RAG فعال گردید.`);
+      addSystemLog("آپلود کارنامه", student?.name || "مدیر ارشد", `فایل کارنامه با نام ${file.name} در دیتابیس مرکزی بارگذاری و موتور RAG برای آن فعال شد.`);
+      alert(`✅ کارنامه تراز '${file.name}' با موفقیت در سامانه با موفقیت آپلود شد و موتور تحلیل RAG فعال گردید.`);
     }, 1500);
   };
 
@@ -658,9 +678,9 @@ export default function AdminView({ student }: { student: Student }) {
           <div>
             <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full border border-indigo-150 font-black inline-block mb-1 flex items-center gap-1 w-fit">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>سامانه ابری و میکروسرویسی ترنم مهر فعال است</span>
+              <span>سامانه ابری و میکروسرویسی {BRAND_CONFIG.name} فعال است</span>
             </span>
-            <h2 className="text-xl font-black text-slate-900">پنل مدیریت هوشمند ترنم مهر</h2>
+            <h2 className="text-xl font-black text-slate-900">پنل مدیریت هوشمند {BRAND_CONFIG.name}</h2>
             <span className="text-xs text-rose-600 font-extrabold block mt-0.5">Senior DevOps Console (v3.2)</span>
           </div>
           <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl border border-slate-800 flex items-center gap-4 font-bold shrink-0 shadow-xl no-print">
@@ -830,6 +850,101 @@ export default function AdminView({ student }: { student: Student }) {
                       </div>
                       <button onClick={() => testConnection("database")} className="w-full bg-amber-500 text-white py-3 rounded-2xl text-xs font-black">تست کوئری دیتابیس</button>
                     </div>
+                  </div>
+                </div>
+
+                {/* Dynamic SaaS Branding customizer */}
+                <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6 text-right mt-8" id="saas-branding-customizer">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                     <div className="flex items-center gap-3">
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                           <Layers size={22} />
+                        </div>
+                        <div>
+                           <h4 className="text-sm font-black text-slate-900 leading-none">مدیریت لایسنس و نام تجاری وب‌سایت (SaaS Whitelabeling)</h4>
+                           <span className="text-[10px] text-slate-400 font-bold">بومی‌سازی و شخصی‌سازی پارامتری نام پنل بر اساس نام هر موسسه</span>
+                        </div>
+                     </div>
+                     <span className="text-[9px] bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black">فعال و نامحدود</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-end">
+                     <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-600 block">۱. انتخاب موسسه برای ویرایش اطلاعات</label>
+                        <select 
+                           value={editingBrandId} 
+                           onChange={(e) => setEditingBrandId(e.target.value)}
+                           className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-semibold focus:ring-1 focus:ring-indigo-500 outline-none"
+                        >
+                           <option value="taranom">شعبه اصلی پنل (ترنم همدلی)</option>
+                           <option value="gaj">نمایندگی آزمون‌های گاج</option>
+                           <option value="ghalamchi">پرتال قلم‌چی (کانون)</option>
+                        </select>
+                     </div>
+                     <div className="lg:col-span-2 text-[10px] text-slate-400 font-semibold leading-relaxed font-sans">
+                        با انتخاب هرکدام از موسسات بالا، می‌توانید نام برند، شعار و عنوان کلیدی آن را تغییر دهید. این تغییرات فوراً و به صورت کاملاً داینامیک در سراسر اپلیکیشن اعمال خواهد شد و در حافظه مرورگر ذخیره می‌شود. برای ذخیره دائمی، مقادیر پیش‌فرض نیز به‌روز شده‌اند.
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-700 block">نام تجاری موسسه (Brand Name)</label>
+                        <input 
+                           type="text" 
+                           value={bName} 
+                           onChange={(e) => setBName(e.target.value)} 
+                           placeholder="مثال: ترنم همدلی" 
+                           className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-bold font-sans" 
+                        />
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-700 block">نام کامل ثبتی موسسه (Full Name)</label>
+                        <input 
+                           type="text" 
+                           value={bFullName} 
+                           onChange={(e) => setBFullName(e.target.value)} 
+                           placeholder="مثال: آکادمی هوشمند ترنم همدلی" 
+                           className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-semibold font-sans" 
+                        />
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-700 block">شعار و زیرعنوان موسسه (Slogan)</label>
+                        <input 
+                           type="text" 
+                           value={bSlogan} 
+                           onChange={(e) => setBSlogan(e.target.value)} 
+                           placeholder="مثال: دستیار تخصصی موفقیت در کنکور سراسری" 
+                           className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-semibold font-sans" 
+                        />
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-700 block">عنوان مرجع آزمون یا مربی هوشمند (Exam Provider)</label>
+                        <input 
+                           type="text" 
+                           value={bExamP} 
+                           onChange={(e) => setBExamP(e.target.value)} 
+                           placeholder="مثال: آزمون‌های شبیه‌ساز ترنم همدلی" 
+                           className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-semibold font-sans" 
+                        />
+                     </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                     <button 
+                        onClick={() => {
+                           updateCustomBrandData(editingBrandId, {
+                              name: bName,
+                              fullName: bFullName,
+                              slogan: bSlogan,
+                              examProvider: bExamP
+                           });
+                           if (onUpdateBrand) onUpdateBrand();
+                           alert("✅ تغییرات برندینگ موسسه با موفقیت در لایه ذخیره‌سازی محلی (SaaS Params) ثبت شد و در تمام بخشهای سایت همگام گردید!");
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl text-xs font-black shadow-lg shadow-indigo-600/20 active:scale-95 transition cursor-pointer font-sans"
+                     >
+                        ذخیره و همگام‌سازی نام تجاری موسسه
+                     </button>
                   </div>
                 </div>
               </div>

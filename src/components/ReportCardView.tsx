@@ -952,7 +952,7 @@ export default function ReportCardView({ student, onNavigate }: ReportCardViewPr
               >
                 <div className="w-12 h-12 border-4 border-blue-950 border-t-amber-400 rounded-full animate-spin"></div>
                 <div className="text-center space-y-1">
-                  <p className="font-bold text-slate-800">هوش کایزن ترنم مهر در حال پایش و سنجش کارنامه‌ علمی شما...</p>
+                  <p className="font-bold text-slate-800">هوش کایزن {BRAND_CONFIG.name} در حال پایش و سنجش کارنامه‌ علمی شما...</p>
                   <p className="text-xs text-slate-400">شناسایی تله‌های تستی کنکور، محاسبات سرعت انتقال، تخمین تراز و رسم روند پویای پیشرفت</p>
                 </div>
               </motion.div>
@@ -1434,7 +1434,7 @@ export default function ReportCardView({ student, onNavigate }: ReportCardViewPr
                           <ClipboardList size={16} />
                           <span>سند کایزن درسی و برنامه جبرانی رفع تله‌های تستی کنکور سراسری</span>
                         </h3>
-                        <p className="text-xs text-indigo-700 font-semibold">مبتنی بر تله‌های علمی فرسودگی و درسی ممیزی‌ شده در کانون علمی ترنم مهر شما</p>
+                        <p className="text-xs text-indigo-700 font-semibold">مبتنی بر تله‌های علمی فرسودگی و درسی ممیزی‌ شده در کانون علمی {BRAND_CONFIG.name} شما</p>
                       </div>
                       <span className="px-3.5 py-1.5 bg-blue-950 text-white rounded-2xl text-[10px] font-black border border-indigo-900 animate-pulse">
                         چرخه هفتگی کایزن فعال است ⏱️
@@ -1490,7 +1490,7 @@ export default function ReportCardView({ student, onNavigate }: ReportCardViewPr
                             <h3 className="text-base font-black text-slate-900">طراح و شبیه‌ساز آزمون تکمیلی شخصی‌سازی شده سراسری</h3>
                           </div>
                           <p className="text-xs text-slate-500 leading-relaxed">
-                            بر پایه هوش کایزن ترنم مهر، با توجه به نقاط ضعف درصدی گزارش شده شما، مباحث و تعداد سوالات آزمون خود را بسازید تا تحت زمان‌بندی مرجع کنکور مورد آزمون آنلاین پیوسته قرار بگیرید.
+                            بر پایه هوش کایزن {BRAND_CONFIG.name}، با توجه به نقاط ضعف درصدی گزارش شده شما، مباحث و تعداد سوالات آزمون خود را بسازید تا تحت زمان‌بندی مرجع کنکور مورد آزمون آنلاین پیوسته قرار بگیرید.
                           </p>
                         </div>
 

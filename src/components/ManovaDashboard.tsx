@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { addSystemLog } from "../lib/syslogs";
 import { Student } from "../types";
+import { BRAND_CONFIG } from "../constants";
 
 // TypeScript interfaces for types of the rebranded Tarmanom Mehr matrix
 interface StudentLead {
@@ -725,12 +726,12 @@ export default function ManovaDashboard({ student, onNavigate }: { student: Stud
         <div className="space-y-1">
           <div className="flex items-center gap-2 justify-start">
             <span className="px-2.5 py-0.5 bg-blue-900 text-white text-[9px] font-black rounded-lg">
-              پایش عملیاتی ترنم مهر
+              پایش عملیاتی {BRAND_CONFIG.name}
             </span>
             <span className="text-slate-300 text-xs">•</span>
             <span className="text-[10px] text-slate-500 font-bold">ماتریس و داشبورد مدیریتی مانوا</span>
           </div>
-          <h1 className="text-xl font-black text-slate-900 tracking-tight">پنل مانیتورینگ جامع و ماتریس چندبعدی هوشمند مانوا ترنم مهر</h1>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">پنل مانیتورینگ جامع و ماتریس چندبعدی هوشمند مانوا {BRAND_CONFIG.name}</h1>
           <p className="text-xs text-slate-500 leading-relaxed">
             سیستم کنترل یکپارچه آموزشی و مالی: پایش مستمر روند ثبت نام داوطلبان، کایزن درسی، توزیع کتب و ترازهای علمی.
           </p>

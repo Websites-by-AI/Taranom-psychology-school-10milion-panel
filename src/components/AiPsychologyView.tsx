@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Student } from "../types";
 import { addSystemLog } from "../lib/syslogs";
+import { BRAND_CONFIG } from "../constants";
 
 interface AiPsychologyViewProps {
   student: Student;
@@ -392,7 +393,7 @@ export default function AiPsychologyView({ student }: { student: Student }) {
           sleepEfficacy: Math.round(qSleep * 10)
         },
         stressLevel: stressSim,
-        diagnosis: `بر اساس مدل‌های روان‌شناختی ترنم مهر، سطح تنش تحصیلی شما معادل ${stressSim}٪ ارزیابی می‌شود. کمال‌گرایی منفی در مباحث درسی (${qPerfectionism}/۱۰) باعث خستگی زودرس ذهن در بعد از ظهر شده است.`,
+        diagnosis: `بر اساس مدل‌های روان‌شناختی ${BRAND_CONFIG.name}، سطح تنش تحصیلی شما معادل ${stressSim}٪ ارزیابی می‌شود. کمال‌گرایی منفی در مباحث درسی (${qPerfectionism}/۱۰) باعث خستگی زودرس ذهن در بعد از ظهر شده است.`,
         cognitiveTrap: qFocus < 5 ? "سوگیری تمرکز سست و نشت زمانی در شیفت‌های درسی طولانی." : "تله تفکر فرسایشی (Overthinking) و وسواس گزینه‌های آزمونی.",
         remedies: [
           "پیاده‌سازی تکنیک پومودورو ۵۰-۱۰ و اجتناب تام از بررسی شبکه‌های مجازی درون استراحت‌ها.",
@@ -582,7 +583,7 @@ export default function AiPsychologyView({ student }: { student: Student }) {
           </div>
           <h1 className="text-3xl font-black tracking-tight font-sans">مرکز پایش روان‌شناختی هوشمند و عصب‌سنجی</h1>
           <p className="text-xs text-slate-300 font-bold max-w-xl leading-relaxed">
-            محاسبه هوشمند سطح اضطراب کنکور، رصد نوسان تمرکز ناشی از خستگی عصبی و تکنیک‌های بیوفیدبک ذهن بر پایه الگوریتم‌های شناختی و هوش مصنوعی ترنم مهر.
+            محاسبه هوشمند سطح اضطراب کنکور، رصد نوسان تمرکز ناشی از خستگی عصبی و تکنیک‌های بیوفیدبک ذهن بر پایه الگوریتم‌های شناختی و هوش مصنوعی ${BRAND_CONFIG.name}.
           </p>
         </div>
 
@@ -644,7 +645,7 @@ export default function AiPsychologyView({ student }: { student: Student }) {
                   <h2 className="text-sm font-black">پرسشنامه سلامت ذهن و خستگی شناختی داوطلب</h2>
                 </div>
                 <p className="text-[11px] text-slate-400 font-bold leading-relaxed">
-                  احساس روحی خود را در بازه ۱ تا ۱۰ (بیشترین شدت) میزان کنید تا مدل تراز روانشناختی ترنم مهر الگوهای خنثی‌سازی تله‌های تستی را بروزرسانی کند.
+                  احساس روحی خود را در بازه ۱ تا ۱۰ (بیشترین شدت) میزان کنید تا مدل تراز روانشناختی ${BRAND_CONFIG.name} الگوهای خنثی‌سازی تله‌های تستی را بروزرسانی کند.
                 </p>
 
                 {/* Slider 1 */}
@@ -820,7 +821,7 @@ export default function AiPsychologyView({ student }: { student: Student }) {
                         {currentReport.stressLevel > 70 ? "سطح استرس نهایی بحرانی ! احتمال بیش‌ریزی عصبی" : currentReport.stressLevel > 45 ? "استرس بهینه مربی‌گری (یوسترس محرک)" : "بهداشت عالی روان و آرامش پاراسمپاتیکی پایدار"}
                       </div>
                       <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
-                        سنسورهای شناختی ترنم مهر پشنهاد می‌کنند در فواصل مطالعه پومودورو، برای ریکاوری از تنفس رینگ فیدبک استفاده فرمایید.
+                        سنسورهای شناختی ${BRAND_CONFIG.name} پشنهاد می‌کنند در فواصل مطالعه پومودورو، برای ریکاوری از تنفس رینگ فیدبک استفاده فرمایید.
                       </p>
                     </div>
                   </div>
@@ -941,7 +942,7 @@ export default function AiPsychologyView({ student }: { student: Student }) {
                   <div className="col-span-12 bg-white p-6 rounded-3xl border border-slate-150 shadow-sm space-y-4">
                     <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                       <Sparkles size={16} className="text-indigo-600 animate-pulse" />
-                      <h4 className="text-xs font-black text-slate-800">تشخیص شناختی دکتر رادان (مشاور روانشناسی ترنم مهر)</h4>
+                      <h4 className="text-xs font-black text-slate-800">تشخیص شناختی دکتر رادان (مشاور روانشناسی {BRAND_CONFIG.name})</h4>
                     </div>
 
                     <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-2">
@@ -1133,7 +1134,7 @@ export default function AiPsychologyView({ student }: { student: Student }) {
 
               <div className="mt-4 p-4 border border-indigo-100 bg-indigo-50/30 rounded-2xl text-[10px] font-bold text-slate-500 leading-relaxed">
                 <span className="text-indigo-950 font-black block mb-1">💡 توصیه مشاور:</span>
-                برای گرفتن نتایج بهتر و ممانعت از پرش حسی چشم‌ها، در مباحث کنکوری شیفت عصر یا قبل از کوییزهای آزمایشی شبیه‌ساز ترنم مهر، این تمرین تنفس را به مدت ۲ الی ۵ دقیقه مستمراً ادامه دهید.
+                برای گرفتن نتایج بهتر و ممانعت از پرش حسی چشم‌ها، در مباحث کنکوری شیفت عصر یا قبل از کوییزهای آزمایشی شبیه‌ساز {BRAND_CONFIG.name}، این تمرین تنفس را به مدت ۲ الی ۵ دقیقه مستمراً ادامه دهید.
               </div>
             </div>
           </motion.div>

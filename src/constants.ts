@@ -1,44 +1,63 @@
 /**
- * تنظیمات سراسری پلتفرم ترنم مهر
+ * تنظیمات سراسری پلتفرم ترنم همدلی
  * تمام نام‌های تجاری و متن‌های ثابت در این فایل مدیریت می‌شوند.
  */
 
-export const INSTITUTIONS = [
+// Helper to get custom institution values from localStorage dynamically
+const getStoredValue = (key: string, defaultValue: string): string => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem(key) || defaultValue;
+  }
+  return defaultValue;
+};
+
+export const getInstitutionsList = () => [
   {
     id: "taranom",
-    name: "ترنم مهر",
-    fullName: "آکادمی هوشمند ترنم مهر",
-    slogan: "دستیار تخصصی موفقیت در کنکور سراسری",
-    examProvider: "آزمون‌های شبیه‌ساز ترنم مهر",
+    name: getStoredValue("taranom_custom_name_taranom", "ترنم همدلی"),
+    fullName: getStoredValue("taranom_custom_fullname_taranom", "آکادمی هوشمند ترنم همدلی"),
+    slogan: getStoredValue("taranom_custom_slogan_taranom", "دستیار تخصصی موفقیت در کنکور سراسری"),
+    examProvider: getStoredValue("taranom_custom_examp_taranom", "آزمون‌های شبیه‌ساز ترنم همدلی"),
     theme: "indigo"
   },
   {
     id: "gaj",
-    name: "گاج",
-    fullName: "انتشارات بین‌المللی گاج",
-    slogan: "مدرن‌ترین سیستم آزمون‌های آزمایشی",
-    examProvider: "آزمون‌های سراسری گاج",
+    name: getStoredValue("taranom_custom_name_gaj", "گاج"),
+    fullName: getStoredValue("taranom_custom_fullname_gaj", "انتشارات بین‌المللی گاج"),
+    slogan: getStoredValue("taranom_custom_slogan_gaj", "مدرن‌ترین سیستم آزمون‌های آزمایشی"),
+    examProvider: getStoredValue("taranom_custom_examp_gaj", "آزمون‌های سراسری گاج"),
     theme: "blue"
   },
   {
     id: "ghalamchi",
-    name: "قلم‌چی",
-    fullName: "بنیاد علمی آموزشی قلم‌چی",
-    slogan: "برنامه‌ریزی و آزمون‌های برنامه‌ای",
-    examProvider: "آزمون‌های راهبردی کانون",
+    name: getStoredValue("taranom_custom_name_ghalamchi", "قلم‌چی"),
+    fullName: getStoredValue("taranom_custom_fullname_ghalamchi", "بنیاد علمی آموزشی قلم‌چی"),
+    slogan: getStoredValue("taranom_custom_slogan_ghalamchi", "برنامه‌ریزی و آزمون‌های برنامه‌ای"),
+    examProvider: getStoredValue("taranom_custom_examp_ghalamchi", "آزمون‌های راهبردی کانون"),
     theme: "blue"
   }
 ];
 
+export const INSTITUTIONS = getInstitutionsList();
+
 export let BRAND_CONFIG = { ...INSTITUTIONS[0] };
 
 export const setBrandById = (id: string) => {
-  const brand = INSTITUTIONS.find(i => i.id === id);
+  const currentList = getInstitutionsList();
+  const brand = currentList.find(i => i.id === id);
   if (brand) {
     BRAND_CONFIG = { ...brand };
-    // This will require a page reload or state sync in a real app,
-    // but for this prototype, we'll use it as a reactive source if possible.
   }
+};
+
+export const updateCustomBrandData = (id: string, updates: { name?: string; fullName?: string; slogan?: string; examProvider?: string }) => {
+  if (typeof window !== "undefined") {
+    if (updates.name) localStorage.setItem(`taranom_custom_name_${id}`, updates.name);
+    if (updates.fullName) localStorage.setItem(`taranom_custom_fullname_${id}`, updates.fullName);
+    if (updates.slogan) localStorage.setItem(`taranom_custom_slogan_${id}`, updates.slogan);
+    if (updates.examProvider) localStorage.setItem(`taranom_custom_examp_${id}`, updates.examProvider);
+  }
+  setBrandById(id);
 };
 
 /**

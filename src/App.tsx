@@ -24,13 +24,15 @@ import MetacognitionLabView from "./components/MetacognitionLabView";
 import CounselingAdvisorView from "./components/CounselingAdvisorView";
 import HistoricalDatabaseView from "./components/HistoricalDatabaseView";
 import ProfileSettingsView from "./components/ProfileSettingsView";
+import CounselorDashboardView from "./components/CounselorDashboardView";
+import TeacherDashboardView from "./components/TeacherDashboardView";
 import { Brain, Settings, Database } from "lucide-react";
 import SmartNotifications from "./components/SmartNotifications";
 import FocusChallengeOverlay from "./components/FocusChallengeOverlay";
 
 export default function App() {
   const [student, setStudent] = useState<Student | null>(null);
-  const [role, setRole] = useState<"student" | "parent" | "admin" | null>(null);
+  const [role, setRole] = useState<"student" | "parent" | "admin" | "counselor" | "teacher" | null>(null);
   const [view, setView] = useState<string>("dashboard");
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem("taranom_app_theme") || BRAND_CONFIG.theme || "classic";
@@ -65,6 +67,7 @@ export default function App() {
       { id: "metacognition", label: "آزمایشگاه فراشناخت", icon: Sparkles, highlight: true },
       { id: "counseling", label: "انتخاب رشته هوشمند", icon: GraduationCap },
       { id: "historical-db", label: "بانک تراز و قبولی", icon: Database },
+      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
     ],
     parent: [
       { id: "parents", label: "نظارت آنلاین والدین", icon: Users },
@@ -73,6 +76,22 @@ export default function App() {
       { id: "psychology", label: "پایش عملکرد ذهنی داوطلب", icon: Brain },
       { id: "counseling", label: "تخمین قبولی فرزند", icon: GraduationCap },
       { id: "historical-db", label: "بانک نتایج کنکور", icon: Database },
+      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
+    ],
+    counselor: [
+      { id: "counselor-dashboard", label: "میزکار مانیتورینگ مشاور", icon: Users, highlight: true },
+      { id: "manova", label: "پورتال آکادمیک کایزن مانوا", icon: Sparkles },
+      { id: "report", label: "کارنامه و درصدهای ممیزی", icon: FileSpreadsheet },
+      { id: "psychology", label: "رادار اضطراب و بهداشت روان", icon: Brain },
+      { id: "counselor-chat", label: "جلسه مشاوره و توصیه‌نامه", icon: MessageSquare },
+      { id: "traps", label: "تله‌های کالیبره زیست", icon: Target },
+      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
+    ],
+    teacher: [
+      { id: "teacher-dashboard", label: "میزکار مانیتورینگ دبیر", icon: Users, highlight: true },
+      { id: "report", label: "کارنامه‌های دانش‌آموزان", icon: FileSpreadsheet },
+      { id: "traps", label: "تله‌های کالیبره زیست", icon: Target },
+      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
     ],
     admin: [
       { id: "admin", label: "نقشه راه SaaS", icon: Users },
@@ -152,13 +171,17 @@ export default function App() {
     }
   };
 
-  const handleLogin = (matchedStudent: Student, selectedRole: "student" | "parent" | "admin") => {
+  const handleLogin = (matchedStudent: Student, selectedRole: "student" | "parent" | "admin" | "counselor" | "teacher") => {
     setStudent(matchedStudent);
     setRole(selectedRole);
     if (selectedRole === "parent") {
       setView("parents");
     } else if (selectedRole === "admin") {
       setView("admin");
+    } else if (selectedRole === "counselor") {
+      setView("counselor-dashboard");
+    } else if (selectedRole === "teacher") {
+      setView("teacher-dashboard");
     } else {
       setView("dashboard");
     }
@@ -193,7 +216,7 @@ export default function App() {
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>سامانه ابری و میکروسرویسی ترنم مهر فعال است</span>
+            <span>سامانه ابری و میکروسرویسی {BRAND_CONFIG.name} فعال است</span>
           </span>
           <span className="hidden sm:inline text-slate-500">|</span>
           <span className="hidden sm:inline bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/10">پروتکل امنیتی ادمین متصل است</span>
@@ -260,6 +283,8 @@ export default function App() {
                 <span className="text-[10px] text-slate-400 font-bold block text-right mt-0.5">
                   {role === "student" && "داوطلب آزمون‌های کنکور سراسری"}
                   {role === "parent" && "سیستم نظارتی و پایش والدین"}
+                  {role === "counselor" && `👔 مربی و مشاور رتبه برتر ${BRAND_CONFIG.name}`}
+                  {role === "teacher" && `👨‍🏫 دبیر طراح و معلم ارشد ${BRAND_CONFIG.name}`}
                   {role === "admin" && "مدیر کل و معمار ارشد آکادمی"}
                 </span>
               </div>
@@ -286,7 +311,7 @@ export default function App() {
                     </div>
                     <div className="space-y-1">
                       {[
-                        { id: "classic", name: "سورمه‌ای اصیل (ترنم مهر)", color: "bg-blue-900" },
+                        { id: "classic", name: `سورمه‌ای اصیل (${BRAND_CONFIG.name})`, color: "bg-blue-900" },
                         { id: "emerald", name: "سبز کانون (آموزشی)", color: "bg-emerald-800" },
                         { id: "ruby", name: "یاقوت درخشان (زرشکی)", color: "bg-rose-900" },
                         { id: "amber", name: "کهربایی گرم (طلایی)", color: "bg-amber-850" },
@@ -497,6 +522,7 @@ export default function App() {
             {view === "metacognition" && <MetacognitionLabView student={student} />}
             {view === "counseling" && <CounselingAdvisorView student={student} />}
             {view === "historical-db" && <HistoricalDatabaseView student={student} />}
+            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
           </>
         )}
 
@@ -508,13 +534,35 @@ export default function App() {
             {view === "psychology" && <AssessmentView student={student} onNavigateChange={(target) => setView(target)} />}
             {view === "counseling" && <CounselingAdvisorView student={student} />}
             {view === "historical-db" && <HistoricalDatabaseView student={student} />}
+            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
           </>
         )}
 
         {role === "admin" && (
           <>
-            {view === "admin" && <AdminView student={student} />}
+            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
+          </>
+        )}
+
+        {role === "counselor" && (
+          <>
+            {view === "counselor-dashboard" && <CounselorDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
+            {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
+            {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
+            {view === "psychology" && <AssessmentView student={student} onNavigateChange={(target) => setView(target)} />}
+            {view === "counselor-chat" && <CounselorView student={student} onNavigate={(target) => setView(target)} />}
+            {view === "traps" && <TestTrapsView student={student} />}
+            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
+          </>
+        )}
+
+        {role === "teacher" && (
+          <>
+            {view === "teacher-dashboard" && <TeacherDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
+            {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
+            {view === "traps" && <TestTrapsView student={student} />}
+            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
           </>
         )}
 
