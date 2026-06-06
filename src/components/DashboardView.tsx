@@ -9,7 +9,9 @@ import { Student, Weakness, DailyPlan, TestTrap } from "../types";
 import { BRAND_CONFIG } from "../constants";
 import GoalTracker from "./GoalTracker";
 import AIExamPredictor from "./AIExamPredictor";
+import RealTimeExamSimulator from "./RealTimeExamSimulator";
 import AdmissionForecastWidget from "./AdmissionForecastWidget";
+import IntelligentInterventionSystem from "./IntelligentInterventionSystem";
 import { addSystemLog } from "../lib/syslogs";
 import { getTestTraps } from "../lib/traps";
 import TrapsTreeMap from "./TrapsTreeMap";
@@ -343,6 +345,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
           </div>
         </div>
       </div>
+
+      {/* Intelligent Intervention System (DIS) - سیستم مداخله گر هوشمند */}
+      <IntelligentInterventionSystem student={student} />
 
       {/* Cloud & System Operational Status Card */}
       <motion.div 
@@ -707,7 +712,7 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
               {loadingQuote ? (
                 <span className="inline-block h-4 w-48 bg-white/20 animate-pulse rounded"></span>
               ) : (
-                `« {quote} »`
+                `« ${quote} »`
               )}
             </h2>
             
@@ -760,6 +765,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
 
       {/* AI Exam Predictor Widget */}
       <AIExamPredictor student={student} />
+
+      {/* Premium Real-time High-pressure Exam Simulator */}
+      <RealTimeExamSimulator student={student} />
 
       {/* Admission Forecast Widget */}
       <AdmissionForecastWidget student={student} />
@@ -1038,9 +1046,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
               <Brain size={16} className="text-indigo-600" />
             </div>
             <div className="space-y-1">
-              <strong className="text-xs font-black text-slate-900 block">یارِ علمیِ تو میگه:</strong>
+              <strong className="text-xs font-black text-slate-900 block">آخرین تحلیل هوش مصنوعی:</strong>
               <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                توی درس علوم، بخشِ «سفر درون سلول» نیاز به یکم تمرین و رفاقتِ بیشتر داره! اصلاً نگرانش نباش؛ اگر روزی فقط ۱۰ دقیقه برای این بخش وقت بگذاری، خیلی زودِ زود این نمودار قرمز رو با هم سبز یا ردیف می‌کنیم. 🚀
+                براساس نمودار فوق، درس <span className="text-rose-600 font-black">«زیست‌شناسی»</span> به دلیل درصد پاسخ‌گویی پایین ({toPersianNum(28)}٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی فصل‌های ژنتیک و گیاهی معطوف کنید.
               </p>
             </div>
           </div>
@@ -1049,9 +1057,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
               <Zap size={16} className="text-amber-500" />
             </div>
             <div className="space-y-1">
-              <strong className="text-xs font-black text-slate-900 block">پیشنهاد مربی همدلتر:</strong>
+              <strong className="text-xs font-black text-slate-900 block">راهکار مربیگری:</strong>
               <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                بخش فرمول‌های شیمیایی جوریه که اگر هر روز فقط ۵ تا تمرینِ شبیه بازی ازش حل کنی، قفلش کاملاً برات باز میشه. این چالشِ ۵ تمرینیِ امروز رو از دست نده! 💪
+                درس <span className="text-amber-600 font-black">«شیمی»</span> نیز در وضعیت هشدار ({toPersianNum(35)}٪) است. حل روزانه حداقل ۳۰ تست از مبحث استوکیومتری می‌تواند تراز شما را در این درس تا ۱۵٪ بهبود بخشد.
               </p>
             </div>
           </div>
@@ -1486,9 +1494,26 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-600 leading-relaxed bg-white/70 p-2.5 rounded-xl border border-slate-100 text-right">
+                    <p className="text-[11px] text-slate-600 leading-relaxed bg-white/70 p-2.5 rounded-xl border border-slate-100 text-right font-medium">
                       <span className="font-extrabold text-indigo-800">توصیه مربی کنکور: </span>{weak.recommendation}
                     </p>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                       <button
+                         onClick={() => onNavigate("schedule")}
+                         className="flex-1 py-2.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-slate-50 text-slate-600 hover:text-indigo-700 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                       >
+                          <Calendar size={13} className="text-indigo-500" />
+                          <span>ترمیم در برنامه مطالعاتی</span>
+                       </button>
+                       <button
+                         onClick={() => onNavigate("traps")}
+                         className="flex-1 py-2.5 bg-indigo-950 text-white hover:bg-slate-900 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 border border-indigo-950"
+                       >
+                          <Target size={13} className="text-amber-400" />
+                          <span>تحلیل تله‌های این مبحث</span>
+                       </button>
+                    </div>
                   </div>
                 ))}
               </div>

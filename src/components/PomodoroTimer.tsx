@@ -130,15 +130,15 @@ export default function PomodoroTimer() {
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col md:flex-row" id="pomodoro-timer-integrated">
+    <div className="bg-white rounded-[28px] md:rounded-[32px] border border-slate-150 shadow-sm overflow-hidden flex flex-col md:flex-row" id="pomodoro-timer-integrated">
       {/* Left: Timer Display */}
-      <div className={`p-8 md:w-1/2 flex flex-col items-center justify-center text-white relative transition-all duration-500 ${modeConfig[mode].bg}`}>
+      <div className={`p-6 sm:p-8 w-full md:w-1/2 flex flex-col items-center justify-center text-white relative transition-all duration-500 ${modeConfig[mode].bg}`}>
         <div className="absolute top-4 right-6 flex items-center gap-2 opacity-60">
             <Clock size={14} />
             <span className="text-[10px] font-bold">سیستم پومودورو ترنم مهر</span>
         </div>
 
-        <div className="text-6xl font-black font-mono mb-6 tracking-widest drop-shadow-sm select-none">
+        <div className="text-5xl sm:text-6xl font-black font-mono mb-6 tracking-widest drop-shadow-sm select-none">
           {formatTime(minutes, seconds)}
         </div>
 
@@ -151,28 +151,28 @@ export default function PomodoroTimer() {
           {!isActive ? (
             <button 
               onClick={startTimer}
-              className="w-14 h-14 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg cursor-pointer"
+              className="w-13 h-13 sm:w-14 sm:h-14 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg cursor-pointer"
             >
               <Play fill="currentColor" size={24} />
             </button>
           ) : (
             <button 
               onClick={pauseTimer}
-              className="w-14 h-14 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg cursor-pointer"
+              className="w-13 h-13 sm:w-14 sm:h-14 bg-white text-slate-900 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg cursor-pointer"
             >
               <Pause fill="currentColor" size={24} />
             </button>
           )}
           <button 
             onClick={resetTimer}
-            className="w-12 h-12 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-white/30 transition border border-white/20 cursor-pointer"
+            className="w-11 h-11 sm:w-12 sm:h-12 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-white/30 transition border border-white/20 cursor-pointer"
           >
             <RotateCcw size={20} />
           </button>
         </div>
 
         {/* Sessions indicator */}
-        <div className="mt-8 flex gap-1">
+        <div className="mt-8 flex gap-1.5">
           {[1, 2, 3, 4].map(i => (
             <div 
               key={i} 
@@ -185,7 +185,7 @@ export default function PomodoroTimer() {
       </div>
 
       {/* Right: AI Monitoring & Config */}
-      <div className="p-8 md:w-1/2 flex flex-col justify-between text-right space-y-6">
+      <div className="p-6 sm:p-8 w-full md:w-1/2 flex flex-col justify-between text-right space-y-6">
           <div className="space-y-4">
             <div className="flex justify-between items-center">
                <div className="flex items-center gap-1.5 text-amber-500 bg-amber-50 px-2 py-1 rounded-lg">

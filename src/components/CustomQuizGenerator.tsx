@@ -97,6 +97,57 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
       trapType: "تله تحلیل جابجایی منحنی‌ها",
       difficulty: "سخت",
       importance: "medium"
+    },
+    {
+      id: "Q-MATH-01",
+      subject: "ریاضیات",
+      title: "مشتق و دیفرانسیل - مشتق توابع مرکب",
+      text: "اگر f(x) = sqrt(x + sqrt(x)) باشد، مقدار عددی مشتق f در نقطه‌ی x = 1 (یعنی f'(1)) کدام گزینه است؟",
+      options: [
+        "۱. 3 * sqrt(2) / 8",
+        "۲. 3 / (4 * sqrt(2))",
+        "۳. sqrt(2) / 4",
+        "۴. 1 / (2 * sqrt(2))"
+      ],
+      correctIdx: 1,
+      explanation: "با استفاده از قانون زنجیره‌ای، داریم: f'(x) = 1/(2*sqrt(x + sqrt(x))) * (1 + 1/(2*sqrt(x))). با قرار دادن x = 1، به دست می‌آید: f'(1) = 1/(2*sqrt(2)) * (1 + 1/2) = 1/(2*sqrt(2)) * 3/2 = 3 / (4*sqrt(2)).",
+      trapType: "تله محاسباتی در زنجیره‌ی مشتق توابع رادیکالی داخلی",
+      difficulty: "بسیار سخت",
+      importance: "high"
+    },
+    {
+      id: "Q-MATH-02",
+      subject: "ریاضیات",
+      title: "مشتق و کاربرد مشتق - نقاط بحرانی و عطف",
+      text: "تابع f(x) = x^3 - 3x^2 + 5 در کدام بازه‌ی زیر اکیداً نزولی است؟",
+      options: [
+        "۱. بازه (0, 2)",
+        "۲. بازه (0, 1)",
+        "۳. بازه (1, 3)",
+        "۴. بازه (-inf, 0)"
+      ],
+      correctIdx: 0,
+      explanation: "مشتق تابع برابر است با f'(x) = 3x^2 - 6x = 3x(x - 2). برای اینکه تابع اکیداً نزولی باشد باید f'(x) < 0 باشد که این شرط در بازه ریشه‌های مشتق یعنی (0, 2) برقرار است.",
+      trapType: "تله تعیین علامت اشتباه و جابجایی محدوده صعودی با نزولی",
+      difficulty: "سخت",
+      importance: "high"
+    },
+    {
+      id: "Q-MATH-03",
+      subject: "ریاضیات",
+      title: "مشتق - تعریف مشتق در نقاط مرزی و قدرمطلق",
+      text: "تابع f(x) = |x^2 - 4|(x - 2) در نقطه مرزی x = 2 دارای کدام وضعیت مشتق‌‌پذیری زیر است؟",
+      options: [
+        "۱. مشتق چپ متمایز از مشتق راست دارد و مشتق‌پذیر نیست",
+        "۲. مشتق‌ ناپذیر است چون در بازه تعریف نشده است",
+        "۳. مشتق‌پذیر است و مقدار آن برابر با صفر است",
+        "۴. مشتق‌پذیر است و مقدار آن برابر با ۴ است"
+      ],
+      correctIdx: 2,
+      explanation: "با باز کردن قدرمطلق در اطراف x=2، متوجه می‌شویم که برای x > 2، ضابطه f(x) = (x-2)^2*(x+2) و برای x < 2 ضابطه f(x) = -(x-2)^2*(x+2) است. مشتق هر دو طرف در x=2 برابر با 0 است، لذا مشتق راست و چپ برابر بوده و تابع مشتق‌پذیر با مشتق صفر است.",
+      trapType: "تله ذهنی متداول که گمان می‌رود تمام توابع قدرمطلقی در ریشه‌ها مشتق‌ناپذیرند",
+      difficulty: "بسیار سخت",
+      importance: "high"
     }
   ];
 
@@ -680,111 +731,186 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
         {quizStarted && !quizFinished && activeQuestion && (
           <motion.div 
             key="quiz-active-view"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
             className="space-y-6"
           >
-            {/* Context bar */}
-            <div className="flex flex-wrap justify-between items-center gap-3 bg-indigo-50 p-3 px-5 rounded-2xl border border-indigo-100">
-              <div className="flex items-center gap-2">
-                <span className="p-1 px-2.5 bg-indigo-600 text-white text-[9px] rounded-lg font-black">{activeQuestion.subject}</span>
-                <span className="p-1 px-2.5 bg-slate-200 text-slate-700 text-[9px] rounded-lg font-bold">دشواری: {activeQuestion.difficulty}</span>
+            {/* Context Bar & High Fidelity Progress Indicator */}
+            <div className="bg-slate-50 border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="px-3.5 py-1.5 bg-indigo-650 text-white text-[10px] rounded-xl font-black shadow-xs tracking-wide">
+                    {activeQuestion.subject}
+                  </span>
+                  <span className={`px-3.5 py-1.5 text-[10px] rounded-xl font-black border ${
+                    activeQuestion.difficulty === "بسیار سخت" 
+                      ? "bg-rose-50/80 text-rose-700 border-rose-200/65" 
+                      : activeQuestion.difficulty === "المپیاد علمی"
+                      ? "bg-purple-50/85 text-purple-700 border-purple-200/65"
+                      : "bg-amber-50/80 text-amber-700 border-amber-200/65"
+                  }`}>
+                    درجه سختی: {activeQuestion.difficulty}
+                  </span>
+                  {isTimedQuiz && (
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 font-mono text-[11px] font-black rounded-xl border border-rose-150 animate-pulse">
+                      <Timer size={13} />
+                      <span>{formatTimer(timeLeft)}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-500 font-black flex items-center gap-1">
+                  <span>سگمنت تله‌ساز:</span>
+                  <span className="text-indigo-950 font-bold bg-white px-2.5 py-1 rounded-lg border border-slate-150 shadow-2xs">
+                    {toPersianNum(currentQuestionIndex + 1)} از {toPersianNum(selectedQuestions.length)}
+                  </span>
+                </div>
               </div>
-              <div className="text-[11px] text-indigo-950 font-black">
-                سوال {toPersianNum(currentQuestionIndex + 1)} از {toPersianNum(selectedQuestions.length)} سگمنت تله‌ساز
+
+              {/* Dynamic Progress Bar */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                  <span>سطح پیشروی در دفترچه هوشمند</span>
+                  <span>{toPersianNum(Math.round(((currentQuestionIndex) / selectedQuestions.length) * 100))}% کامل شده</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-200/60 rounded-full overflow-hidden p-0.5 border border-slate-100">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${((currentQuestionIndex + (isChecked ? 1 : 0.5)) / selectedQuestions.length) * 100}%` }}
+                    transition={{ type: "spring", stiffness: 60 }}
+                    className="h-full rounded-full bg-gradient-to-l from-indigo-550 via-indigo-600 to-indigo-700 shadow-xs"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Question Card Box */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-xs space-y-4">
-              <div className="flex gap-3.5 items-start">
-                <div className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">
-                  {toPersianNum(currentQuestionIndex + 1)}
-                </div>
+            {/* Premium Question Card Box */}
+            <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/80 shadow-md shadow-slate-100/40 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-2 h-full bg-indigo-650" />
+              
+              <div className="space-y-6">
                 <div>
-                  <h4 className="text-xs font-black text-indigo-700 mb-1.5">{activeQuestion.title}</h4>
-                  <p className="text-sm font-black text-slate-900 leading-relaxed text-right">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="p-1 px-2.5 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black border border-indigo-100/50">
+                      ثبتی: {activeQuestion.id}
+                    </span>
+                    <h4 className="text-xs font-black text-slate-400">{activeQuestion.title}</h4>
+                  </div>
+                  
+                  <p className="text-base md:text-[17px] font-black text-slate-800 leading-relaxed md:leading-loose text-right">
                     {activeQuestion.text}
                   </p>
                 </div>
-              </div>
 
-              {/* Options lists */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3">
-                {activeQuestion.options.map((opt, oIdx) => {
-                  const isSelected = userAnswers[currentQuestionIndex] === oIdx;
-                  
-                  // Visual decorators for result verification in training mode
-                  let btnStyle = "bg-slate-50/50 hover:bg-slate-50 border-slate-150 text-slate-800";
-                  let iconElement = null;
+                {/* Options cards - Redesigned cleanly with Persian circular radio icons */}
+                <div className="grid grid-cols-1 gap-3.5 pt-2">
+                  {activeQuestion.options.map((opt, oIdx) => {
+                    const isSelected = userAnswers[currentQuestionIndex] === oIdx;
+                    
+                    // Cleaner text without option prefix character if possible
+                    let cleanText = opt;
+                    const matchPrefix = opt.match(/^([۱۲۳۴1234]\.\s*)/);
+                    if (matchPrefix) {
+                      cleanText = opt.substring(matchPrefix[0].length);
+                    }
 
-                  if (quizMode === "practice" && isChecked) {
-                    if (oIdx === activeQuestion.correctIdx) {
-                      btnStyle = "bg-emerald-50 border-emerald-300 text-emerald-950 ring-1 ring-emerald-300";
-                      iconElement = <CheckCircle2 size={16} className="text-emerald-600 ml-2" />;
-                    } else if (isSelected) {
-                      btnStyle = "bg-rose-50 border-rose-300 text-rose-950 ring-1 ring-rose-300";
-                      iconElement = <XCircle size={16} className="text-rose-600 ml-2" />;
+                    const optionNum = toPersianNum(oIdx + 1);
+
+                    // Dynamic styling based on state
+                    let btnStyle = "bg-white hover:bg-slate-50/70 border-slate-250 text-slate-800";
+                    let badgeStyle = "bg-slate-100 text-slate-700 border-slate-200";
+                    let iconElement = (
+                      <div className="w-5 h-5 rounded-full border border-slate-350 bg-white flex items-center justify-center shrink-0">
+                        <span className="text-[10px] text-slate-400 font-bold">{optionNum}</span>
+                      </div>
+                    );
+
+                    if (quizMode === "practice" && isChecked) {
+                      if (oIdx === activeQuestion.correctIdx) {
+                        btnStyle = "bg-emerald-50/70 border-emerald-500 text-emerald-950 shadow-xs";
+                        badgeStyle = "bg-emerald-600 text-white border-emerald-600";
+                        iconElement = <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />;
+                      } else if (isSelected) {
+                        btnStyle = "bg-rose-50/70 border-rose-550 text-rose-950 shadow-xs";
+                        badgeStyle = "bg-rose-600 text-white border-rose-600";
+                        iconElement = <XCircle size={18} className="text-rose-600 shrink-0" />;
+                      } else {
+                        btnStyle = "bg-slate-50/40 border-slate-150 text-slate-400 opacity-60";
+                        badgeStyle = "bg-slate-100 text-slate-400 border-slate-100";
+                      }
                     } else {
-                      btnStyle = "bg-slate-50 opacity-60 border-slate-100 text-slate-400";
+                      if (isSelected) {
+                        btnStyle = "bg-indigo-50 inline-border-focus border-indigo-600 text-indigo-950 ring-1 ring-indigo-500 shadow-sm";
+                        badgeStyle = "bg-indigo-650 text-white border-indigo-600 shadow-xs";
+                        iconElement = (
+                          <div className="w-5 h-5 rounded-full bg-indigo-650 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                            <span className="text-[10px] font-black">{optionNum}</span>
+                          </div>
+                        );
+                      }
                     }
-                  } else {
-                    if (isSelected) {
-                      btnStyle = "bg-indigo-900 border-indigo-950 text-white shadow-md transform scale-[1.01]";
-                    }
-                  }
 
-                  return (
-                    <button
-                      key={oIdx}
-                      onClick={() => handleSelectOption(oIdx)}
-                      disabled={quizMode === "practice" && isChecked}
-                      className={`text-right p-4 rounded-2xl border text-xs font-black transition-all duration-150 flex items-center justify-between cursor-pointer ${btnStyle}`}
-                    >
-                      <span className="leading-relaxed flex-grow">{opt}</span>
-                      {iconElement}
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={oIdx}
+                        onClick={() => handleSelectOption(oIdx)}
+                        disabled={quizMode === "practice" && isChecked}
+                        className={`text-right p-4.5 rounded-2xl border text-xs md:text-sm font-black transition-all duration-150 flex items-center justify-between gap-4 cursor-pointer hover:border-slate-300 ${btnStyle} hover:scale-[1.005] active:scale-[0.99]`}
+                      >
+                        <div className="flex items-center gap-3.5 flex-grow">
+                          <span className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center border font-mono shrink-0 ${badgeStyle}`}>
+                            {optionNum}
+                          </span>
+                          <span className="leading-relaxed text-right">{cleanText}</span>
+                        </div>
+                        {iconElement}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             {/* PRACTICE MODE: IMMEDIATE FEEDBACK PANEL */}
             {quizMode === "practice" && isChecked && (
               <motion.div 
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-5 rounded-3xl border space-y-3 ${
-                  isCorrect ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/40 border-rose-100'
+                className={`p-6 rounded-[32px] border space-y-4 shadow-sm ${
+                  isCorrect 
+                    ? 'bg-emerald-50/40 border-emerald-200/80 text-emerald-950' 
+                    : 'bg-rose-50/30 border-rose-200/80 text-rose-950'
                 }`}
               >
-                <div className="flex justify-between items-start flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`p-1 px-2.5 rounded-lg text-[9px] font-black ${
-                      isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                <div className="flex justify-between items-center flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black shadow-2xs ${
+                      isCorrect ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
                     }`}>
-                      {isCorrect ? '✓ پاسخ شما کاملاً درست است!' : '✗ در دام تله تستی طراح افتادید!'}
+                      {isCorrect ? '✓ پاسخ علمی شما کاملاً صحیح است' : '✗ گرفتار دام یا تله تستی شدید'}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-extrabold flex items-center gap-1.5 bg-white px-2 py-0.5 rounded-md border border-slate-100">
-                      <Lightbulb size={12} className="text-amber-500" />
-                      <span>عنوان تله: {activeQuestion.trapType}</span>
+                    <span className="text-[10px] text-slate-600 font-extrabold flex items-center gap-1.5 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-xl border border-slate-200 shadow-3xs">
+                      <Lightbulb size={13} className="text-amber-500" />
+                      <span>مهندسی تله: {activeQuestion.trapType}</span>
                     </span>
                   </div>
 
                   {/* Add to trap vault option */}
                   <button
                     onClick={() => handleQuickSaveTrap(activeQuestion)}
-                    className="flex items-center gap-1.5 bg-indigo-900 hover:bg-slate-900 text-white text-[10px] font-black p-1.5 px-3 rounded-lg transition shadow-xs cursor-pointer"
+                    className="flex items-center gap-1.5 bg-slate-900 hover:bg-indigo-900 text-white text-[10px] font-black p-2 px-3.5 rounded-xl transition-all shadow-sm cursor-pointer hover:scale-102 active:scale-95"
                   >
-                    <Save size={12} />
-                    <span>افزودن این مورد به مخزن تله‌ها</span>
+                    <Save size={13} />
+                    <span>افزودن این مورد به مخزن شخصی کایزن</span>
                   </button>
                 </div>
 
-                <div className="bg-white p-4 rounded-xl border border-slate-150 space-y-1.5">
-                  <strong className="text-xs font-black text-slate-950 block">تحلیل جامع و منطق قانونی پاسخگویی:</strong>
-                  <p className="text-[11px] text-slate-650 leading-relaxed font-semibold">
+                <div className="bg-white/95 p-5 rounded-2xl border border-slate-150 space-y-2 shadow-2xs">
+                  <strong className="text-xs font-black text-slate-900 block flex items-center gap-1.5">
+                    <Info size={14} className="text-indigo-600" />
+                    <span>تحلیل عارضه‌شناسی و درسنامه طراح:</span>
+                  </strong>
+                  <p className="text-xs text-slate-700 leading-relaxed font-semibold text-right">
                     {activeQuestion.explanation}
                   </p>
                 </div>
@@ -792,16 +918,16 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
             )}
 
             {/* QUIZ NAVIGATION ACTIONS */}
-            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-3xl border border-slate-100 print:hidden">
+            <div className="flex justify-between items-center bg-slate-100/80 backdrop-blur-xs p-5 rounded-[28px] border border-slate-200 print:hidden">
               <button
                 onClick={() => {
                   if (confirm("آیا مایل هستید آزمون را نیمه‌کاره رها کرده و به پنل پیکربندی بازگردید؟")) {
                     setQuizStarted(false);
                   }
                 }}
-                className="text-xs font-black text-slate-500 hover:text-rose-600 transition"
+                className="text-xs font-black text-slate-500 hover:text-rose-600 transition-all px-4 py-2 rounded-xl hover:bg-slate-200/50"
               >
-                انصراف و خروج
+                انصراف و خروج از آزمون
               </button>
 
               <div className="flex items-center gap-3">
@@ -809,9 +935,9 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
                   <button
                     onClick={handleCheckAnswer}
                     disabled={userAnswers[currentQuestionIndex] === undefined}
-                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-2xl px-6 py-2.5 text-xs font-sans font-black transition shadow-md cursor-pointer"
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-2xl px-6 py-3 text-xs font-sans font-black transition-all shadow-md active:scale-95 cursor-pointer"
                   >
-                    ارزیابی و بررسی پاسخ
+                    ارزیابی و بررسی پاسخ تشریحی
                   </button>
                 )}
 
@@ -819,9 +945,9 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
                   <button
                     onClick={handleNextQuestion}
                     disabled={userAnswers[currentQuestionIndex] === undefined}
-                    className="bg-slate-900 hover:bg-rose-600 disabled:opacity-40 text-white rounded-2xl px-8 py-2.5 text-xs font-sans font-black transition shadow-md flex items-center gap-1 cursor-pointer"
+                    className="bg-indigo-950 hover:bg-indigo-900 disabled:opacity-40 text-white rounded-2xl px-8 py-3 text-xs font-sans font-black transition-all shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer"
                   >
-                    <span>{currentQuestionIndex < selectedQuestions.length - 1 ? 'سوال بعدی' : 'مشاهده کارنامه تراز'}</span>
+                    <span>{currentQuestionIndex < selectedQuestions.length - 1 ? 'سوال تستی بعدی' : 'مشاهده کارنامه تراز نهایی'}</span>
                     <ChevronLeft size={14} />
                   </button>
                 )}

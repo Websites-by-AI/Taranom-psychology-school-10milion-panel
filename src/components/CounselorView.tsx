@@ -306,11 +306,11 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[72vh]"
+            className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:h-[72vh] min-h-[500px]"
             id="counselor-view-container"
           >
             {/* Helper Tips Sidebar */}
-            <div className="lg:col-span-1 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4 text-right" id="counselor-quick-tips">
+            <div className="lg:col-span-1 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4 text-right order-2 lg:order-1" id="counselor-quick-tips">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100 justify-start">
                   <span className="p-1 px-1.5 bg-amber-50 text-amber-600 rounded-lg"><HelpCircle size={15} /></span>

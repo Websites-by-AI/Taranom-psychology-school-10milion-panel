@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Target, Layers, BookOpen, Scale, ShieldAlert, 
   HelpCircle, ChevronDown, ChevronUp, AlertCircle, 
-  Plus, CheckCircle, Info, Sparkles, Brain,
-  Video, Play, Volume2, Pause, Heart, Smile
+  Plus, CheckCircle, Info, Sparkles, Brain
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TestTrap } from "../types";
@@ -20,7 +19,6 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
   const [traps, setTraps] = useState<TestTrap[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [selectedTrapDetail, setSelectedTrapDetail] = useState<TestTrap | null>(null);
-  const [activeVideoTrap, setActiveVideoTrap] = useState<TestTrap | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     "biology": true,
     "physics": true,
@@ -124,10 +122,10 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
           <div>
             <span className="p-1 px-2.5 bg-indigo-50 text-indigo-700 text-[9px] rounded-lg font-black border border-indigo-150 inline-block mb-1">نقشه راه بصری</span>
             <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <span>نقشه گنجِ یادگیری تو! 🗺️</span>
+              <span>درخت دانش و تفکیک موضوعی تله‌های تستی ذخیره شده</span>
               <Sparkles size={14} className="text-amber-500 fill-amber-100" />
             </h2>
-            <p className="text-xs text-slate-500 font-bold mt-1 leading-relaxed">اینجا جاهاییه که ممکنه توی امتحان دست‌انداز داشته باشن. ما این دست‌اندازها رو برات علامت زدیم تا با دیدنِ پاسخ‌های ویدیوییِ کوتاه، خیلی راحت و بدونِ استرس از روشون رد بشی.</p>
+            <p className="text-xs text-slate-500 font-bold mt-1">ساختار سلسله‌مراتبی تله‌های شکارشده به موازات مباحث کنکور سراسری</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -149,8 +147,8 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-1.5 scroll-smooth">
                 <Target size={16} className="text-amber-400" />
               </div>
-              <strong className="text-xs font-black tracking-wide">ریشه اصلی نقشه گنج یادگیری</strong>
-              <span className="text-[9px] text-indigo-300 mt-1 font-bold">دست‌اندازهایی که خیلی ساده ردشون می‌کنی</span>
+              <strong className="text-xs font-black tracking-wide">ریشه اصلی درخت دانش</strong>
+              <span className="text-[9px] text-indigo-300 mt-1 font-bold">تله‌های نجات‌بخش کنکور سراسری</span>
             </div>
             
             {/* Split connectors downward on desktop */}
@@ -215,20 +213,7 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${trap.importance === 'high' ? 'bg-rose-500' : 'bg-slate-400'}`} />
                             <p className="text-[10px] font-black text-slate-800 truncate leading-relaxed">{trap.questionTitle}</p>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveVideoTrap(trap);
-                              }}
-                              className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 px-2 py-0.5 rounded-lg text-[9px] font-black transition-colors cursor-pointer"
-                              title="مشاهده پاسخ ویدیویی کوتاه"
-                            >
-                              <Video size={10} className="text-indigo-600" />
-                              <span>پاسخ ویدیویی</span>
-                            </button>
-                            <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{trap.category}</span>
-                          </div>
+                          <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md shrink-0 font-bold">{trap.category}</span>
                         </div>
                       ))
                     ) : (
@@ -291,20 +276,7 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${trap.importance === 'high' ? 'bg-rose-500' : 'bg-slate-400'}`} />
                             <p className="text-[10px] font-black text-slate-800 truncate leading-relaxed">{trap.questionTitle}</p>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveVideoTrap(trap);
-                              }}
-                              className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 px-2 py-0.5 rounded-lg text-[9px] font-black transition-colors cursor-pointer"
-                              title="مشاهده پاسخ ویدیویی کوتاه"
-                            >
-                              <Video size={10} className="text-indigo-600" />
-                              <span>پاسخ ویدیویی</span>
-                            </button>
-                            <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{trap.category}</span>
-                          </div>
+                          <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md shrink-0 font-bold">{trap.category}</span>
                         </div>
                       ))
                     ) : (
@@ -367,20 +339,7 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${trap.importance === 'high' ? 'bg-rose-500' : 'bg-slate-400'}`} />
                             <p className="text-[10px] font-black text-slate-800 truncate leading-relaxed">{trap.questionTitle}</p>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveVideoTrap(trap);
-                              }}
-                              className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 px-2 py-0.5 rounded-lg text-[9px] font-black transition-colors cursor-pointer"
-                              title="مشاهده پاسخ ویدیویی کوتاه"
-                            >
-                              <Video size={10} className="text-indigo-600" />
-                              <span>پاسخ ویدیویی</span>
-                            </button>
-                            <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{trap.category}</span>
-                          </div>
+                          <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md shrink-0 font-bold">{trap.category}</span>
                         </div>
                       ))
                     ) : (
@@ -436,20 +395,7 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${trap.importance === 'high' ? 'bg-rose-500' : 'bg-slate-400'}`} />
                             <p className="text-[10px] font-bold text-slate-700 truncate">{trap.questionTitle}</p>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveVideoTrap(trap);
-                              }}
-                              className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 px-2 py-0.5 rounded-lg text-[9px] font-black transition-colors cursor-pointer"
-                              title="مشاهده پاسخ ویدیویی کوتاه"
-                            >
-                              <Video size={10} className="text-indigo-600" />
-                              <span>پاسخ ویدیویی</span>
-                            </button>
-                            <span className="text-[8px] bg-slate-100 text-slate-550 px-1.5 py-0.5 rounded-md font-bold">{trap.subject}</span>
-                          </div>
+                          <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md shrink-0 font-bold">{trap.subject}</span>
                         </div>
                       ))}
                     </div>
@@ -491,21 +437,11 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
             </div>
 
             <div className="space-y-4 max-w-4xl">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                <div className="flex items-center gap-3">
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 shadow-[0_0_8px_rgba(99,102,241,0.5)] shrink-0" />
-                  <h3 className="text-sm font-black text-slate-900 leading-relaxed pr-1 md:pl-16">
-                    {selectedTrapDetail.questionTitle}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveVideoTrap(selectedTrapDetail)}
-                  className="inline-flex items-center gap-1.5 bg-indigo-950 hover:bg-slate-900 text-white font-heavy px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md transition-all shrink-0 cursor-pointer self-start md:self-auto"
-                >
-                  <Video size={13} className="text-amber-400 animate-pulse" />
-                  <span>پخش مستقیم پاسخ ویدیویی 🎬</span>
-                </button>
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
+                <h3 className="text-sm font-black text-slate-900 leading-relaxed pl-16">
+                  {selectedTrapDetail.questionTitle}
+                </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -554,313 +490,10 @@ export default function TrapsTreeMap({ studentId, studentName, onRefreshStats }:
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {activeVideoTrap && (
-          <CalmingVideoModal 
-            trap={activeVideoTrap} 
-            onClose={() => setActiveVideoTrap(null)} 
-          />
-        )}
-      </AnimatePresence>
-
       {/* Guide text */}
       <p className="text-[11px] text-slate-400 leading-relaxed text-right font-semibold">
         💡 <strong className="font-bold text-indigo-950">نکته آموزشی ترنم مهر:</strong> روی هر یک از کارت‌های تله تستی بالا کلیک کنید تا جزئیات سوال، تله طراحی شده، اشتباه شما و مستند علمی صریح جهت حذف خطا در تراز کنکور در این باکس خلاصه نشان داده شود.
       </p>
-    </div>
-  );
-}
-
-// Calming Web Audio triad synthesizer
-let audioCtx: AudioContext | null = null;
-function playCalmSound() {
-  try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    if (!audioCtx) {
-      audioCtx = new AudioContextClass();
-    }
-    if (audioCtx.state === "suspended") {
-      audioCtx.resume();
-    }
-    
-    // Play relaxing harmony: C Major 9 chord tones
-    const freqs = [130.81, 196.00, 261.63, 329.63, 392.00, 493.88];
-    freqs.forEach((freq, idx) => {
-      const osc = audioCtx!.createOscillator();
-      const gain = audioCtx!.createGain();
-      
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, audioCtx!.currentTime);
-      
-      gain.gain.setValueAtTime(0, audioCtx!.currentTime);
-      gain.gain.linearRampToValueAtTime(0.04, audioCtx!.currentTime + 0.5 + idx * 0.2);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx!.currentTime + 3.0);
-      
-      osc.connect(gain);
-      gain.connect(audioCtx!.destination);
-      
-      osc.start();
-      osc.stop(audioCtx!.currentTime + 3.5);
-    });
-  } catch (error) {
-    console.warn("Audio speech context initiation deferred:", error);
-  }
-}
-
-interface CalmingVideoModalProps {
-  trap: TestTrap;
-  onClose: () => void;
-}
-
-function CalmingVideoModal({ trap, onClose }: CalmingVideoModalProps) {
-  const [activeChapter, setActiveChapter] = useState<'refact' | 'mistake' | 'solution'>('refact');
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const [stressRating, setStressRating] = useState<number | null>(null);
-  const [feedbackSent, setFeedbackSent] = useState(false);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setProgress(p => {
-          if (p >= 100) {
-            if (activeChapter === 'refact') {
-              setActiveChapter('mistake');
-              return 0;
-            } else if (activeChapter === 'mistake') {
-              setActiveChapter('solution');
-              return 0;
-            } else {
-              setIsPlaying(false);
-              return 100;
-            }
-          }
-          return p + 1.5;
-        });
-      }, 100);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, activeChapter]);
-
-  useEffect(() => {
-    if (soundEnabled && isPlaying) {
-      playCalmSound();
-    }
-  }, [soundEnabled, activeChapter, isPlaying]);
-
-  const triggerCalmSound = () => {
-    playCalmSound();
-  };
-
-  const getChapterText = () => {
-    switch (activeChapter) {
-      case 'refact':
-        return {
-          title: "🫂 رفیقِ درس‌هات شو",
-          subtitle: "پله اول: دور کردن استرس درس شیمی/علوم و علوم تجربی",
-          text: `سلام دوست من! اول از همه بیا با هم یک نفس عمیق بکشیم 🌸. مبحث ${trap.subject} اصلاً ترسناک نیست. فراموش نکن که تو برای مقطع متوسطه اول درس می‌خونی و نباید استرس آزمون‌های بزرگتر رو داشته باشی. این سوال یه جور بازی ذهن و معماست که با هم حلش می‌کنیم. بیا این بخش رو با آرامش رد بکنیم!`,
-          tip: "نفسِ عمیق بکش... دَم به مدت ۳ ثانیه، بازدم آرام..."
-        };
-      case 'mistake':
-        return {
-          title: "🔍 رازِ دستانداز کجاست؟",
-          subtitle: "پله دوم: اشتباه در آزمون‌ها بخش طبیعی و عالی رشد ماست!",
-          text: `ببین، یادت میاد اینطوری به موضوع نگاه کرده بودی؟ «${trap.userMistake}». مغز ما خیلی باهوشه، ولی گاهی اوقات دوست داره سریع فریب طرح رو بخوره! این دقیقاً همون دست‌انداز جادوییه که بهت کمک می‌کنه باهوش‌تر بشی. پس اصلاً ناراحت نشو، تازه علت رو کشف کردیم!`,
-          tip: "اشتباهات یعنی در حالِ آزمودن و قوی‌تر شدنی!"
-        };
-      case 'solution':
-        return {
-          title: "💡 راهِ فرار و میان‌بر رندانه",
-          subtitle: "پله سوم: راه حل آسان بدون فرمول‌های استرس‌زای رباتیک",
-          text: `حالا نگاه کن چقدر آسان و لطیف قفلش باز میشه! «${trap.correctAnswer}». کلید راهنما اینه: «${trap.educationalNote}». بدون هیچ سختی، با روزی فقط ۵ تا مرورِ به شکل بازی، دفعه بعد بدون کوچکترین استرسی از روی این مبحث پرواز می‌کنی!`,
-          tip: "بزن بریم برای موفقیت واقعی با خیال خوش و خندان! ✨"
-        };
-    }
-  };
-
-  const chapterInfo = getChapterText();
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md" style={{ direction: "rtl" }}>
-      <div className="relative w-full max-w-lg bg-slate-950 text-white rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col justify-between" id="calm-video-modal-card">
-        
-        {/* Header decoration */}
-        <div className="p-4 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-slate-300 font-black">پاسخ ویدیویی مربیِ صمیمی همدلتر</span>
-          </div>
-          <button 
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition flex items-center justify-center cursor-pointer text-sm font-bold border-none"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Video simulation Screen */}
-        <div className="relative h-60 bg-gradient-to-b from-indigo-950 via-slate-900 to-black flex flex-col justify-between p-4 overflow-hidden">
-          {/* Animated decorative waves inside video player */}
-          <div className="absolute inset-0 pointer-events-none opacity-25">
-            <div className="absolute -inset-[10px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/25 via-transparent to-transparent animate-pulse" />
-            <div className="absolute left-[20%] top-[30%] w-32 h-32 rounded-full border border-indigo-500/30 animate-ping duration-1000" />
-          </div>
-
-          <div className="z-10 flex justify-between items-start">
-            <span className="px-2 py-0.5 bg-indigo-900/40 border border-indigo-500/35 rounded-md text-[9px] text-indigo-200 font-bold">
-              درس: {trap.subject}
-            </span>
-            <button 
-              type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-1 px-2.5 bg-white/10 hover:bg-white/20 text-xs text-slate-200 rounded-lg flex items-center gap-1.5 transition border-none cursor-pointer"
-            >
-              <span className="text-[9px] font-black">{soundEnabled ? 'صدا روشن' : 'صدا خاموش'}</span>
-            </button>
-          </div>
-
-          {/* Calming teacher voice subtitle & graphic avatar */}
-          <div className="z-10 flex flex-col items-center justify-center my-auto space-y-3">
-            <div className="w-16 h-16 rounded-full bg-indigo-600/30 flex items-center justify-center border border-indigo-500 relative">
-              <span className="absolute inset-0 rounded-full bg-indigo-500/10 animate-ping" />
-              <Smile size={32} className="text-amber-300 animate-bounce" />
-            </div>
-            
-            {/* Animated subtitles */}
-            <div className="text-center max-w-[280px]">
-              <p className="text-xs font-black text-amber-200 leading-relaxed drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
-                {chapterInfo.tip}
-              </p>
-            </div>
-          </div>
-
-          {/* Controls Bar */}
-          <div className="z-10 flex flex-col gap-2">
-            {/* Progress bar */}
-            <div className="w-full bg-white/15 h-1 rounded-full overflow-hidden">
-              <div 
-                className="bg-indigo-400 h-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-
-            <div className="flex justify-between items-center text-[10px] text-slate-400 font-sans">
-              <span>{isPlaying ? 'در حال پخش...' : 'متوقف شده'}</span>
-              <div className="flex items-center gap-2">
-                <button 
-                  type="button"
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition cursor-pointer border-none text-[8px]"
-                >
-                  {isPlaying ? '⏸' : '▶'}
-                </button>
-                <span>۰۰:{(progress * 0.3).toFixed(0).padStart(2, '0')} / ۰۰:۳۰</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Chapters tabs */}
-        <div className="grid grid-cols-3 bg-slate-900 border-b border-slate-800 text-center text-[11px]">
-          <button 
-            type="button"
-            onClick={() => { setActiveChapter('refact'); setProgress(0); triggerCalmSound(); }}
-            className={`py-2 px-1 font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer border-none ${
-              activeChapter === 'refact' ? 'bg-indigo-900 border-b-2 border-amber-400 text-white font-heavy' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>🫂 صمیمی شو</span>
-          </button>
-          <button 
-            type="button"
-            onClick={() => { setActiveChapter('mistake'); setProgress(0); triggerCalmSound(); }}
-            className={`py-2 px-1 font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer border-none ${
-              activeChapter === 'mistake' ? 'bg-indigo-900 border-b-2 border-amber-400 text-white font-heavy' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>🔍 راز دست‌انداز</span>
-          </button>
-          <button 
-            type="button"
-            onClick={() => { setActiveChapter('solution'); setProgress(0); triggerCalmSound(); }}
-            className={`py-2 px-1 font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer border-none ${
-              activeChapter === 'solution' ? 'bg-indigo-950 border-b-2 border-amber-400 text-white font-heavy' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>💡 دغدغه حل کاره</span>
-          </button>
-        </div>
-
-        {/* Chapter explanatory Text Area */}
-        <div className="p-5 space-y-4 bg-slate-950">
-          <div className="space-y-1">
-            <h4 className="text-sm font-black text-white flex items-center gap-1.5">
-              <Sparkles size={14} className="text-amber-400 fill-amber-400" />
-              <span>{chapterInfo.title}</span>
-            </h4>
-            <p className="text-[10px] text-slate-400 font-bold">{chapterInfo.subtitle}</p>
-          </div>
-
-          <div className="bg-slate-900/75 p-4 rounded-2xl border border-slate-800/40">
-            <p className="text-xs text-slate-150 leading-relaxed font-semibold">
-              {chapterInfo.text}
-            </p>
-          </div>
-
-          {/* Interactive Stress Level Metric & Self Compassion check-in to lower cortisol */}
-          <div className="pt-2 border-t border-slate-800/40 space-y-3.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] text-slate-350 font-black">حس قلبی تو در حال حاضر چیه؟</span>
-              {feedbackSent ? (
-                <span className="text-[10px] text-emerald-400 font-black animate-bounce">ممنون که گفتی! مربی همدل در کنارت هست ❤️</span>
-              ) : (
-                <div className="flex items-center gap-1" style={{ direction: "ltr" }}>
-                  {[1, 2, 3, 4, 5].map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() => {
-                        setStressRating(level);
-                        setFeedbackSent(true);
-                      }}
-                      className="text-xs hover:scale-125 transition duration-150 cursor-pointer border-none p-0 bg-transparent"
-                      title={`${level} ستاره`}
-                    >
-                      {level <= (stressRating || 0) ? '💚' : '🤍'}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button 
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-1 px-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-950/40 transition duration-150 cursor-pointer border-none text-center"
-              >
-                دمت گرم، متوجه شدم! 🤝
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setProgress(0);
-                  setIsPlaying(true);
-                  triggerCalmSound();
-                }}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer border-none"
-              >
-                پخش مجدد این بخش 🔁
-              </button>
-            </div>
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }

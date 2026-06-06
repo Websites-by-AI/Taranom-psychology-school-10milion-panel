@@ -4,7 +4,7 @@ import {
   BookOpen, ArrowUp, ArrowDown, Brain, ExternalLink, 
   CheckCircle, AlertTriangle, ArrowLeftRight, HelpCircle, 
   Bookmark, Award, PlayCircle, Minimize2, Check, Send, 
-  Flame, LayoutGrid, Zap, AlignJustify
+  Flame, LayoutGrid, Zap, AlignJustify, LineChart
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { DailyPlan, Student } from "../types";
@@ -12,6 +12,7 @@ import PomodoroTimer from "./PomodoroTimer";
 
 interface StudyPlanViewProps {
   student?: Student;
+  onNavigate?: (view: string) => void;
 }
 
 // Helper to convert numbers to Persian locales
@@ -81,7 +82,7 @@ const QUIZ_BANK: Record<string, {
   ]
 };
 
-export default function StudyPlanView({ student }: StudyPlanViewProps) {
+export default function StudyPlanView({ student, onNavigate }: StudyPlanViewProps) {
   // Fallback default student if not provided
   const currentStudent = student || {
     id: "arateb_default",
@@ -407,50 +408,53 @@ export default function StudyPlanView({ student }: StudyPlanViewProps) {
            </div>
 
            {/* Days Selector for Focus Mode */}
-           <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm space-y-2">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">انتخاب روز مطالعاتی</h3>
-              <div className="space-y-1">
-                 {plans.map((plan, idx) => (
-                   <button
-                     key={idx}
-                     onClick={() => {
-                       setActiveDayIdx(idx);
-                       setViewMode("daily");
-                       // reset quiz if user switches day
-                       setActiveQuizTopic(null);
-                     }}
-                     className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all text-right cursor-pointer group ${
-                       activeDayIdx === idx && viewMode === "daily"
-                         ? "bg-slate-950 border-slate-900 text-white shadow-xl shadow-slate-150" 
-                         : "bg-white border-slate-50 hover:bg-slate-50/80 text-slate-700 hover:border-slate-150"
-                     }`}
-                   >
-                     <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center border font-mono text-xs font-black ${
-                          activeDayIdx === idx && viewMode === "daily"
-                            ? "bg-white/10 border-white/10 text-white" 
-                            : plan.completed 
-                              ? "bg-emerald-50 border-emerald-100 text-emerald-600"
-                              : "bg-slate-50 border-slate-100 text-slate-500"
-                        }`}>
-                          {plan.completed ? <Check size={14} className="stroke-[3]" /> : toPersianNum(idx + 1)}
-                        </div>
-                        <div>
-                           <span className="text-xs font-black block">{plan.day}</span>
-                           <span className={`text-[9px] block ${
-                             activeDayIdx === idx && viewMode === "daily" ? "text-slate-300" : "text-slate-400"
-                           } font-bold`}>{plan.totalQuestions} تست اولویت‌دار</span>
-                        </div>
-                     </div>
+           <div className="bg-white p-4 md:p-5 rounded-[28px] border border-slate-150 shadow-xs space-y-3">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">انتخاب روز مطالعاتی</h3>
+              <div className="flex lg:flex-col gap-2 overflow-x-auto scrollbar-none pb-2 lg:pb-0 px-1 -mx-2 lg:mx-0 lg:px-0">
+                 {plans.map((plan, idx) => {
+                   const isSelected = activeDayIdx === idx && viewMode === "daily";
+                   return (
+                     <button
+                       key={idx}
+                       onClick={() => {
+                         setActiveDayIdx(idx);
+                         setViewMode("daily");
+                         // reset quiz if user switches day
+                         setActiveQuizTopic(null);
+                       }}
+                       className={`flex-shrink-0 min-w-[110px] lg:w-full flex lg:flex-row flex-col items-center justify-between p-3.5 rounded-2xl border transition-all text-right cursor-pointer gap-2 lg:gap-3 group ${
+                         isSelected
+                           ? "bg-indigo-950 border-indigo-950 text-white shadow-md shadow-indigo-950/10" 
+                           : "bg-white border-slate-150 hover:bg-slate-50 text-slate-700 hover:border-slate-350"
+                       }`}
+                     >
+                       <div className="flex lg:flex-row flex-col items-center gap-2 lg:gap-3 lg:text-right text-center w-full">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center border font-mono text-xs font-black shrink-0 ${
+                            isSelected
+                              ? "bg-white/10 border-white/15 text-white" 
+                              : plan.completed 
+                                ? "bg-emerald-50 border-emerald-100 text-emerald-600"
+                                : "bg-slate-50 border-slate-100 text-slate-500"
+                          }`}>
+                            {plan.completed ? <Check size={14} className="stroke-[3]" /> : toPersianNum(idx + 1)}
+                          </div>
+                          <div className="lg:text-right text-center">
+                             <span className="text-xs font-black block whitespace-nowrap">{plan.day}</span>
+                             <span className={`text-[9px] block whitespace-nowrap mt-0.5 ${
+                               isSelected ? "text-indigo-200" : "text-slate-400"
+                             } font-bold`}>{plan.totalQuestions} تست اولویت‌دار</span>
+                          </div>
+                       </div>
 
-                     <div className="flex gap-2">
-                        {plan.completed && (
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        )}
-                        <ArrowLeftRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                     </div>
-                   </button>
-                 ))}
+                       <div className="hidden lg:flex gap-2">
+                          {plan.completed && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          )}
+                          <ArrowLeftRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                       </div>
+                     </button>
+                   );
+                 })}
               </div>
            </div>
 
@@ -569,35 +573,69 @@ export default function StudyPlanView({ student }: StudyPlanViewProps) {
                     </div>
 
                     {/* Connected Dashboard Metadata & Dynamic Weakness Integrations */}
-                    <div className="bg-gradient-to-r from-red-50/40 via-amber-50/30 to-slate-50 p-5 rounded-2xl border border-red-100/60 text-right space-y-3">
-                       <div className="flex items-center gap-2">
-                          <AlertTriangle size={16} className="text-rose-500" />
-                          <h4 className="text-xs font-black text-slate-900">
-                             ارتباط با ضعف‌های دپارتمان ترنم مهر & پیش‌بینی تراز روزهای امتحان
-                          </h4>
+                    <div className="bg-gradient-to-br from-rose-50/50 via-white to-indigo-50/30 p-6 rounded-[32px] border border-rose-100/60 text-right space-y-4 shadow-sm relative overflow-hidden group">
+                       <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500/40 group-hover:bg-rose-500 transition-colors" />
+                       
+                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div className="flex items-center gap-2.5">
+                             <div className="p-2 bg-rose-100 text-rose-600 rounded-xl animate-pulse">
+                                <AlertTriangle size={18} />
+                             </div>
+                             <h4 className="text-sm font-black text-slate-900">
+                                تحلیل عارضه‌یابی و مانیتورینگ هوشمند کایزن
+                             </h4>
+                          </div>
+                          
+                          <button 
+                            onClick={() => onNavigate?.("manova")}
+                            className="flex items-center gap-1.5 text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-150 transition-all cursor-pointer"
+                          >
+                             <LineChart size={12} />
+                             <span>مشاهده در رادار Manova</span>
+                          </button>
                        </div>
                        
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                          <div className="space-y-1.5">
-                             <span className="text-[10px] text-slate-400 block font-bold">مبحث ضعیف متناظر در داشبورد:</span>
-                             <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-100 text-[11px] font-black text-slate-700 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-rose-500" />
-                                <span>{activeConnection.weakTopic}</span>
+                          <div className="space-y-2">
+                             <span className="text-[10px] text-slate-400 block font-black">نقطه اصطکاک و ضعف (بر پایه هوش مصنوعی):</span>
+                             <div className="bg-white/80 backdrop-blur-sm px-4 py-3 rounded-2xl border border-slate-150 flex items-center justify-between group/item">
+                                <div className="flex items-center gap-2.5">
+                                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-200" />
+                                   <span className="text-xs font-black text-slate-800">{activeConnection.weakTopic}</span>
+                                </div>
+                                <button 
+                                  onClick={() => onNavigate?.("progress")}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                >
+                                   <ExternalLink size={14} />
+                                </button>
                              </div>
                           </div>
                           
-                          <div className="space-y-1.5">
-                             <span className="text-[10px] text-slate-400 block font-bold">نوع تله تستی محتمل:</span>
-                             <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-100 text-[11px] font-black text-indigo-700 flex items-center gap-1.5">
-                                <Brain size={12} className="text-indigo-600 animate-pulse" />
-                                <span>تله‌های مدل ({activeConnection.testTrapCategory}) با اهمیت بالا</span>
+                          <div className="space-y-2">
+                             <span className="text-[10px] text-slate-400 block font-black">کالیبراتور تله تستی پیشنهادی:</span>
+                             <div className="bg-white/80 backdrop-blur-sm px-4 py-3 rounded-2xl border border-indigo-150 flex items-center justify-between group/item">
+                                <div className="flex items-center gap-2.5">
+                                   <Brain size={14} className="text-indigo-600" />
+                                   <span className="text-xs font-black text-indigo-900">تله‌های {activeConnection.testTrapCategory}</span>
+                                </div>
+                                <button 
+                                  onClick={() => onNavigate?.("traps")}
+                                  className="flex items-center gap-1 text-[9px] font-black bg-indigo-600 text-white px-2 py-1 rounded-lg shadow-sm hover:bg-indigo-700 transition-all cursor-pointer"
+                                >
+                                   <span>ورود به بانک تله</span>
+                                   <ArrowUp size={10} className="rotate-45" />
+                                </button>
                              </div>
                           </div>
+                       </div> 
+                       
+                       <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50">
+                          <p className="text-[11px] text-slate-650 leading-relaxed font-bold flex items-start gap-2">
+                             <Zap size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                             <span>{activeConnection.note}</span>
+                          </p>
                        </div>
-
-                       <p className="text-[11px] text-slate-500 leading-relaxed font-medium pt-1">
-                         {activeConnection.note}
-                       </p>
                     </div>
 
                     {/* Interactive Post-Study Test Action (آزمون تستی بعد از کار مطالعاتی) */}

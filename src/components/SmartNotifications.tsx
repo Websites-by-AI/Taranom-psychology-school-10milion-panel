@@ -122,7 +122,7 @@ export default function SmartNotifications({ onAction }: SmartNotificationsProps
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-3 w-85 bg-white border border-slate-150 rounded-3xl shadow-2xl z-50 overflow-hidden text-right"
+              className="absolute -right-24 sm:right-0 mt-3 w-76 sm:w-85 max-w-[calc(100vw-32px)] bg-white border border-slate-150 rounded-3xl shadow-2xl z-50 overflow-hidden text-right"
             >
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -186,12 +186,12 @@ export default function SmartNotifications({ onAction }: SmartNotificationsProps
       <AnimatePresence>
         {showPopup && (
           <motion.div 
-            initial={{ opacity: 0, x: 20, y: 100 }}
-            animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="fixed bottom-24 right-8 z-50 w-80 bg-white border border-blue-100 rounded-3xl shadow-2xl p-5 text-right font-sans ring-4 ring-blue-50/50"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-20 sm:bottom-24 left-4 right-4 sm:left-auto sm:right-8 mx-auto sm:mx-0 w-[calc(100vw-32px)] sm:w-80 max-w-sm bg-white border border-blue-100 rounded-3xl shadow-2xl p-5 text-right font-sans ring-4 ring-blue-50/50 z-50"
           >
-            <div className="absolute -top-3 -right-3 w-10 h-10 bg-blue-900 text-white rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
+            <div className="absolute -top-3 -right-1 sm:-right-3 w-10 h-10 bg-blue-900 text-white rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
               <Brain size={22} />
             </div>
             

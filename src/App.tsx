@@ -53,12 +53,12 @@ export default function App() {
 
   const navigationItems = {
     student: [
-      { id: "dashboard", label: "پرتال داوطلب کنکور", icon: LayoutDashboard },
+      { id: "dashboard", label: "مرکز فرماندهی موفقیت", icon: LayoutDashboard },
       { id: "manova", label: "داشبورد مانوا", icon: Sparkles, highlight: true },
       { id: "report", label: "کارنامه ترازها", icon: FileSpreadsheet },
       { id: "schedule", label: "برنامه‌ریزی و تقویم", icon: Calendar },
-      { id: "counselor", label: "مشاور هوشمند کنکور", icon: MessageSquare },
-      { id: "progress", label: "بهبود تراز", icon: LineChart },
+      { id: "counselor", label: "اتاق گفتگو و پشتیبانی هوشمند", icon: MessageSquare },
+      { id: "progress", label: "نمای پایش عملکرد و سلامت آموزشی", icon: LineChart },
       { id: "traps", label: "بانک تله‌های تستی", icon: Target },
       { id: "quiz", label: "آزمون سفارشی", icon: Brain },
       { id: "psychology", label: "پایش آمادگی ذهنی", icon: Brain },
@@ -252,7 +252,7 @@ export default function App() {
             <div className="flex items-center gap-4 relative">
               <SmartNotifications onAction={(type) => {
                 if (type === "challenge") setIsFocusChallengeOpen(true);
-                if (type === "nudge") setView("assessment");
+                if (type === "nudge") setView("quiz");
               }} />
               
               <div className="text-left hidden md:block">
@@ -488,7 +488,7 @@ export default function App() {
             {view === "dashboard" && <DashboardView student={student} onNavigate={(target) => setView(target)} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
             {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "schedule" && <StudyPlanView student={student} />}
+            {view === "schedule" && <StudyPlanView student={student} onNavigate={(target) => setView(target)} />}
             {view === "counselor" && <CounselorView student={student} onNavigate={(target) => setView(target)} />}
             {view === "progress" && <ProgressView />}
             {view === "traps" && <TestTrapsView student={student} />}
