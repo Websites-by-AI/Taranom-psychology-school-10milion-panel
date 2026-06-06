@@ -3,110 +3,46 @@ import {
   Users, Sparkles, BookOpen, HeartPulse, Brain, Plus, Calendar, 
   Settings, Database, Compass, CheckCircle2, ChevronLeft, 
   HelpCircle, UserCheck, GraduationCap, AlertCircle, ClipboardList, FileSpreadsheet, Target,
-  BookMarked, PenTool, Lightbulb, TrendingUp, Presentation, ArrowLeftRight
+  BookMarked, PenTool, Lightbulb, TrendingUp, Presentation, ArrowLeftRight,
+  Edit2, Shield, Award, Briefcase, MapPin, Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
+import { getTeacherProfile, saveTeacherProfile, TeacherProfile, getProfileMetadata, getHydratedStudent } from "../lib/userProfiles";
 
-const STUDENTS_UNDER_TEACHER: Student[] = [
-  { 
-    id: "1", 
-    name: "مریم حسینی", 
-    code: "9812405", 
-    field: "tajrobi", 
-    grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰",
-    city: "تهران",
-    age: 18,
-    academicProfile: {
-      studyHoursPerDay: 11,
-      educationLevel: "پایه دوازدهم",
-      currentGpa: 19.8,
-      targetGpa: 20.0,
-      currentTraz: 10450,
-      targetTraz: 11200
-    },
-    parentalContext: {
-      fatherAlive: true,
-      motherAlive: true,
-      childrenCount: 2,
-      fatherEducation: "کارشناسی ارشد (مهندسی)",
-      motherEducation: "دکتری (پزشک عمومی)",
-      householdIncome: "excellent",
-      familySupportLevel: "high"
-    },
-    goals: {
-      studentVision: "قبولی در رشته پزشکی دانشگاه علوم پزشکی تهران",
-      familyExpectation: "تحصیل در مدارج عالی پزشکی تخصصی"
-    },
-    familyContext: "محیط خانه آرام و حامی؛ داوطلب اتاق مطالعه مستقل دارد و نظارت مستمر انجام می‌شود.",
-    additionalNotes: "نیاز تجمعي به پایش تله‌های تستی زیست‌شناسی تخصصی و مهار استرس آزمون در دقایق پایانی دارد."
-  },
-  { 
-    id: "2", 
-    name: "علیرضا رضایی", 
-    code: "9786431", 
-    field: "riazi", 
-    grade: "رتبه فرضی ۲۴ کشوری - تراز ۱۰/۱۲۰",
-    city: "مشهد",
-    age: 17,
-    academicProfile: {
-      studyHoursPerDay: 10,
-      educationLevel: "پایه یازدهم متمم کنکور",
-      currentGpa: 19.45,
-      targetGpa: 19.9,
-      currentTraz: 10120,
-      targetTraz: 10800
-    },
-    parentalContext: {
-      fatherAlive: true,
-      motherAlive: true,
-      childrenCount: 1,
-      fatherEducation: "دیپلم (آزاد)",
-      motherEducation: "کارشناسی (فرهنگی)",
-      householdIncome: "mid",
-      familySupportLevel: "medium"
-    },
-    goals: {
-      studentVision: "مهندسی کامپیوتر دانشگاه صنعتی شریف",
-      familyExpectation: "ورود مستقیم به بازار کار فناوری اطلاعات"
-    },
-    familyContext: "حمایت عالی مادری؛ استرس کلی متوسط است اما نیاز به افزایش ساعت مطالعه دارد.",
-    additionalNotes: "ضعف اندک در مباحث هندسه پایه و حسابان گزارش شده است."
-  },
-  { 
-    id: "3", 
-    name: "امیرمحمد اکبری", 
-    code: "9921477", 
-    field: "ensani", 
-    grade: "رتبه فرضی ۱۲ کشوری - تراز ۹/۹۵۰",
-    city: "اصفهان",
-    age: 18,
-    academicProfile: {
-      studyHoursPerDay: 9,
-      educationLevel: "پایه دوازدهم",
-      currentGpa: 19.2,
-      targetGpa: 19.8,
-      currentTraz: 9950,
-      targetTraz: 10400
-    },
-    parentalContext: {
-      fatherAlive: true,
-      motherAlive: true,
-      childrenCount: 3,
-      fatherEducation: "کارشناسی (کارمند)",
-      motherEducation: "دیپلم (خانه دار)",
-      householdIncome: "mid",
-      familySupportLevel: "high"
-    },
-    goals: {
-      studentVision: "رشته حقوق دانشگاه تهران",
-      familyExpectation: "قبولی در دانشگاه‌های تراز اول پایتخت برای حقوق"
-    },
-    familyContext: "محیط خانه پرجمعیت اما صمیمی؛ تمرکز بالا است و نوسان تراز کمی دارد.",
-    additionalNotes: "نیاز به تقویت عروض فشرده و تندخوانی دروس تخصصی دارد."
+// Mock student dynamic generator - dynamically hydrated to prevent static placeholders and support live registrations
+const getSupervisedStudents = (): Student[] => {
+  const baseStudents = [
+    { id: "1", name: "مریم حسینی", code: "9812405", field: "tajrobi" as const },
+    { id: "2", name: "علیرضا رضایی", code: "9786431", field: "riazi" as const },
+    { id: "3", name: "امیرمحمد اکبری", code: "9921477", field: "ensani" as const }
+  ];
+
+  let newlyRegistered: Student[] = [];
+  try {
+    const data = localStorage.getItem("arateb_new_registrations");
+    if (data) {
+      newlyRegistered = JSON.parse(data);
+    }
+  } catch (e) {
+    console.error(e);
   }
-];
+
+  const all = [...baseStudents];
+  newlyRegistered.forEach(ns => {
+    if (!all.some(s => s.id === ns.id || s.code === ns.code)) {
+      all.push({
+        id: ns.id,
+        name: ns.name,
+        code: ns.code,
+        field: ns.field
+      });
+    }
+  });
+
+  return all.map(s => getHydratedStudent(s));
+};
 
 interface TeacherDashboardViewProps {
   student: Student;
@@ -115,8 +51,47 @@ interface TeacherDashboardViewProps {
 }
 
 export default function TeacherDashboardView({ student, onNavigate, onUpdateStudent }: TeacherDashboardViewProps) {
-  const [activeStudent, setActiveStudent] = useState<Student>(student);
+  const studentsUnderTeacher = getSupervisedStudents();
+  // Ensure the active student profile is fully hydrated
+  const [activeStudent, setActiveStudent] = useState<Student>(() => {
+    return getHydratedStudent(student);
+  });
   
+  // Teacher profile state (fully dynamic and powered by our requested helper function factory)
+  const [teacherProfile, setTeacherProfile] = useState<TeacherProfile>(() => {
+    return getProfileMetadata("teacher") as TeacherProfile;
+  });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  
+  // Form states for Teacher Profile
+  const [tName, setTName] = useState(teacherProfile.name);
+  const [tSpecialization, setTSpecialization] = useState(teacherProfile.specialization);
+  const [tSchools, setTSchools] = useState(teacherProfile.schools.join("، "));
+  const [tClassProgram, setTClassProgram] = useState(teacherProfile.classProgram);
+  const [tLicense, setTLicense] = useState(teacherProfile.licenseNumber);
+  const [tExperience, setTExperience] = useState(teacherProfile.experienceYears);
+  const [tWorkplace, setTWorkplace] = useState(teacherProfile.workplace);
+  const [tWorkHours, setTWorkHours] = useState(teacherProfile.workHours);
+  
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: TeacherProfile = {
+      id: teacherProfile.id,
+      name: tName,
+      specialization: tSpecialization,
+      schools: tSchools.split(/[،,،\n]/).map(s => s.trim()).filter(Boolean),
+      classProgram: tClassProgram,
+      licenseNumber: tLicense,
+      experienceYears: Number(tExperience),
+      workplace: tWorkplace,
+      workHours: tWorkHours
+    };
+    saveTeacherProfile(updated);
+    setTeacherProfile(updated);
+    setIsEditingProfile(false);
+    alert("امضاء دبیر طراح و جزئیات تخصص علمی با موفقیت به‌روزرسانی شد!");
+  };
+
   // Custom teacher states
   const [targetLevel, setTargetLevel] = useState<"standard" | "hard" | "olympiad">("hard");
   const [prescribedMaterial, setPrescribedMaterial] = useState(() => {
@@ -145,24 +120,171 @@ export default function TeacherDashboardView({ student, onNavigate, onUpdateStud
       <div className="bg-gradient-to-tr from-slate-900 via-emerald-950 to-indigo-950 rounded-[35px] p-8 text-white relative overflow-hidden shadow-xl border border-white/5">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-[80px]" />
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black border border-emerald-500/10">
-              <Presentation size={12} />
-              <span>پورتال تعاملی دبیران و طراحان کنکور</span>
-            </span>
-            <h1 className="text-2xl md:text-3xl font-black">پنل کنترل آموزشی و تجویز درسی دبیران {BRAND_CONFIG.name}</h1>
-            <p className="text-slate-350 text-xs max-w-2xl leading-relaxed">
-              بر اساس خطاهای مکرر تستی و سطح علمی داوطلب در شبیه‌ساز آزمون، در این بخش به همکارتان در مسیر یادگیری کایزن کمک کرده و تست‌های هدفمند مباحث مختلف را مستقیم به پورتال دانش‌آموزی او الصاق کنید.
+          <div className="space-y-3 flex-grow">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black border border-emerald-500/10">
+                <Presentation size={12} />
+                <span>پورتال تعاملی دبیران و طراحان کنکور</span>
+              </span>
+              <button 
+                onClick={() => setIsEditingProfile(!isEditingProfile)}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 text-[10px] font-black border border-amber-500/20 transition-all cursor-pointer shadow-xs"
+              >
+                <Edit2 size={10} />
+                <span>{isEditingProfile ? "بستن فرم ویرایش" : "ویرایش امضاء و مدارس تدریس"}</span>
+              </button>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black">پنل کنترل آموزشی و تجویز درسی {teacherProfile.name}</h1>
+            <p className="text-slate-300 text-xs max-w-2xl leading-relaxed">
+              تخصص علمی: <span className="text-emerald-300 font-bold">{teacherProfile.specialization}</span> | سابقه: <span className="text-amber-300 font-extrabold">{teacherProfile.experienceYears} سال تدریس طراز اول</span>
+            </p>
+            <p className="text-slate-400 text-[11px] leading-relaxed max-w-2xl">
+              مدارس فعال شما: <span className="text-white font-bold">{teacherProfile.schools.join("، ")}</span>
+            </p>
+            <p className="text-slate-400 text-[11px] leading-relaxed max-w-2xl">
+              برنامه کلاسی هفتگی: <span className="text-slate-300 font-bold font-mono">{teacherProfile.classProgram}</span>
             </p>
           </div>
-          <div className="bg-slate-800/40 backdrop-blur-md p-4 rounded-2xl border border-emerald-900/30 text-right min-w-[180px]">
-             <span className="text-[9px] text-slate-400 block font-bold mb-1">کد یکتا پرسنلی دبیر</span>
-             <span className="text-xs font-black font-mono text-emerald-300">TEACHER_ID_3811</span>
+          <div className="bg-slate-800/50 backdrop-blur-md p-5 rounded-2xl border border-emerald-900/30 text-right min-w-[240px] shadow-lg self-stretch flex flex-col justify-between">
+             <div>
+               <span className="text-[10px] text-slate-400 block font-bold mb-1">کد یکتا و کد پرسنلی مصوب دبیر</span>
+               <span className="text-xs font-black font-mono text-emerald-300 block">{teacherProfile.licenseNumber}</span>
+             </div>
              <div className="h-px bg-slate-700/50 my-2" />
-             <span className="text-[10px] text-indigo-300 font-bold block">دپارتمان: طراحی سوالات کایزن</span>
+             <div className="text-[10px] text-slate-300 font-semibold space-y-1">
+               <div className="flex items-center gap-1.5">
+                 <Award size={12} className="text-indigo-400 shrink-0" />
+                 <span className="truncate">{teacherProfile.workplace}</span>
+               </div>
+               <div className="flex items-center gap-1.5">
+                 <Clock size={12} className="text-amber-400 shrink-0" />
+                 <span className="truncate">{teacherProfile.workHours}</span>
+               </div>
+             </div>
           </div>
         </div>
       </div>
+
+      {/* Toggleable Profile Editor Row */}
+      <AnimatePresence>
+        {isEditingProfile && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <form onSubmit={handleSaveProfile} className="bg-slate-900/50 border border-emerald-800/30 p-6 rounded-[30px] space-y-4 text-white">
+              <div className="flex items-center justify-between pb-3 border-b border-emerald-950">
+                <h3 className="text-sm font-black text-emerald-300 flex items-center gap-2">
+                  <Shield size={16} />
+                  <span>تنظیمات هویتی و ویرایش پورتال دبیر کایزن (پویای سیستمی)</span>
+                </h3>
+                <span className="text-[9px] text-slate-350">اطلاعات این فرم مستقیماً در کارنامه، تجویزها و برنامه مطالعاتی داوطلبان کلاس شما منعکس می‌شود</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">نام و نام خانوادگی دبیر</label>
+                  <input
+                    type="text"
+                    required
+                    value={tName}
+                    onChange={(e) => setTName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">کد پرسنلی / کد صنفی آموزش پرورش</label>
+                  <input
+                    type="text"
+                    required
+                    value={tLicense}
+                    onChange={(e) => setTLicense(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">تخصص دپارتمانی (مثال: دبیر ممیزی شیمی)</label>
+                  <input
+                    type="text"
+                    required
+                    value={tSpecialization}
+                    onChange={(e) => setTSpecialization(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">مدرسه‌ها تحت تدریس (با ویرگول جدا کنید)</label>
+                  <input
+                    type="text"
+                    required
+                    value={tSchools}
+                    onChange={(e) => setTSchools(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">محل فعالیت / شعبه کانون اصلی</label>
+                  <input
+                    type="text"
+                    required
+                    value={tWorkplace}
+                    onChange={(e) => setTWorkplace(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">سابقه تدریس رسمی کنکور (سال)</label>
+                  <input
+                    type="number"
+                    required
+                    value={tExperience}
+                    onChange={(e) => setTExperience(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">برنامه تدریس و روزهای کلاس‌ها</label>
+                  <input
+                    type="text"
+                    required
+                    value={tClassProgram}
+                    onChange={(e) => setTClassProgram(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">بازه حضور هفتگی جهت پاسخ بالینی</label>
+                  <input
+                    type="text"
+                    required
+                    value={tWorkHours}
+                    onChange={(e) => setTWorkHours(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-emerald-850 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition duration-150 cursor-pointer shadow-md"
+                >
+                  ذخیره و همگام‌سازی امضاء کانون دبیران
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -174,11 +296,11 @@ export default function TeacherDashboardView({ student, onNavigate, onUpdateStud
                 <Users size={16} className="text-emerald-600" />
                 <span>کلاس‌های تحت هدایت علمی شما</span>
               </h3>
-              <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">۳ داوطلب کاندید</span>
+              <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">{studentsUnderTeacher.length} داوطلب کاندید</span>
             </div>
 
             <div className="space-y-2">
-              {STUDENTS_UNDER_TEACHER.map((st) => {
+              {studentsUnderTeacher.map((st) => {
                 const isActive = activeStudent.id === st.id;
                 return (
                   <button

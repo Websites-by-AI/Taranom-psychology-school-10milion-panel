@@ -29,6 +29,7 @@ import TeacherDashboardView from "./components/TeacherDashboardView";
 import { Brain, Settings, Database } from "lucide-react";
 import SmartNotifications, { getRoleBannerAlert } from "./components/SmartNotifications";
 import FocusChallengeOverlay from "./components/FocusChallengeOverlay";
+import { getProfileMetadata, getHydratedStudent } from "./lib/userProfiles";
 
 export default function App() {
   const [student, setStudent] = useState<Student | null>(null);
@@ -173,7 +174,7 @@ export default function App() {
   };
 
   const handleLogin = (matchedStudent: Student, selectedRole: "student" | "parent" | "admin" | "counselor" | "teacher") => {
-    setStudent(matchedStudent);
+    setStudent(getHydratedStudent(matchedStudent));
     setRole(selectedRole);
     if (selectedRole === "parent") {
       setView("parents");
@@ -283,7 +284,13 @@ export default function App() {
               }} />
               
               <div className="text-left hidden md:block">
-                <span className="font-bold text-slate-800 text-xs block text-right">{student.name}</span>
+                <span className="font-bold text-slate-800 text-xs block text-right">
+                  {role === "counselor" || role === "teacher" 
+                    ? getProfileMetadata(role).name 
+                    : role === "admin" 
+                      ? "مدیر کل آکادمی" 
+                      : student.name}
+                </span>
                 <span className="text-[10px] text-slate-400 font-bold block text-right mt-0.5">
                   {role === "student" && "داوطلب آزمون‌های کنکور سراسری"}
                   {role === "parent" && "سیستم نظارتی و پایش والدین"}
@@ -592,7 +599,7 @@ export default function App() {
             {view === "progress" && <ProgressView />}
             {view === "traps" && <TestTrapsView student={student} />}
             {view === "quiz" && <CustomQuizGenerator student={student} />}
-            {view === "psychology" && <AssessmentView student={student} onNavigateChange={(target) => setView(target)} />}
+            {view === "psychology" && <AssessmentView role={role} student={student} onNavigateChange={(target) => setView(target)} />}
             {view === "metacognition" && <MetacognitionLabView student={student} />}
             {view === "counseling" && <CounselingAdvisorView student={student} />}
             {view === "historical-db" && <HistoricalDatabaseView student={student} />}
@@ -605,7 +612,7 @@ export default function App() {
             {view === "parents" && <ParentsView student={student} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
             {view === "report" && <ReportCardView student={student} />}
-            {view === "psychology" && <AssessmentView student={student} onNavigateChange={(target) => setView(target)} />}
+            {view === "psychology" && <AssessmentView role={role} student={student} onNavigateChange={(target) => setView(target)} />}
             {view === "counseling" && <CounselingAdvisorView student={student} />}
             {view === "historical-db" && <HistoricalDatabaseView student={student} />}
             {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
@@ -624,7 +631,7 @@ export default function App() {
             {view === "counselor-dashboard" && <CounselorDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
             {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "psychology" && <AssessmentView student={student} onNavigateChange={(target) => setView(target)} />}
+            {view === "psychology" && <AssessmentView role={role} student={student} onNavigateChange={(target) => setView(target)} />}
             {view === "counselor-chat" && <CounselorView student={student} onNavigate={(target) => setView(target)} />}
             {view === "traps" && <TestTrapsView student={student} />}
             {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}

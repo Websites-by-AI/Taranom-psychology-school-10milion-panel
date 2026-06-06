@@ -3,7 +3,8 @@ import {
   Brain, Sparkles, Wind, Award, Clock, Heart, 
   Calendar, Check, Play, RefreshCw, AlertCircle, 
   TrendingUp, BarChart3, Info, ChevronLeft, Percent, Layers, ClipboardList, ArrowLeftRight, HelpCircle, Smile,
-  UserPlus, Home, GraduationCap, Target, Activity, Zap, ShieldAlert, Eye, BookMarked, ExternalLink
+  UserPlus, Home, GraduationCap, Target, Activity, Zap, ShieldAlert, Eye, BookMarked, ExternalLink,
+  Printer, Trash2, Plus, FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -12,6 +13,7 @@ import { addSystemLog } from "../lib/syslogs";
 
 interface AssessmentViewProps {
   student: Student;
+  role?: "student" | "parent" | "admin" | "counselor" | "teacher" | null;
   onNavigateChange?: (view: string) => void;
 }
 
@@ -34,8 +36,250 @@ interface PsychologyReport {
   breathingPaceSec: number;
 }
 
-export default function AssessmentView({ student, onNavigateChange }: AssessmentViewProps) {
-  const [activeTab, setActiveTab] = useState<"exam-diagnostic" | "ai-synthesis" | "breathing" | "smart-profile" | "scientific-analysis" | "re-design-showcase">("re-design-showcase");
+const toPersianNum = (n: number | string): string => {
+  const farsiDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+  return n.toString().replace(/\d/g, (x) => farsiDigits[parseInt(x)]);
+};
+
+const PSY_TESTS = {
+  anxiety: {
+    title: "تست غربالگری اضطراب آزمودنی بک (BAI)",
+    subtitle: "اندازه‌گیری و تفکیک ترس بالینی، علائم بدنی کورتیزول و قفل‌شدگی هیپوکامپ",
+    intro: "این غربالگری روان‌شناختی وضعیت انقباض عضلانی، اضطراب شناختی و فاجعه‌سازی ذهنی شما را در جلسات آزمون پایش می‌کند.",
+    questions: [
+      { id: 1, text: "احساس تپش قلب شدید، لرزش دست یا بی‌قراری بدنی حین پارت‌های آزمونی." },
+      { id: 2, text: "ترس مفرط از شکست و افکار فاجعه‌ساز درباره رتبه (مثلاً نابود شدن کامل زندگی آینده)." },
+      { id: 3, text: "احساس سفتی مفرط عضلات، عرق سرد، تنگی نفس یا قفل شدن فک هنگام یادآوری کتب تلنبار شده." },
+      { id: 4, text: "سرگیجه، تاری دید، یا حالت تهوع خفیف مابین پورت‌های درسی یا قبل شروع کوییز." },
+      { id: 5, text: "ترس از دست دادن کنترل، توقف ذهنی (بلاک حافظه) یا پاک شدن ناگهانی فرمول‌ها در برابر سوالات دشوار." },
+      { id: 6, text: "برآشفتگی عصبی یا پرخاشگری پیاپی برای مسائل بسیار کوچک به علت فشار درس." },
+      { id: 7, text: "بی‌خوابی مکرر، بیدار شدن با تپش دلهره در ساعت پایانی شب یا کابوس آزمون با درصد منفی." }
+    ],
+    getFeedback: (score: number) => {
+      if (score <= 6) return {
+        level: "اضطراب طبیعی و محرک (سازنده)",
+        levelColor: "text-emerald-700 bg-emerald-50 border-emerald-100",
+        clinicalAnalysis: "سطح اضطراب شما در محدوده طبیعی و بهینه است. پالس‌های خفیف آدرنالین برای بیداری قشر مغز و حفظ انگیزه کاملاً سازنده است.",
+        examImpact: [
+          "حفظ تمرکز و پایداری عملکردی کامل در ماراتن ۴ ساعته کنکور.",
+          "یادآوری سریع فرمول‌ها و ممانعت از توقف حافظه حین آزمون.",
+          "ثبات کامل دستان و تنفس در دفترچه‌های محاسباتی سنگین."
+        ],
+        remedies: [
+          "حفظ ریتم پومودوروی ۵۰-۱۰ فعلی در منزل.",
+          "تخصیص ۵ دقیقه ذهن‌آگاهی تنفس برای صبحانه.",
+          "تمرین تست‌زنی با روش حل چندایده‌ای."
+        ],
+        medicalAdvice: "نیازی به درمان روان‌پزشکی یا مداخله دارویی بالینی وجود ندارد."
+      };
+      if (score <= 13) return {
+        level: "اضطراب متوسط (آزاددهنده و فرسایشی)",
+        levelColor: "text-amber-700 bg-amber-50 border-amber-100",
+        clinicalAnalysis: "اضطراب فرسایشی متوسط بر سیستم سمپاتیک شما حاکم شده است. ترشح مداوم کورتیزول باعث خستگی زودرس ذهن و مسدود شدن جریان خلاقیت پردازشی می‌شود.",
+        examImpact: [
+          "کاهش ۱۰ تا ۱۵ درصدی سرعت پردازش سوالات زمان‌دار کنکور.",
+          "تردیدهای پیاپی و تغییر مکرر پاسخ‌های صحیح به غلط.",
+          "خطای محاسباتی مضحک ناشی از حواس‌پرتی ثانیه‌ای."
+        ],
+        remedies: [
+          "اجرای ۳ دقیقه تنفس بیوفیدبک مهارکننده سمپاتیک قبل از هر آزمون شبیه‌ساز.",
+          "عدم تمرکز روی ساعت مچی به صورت فرسایشی.",
+          "پیاده‌سازی متد تمرینی با استفاده از کارت‌های استراتژی عبور."
+        ],
+        medicalAdvice: "انجام رفتاردرمانی شناختی (CBT) جهت مهار فاجعه‌سازی؛ ارزیابی فاکتور خواب و استفاده از دمنوش‌های طبیعی تاییدشده مانند بابونه و بادرنجبویه."
+      };
+      return {
+        level: "اضطراب شدید بالینی (موجب بلاک شناختی)",
+        levelColor: "text-rose-700 bg-rose-50 border-rose-100",
+        clinicalAnalysis: "اضطراب بالینی حاد بر غشای مغزی شما حکمفرماست. ترشح سرریز آدرنالین باعث فوبیا و پدیده عصب‌شناختی 'قفل ذهنی' (Mental Block) در جلسات کوییز می‌شود.",
+        examImpact: [
+          "خالی شدن ناگهانی حافظه و ندیدن سوالات آسان در آزمون.",
+          "tari دید موقت، گریه ناگهانی یا لرزش دست شدید در شروع جلسه.",
+          "احساس سرکوب عمیق و خستگی شدید روحی بعد از ۳۰ دقیقه اول."
+        ],
+        remedies: [
+          "آموختن ریلکسیشن عضلانی پیشرونده جاکوبسون (PMR) روزانه ۱۰ دقیقه.",
+          "تمرین حل تست‌های کنکور در خانه بدون در نظر گرفتن زمان تا ۳ هفته.",
+          "حذف مطلق صحبت‌های منفی با خانواده و کانال‌های رتبه‌سنج تلگرام."
+        ],
+        medicalAdvice: "توصیه مبرم برای ارجاع بالینی نزد پزشک متخصص اعصاب و روان (روانپزشک) جهت ممیزی و ارزیابی لزوم درمان‌های دارویی علامتی (نظیر پروپرانولول یا داروهای انتخابی بازجذب سروتونین SSRI) همراه با روان‌درمانی فشرده تحصیلی."
+      };
+    }
+  },
+  depression: {
+    title: "تست فرسودگی تحصیلی و افسردگی بک (BDI)",
+    subtitle: "ارزیابی سطوح بی‌رمقی ذهنی، فقدان انگیزه تحصیلی و درماندگی آموخته‌شده",
+    intro: "این ابزار بالینی تراز انرژی حیاتی، بدبینی شناختی و افت عملکرد در قالب پدیده فرسودگی تحصیلی (Academic Burnout) را ارزیابی می‌کند.",
+    questions: [
+      { id: 1, text: "احساس ناامیدی شدید و این ایده مخرب که «من هر چقدر هم درس بخوانم، باز هم به نتیجه دلخواهم نمی‌رسم»." },
+      { id: 2, text: "کاهش شدید اشتیاق و علاقه به کتب؛ حس کلافگی عمیق و پوچی تمام تلاش‌های تلاش درسی کنکور." },
+      { id: 3, text: "احساس فرسودگی مداوم، تنبلی عضلانی و کمبود انرژی حیاتی به صورتی که حتی با خواب زیاد باز هم تمایل به بیداری ندارم." },
+      { id: 4, text: "سرزنش گزنده خود، احساس گناه مکرر بابت ساعت‌های تلف‌شده گذشته و لگدمال کردن عزت‌نفس تحصیلی." },
+      { id: 5, text: "میل شدید به ایزوله‌سازی خود، عدم پاسخ به خانواده و مشاوران و رها کردن نگارش گزارشکار به علت احساس شرم." },
+      { id: 6, text: "تعلل گزافه (Procrastination)، افت سنگین در آغاز پارت‌های درمانی روزانه و ترجیح انفعال محض." },
+      { id: 7, text: "اتکا به پناه جستن‌های فرارگونه نظیر خواب مفرط روزانه یا گشت‌وگذار مخرب چندین ساعته در گوشی مابین پارت‌ها." }
+    ],
+    getFeedback: (score: number) => {
+      if (score <= 6) return {
+        level: "نشاط روحی بهینه و نوسانات طبیعی انگیزه",
+        levelColor: "text-emerald-700 bg-emerald-50 border-emerald-100",
+        clinicalAnalysis: "شما در دایره بهداشتی عالی روان هستید. افت‌های جزئی انگیزه مابین بودجه‌بندی‌ها در مسیر کنکور واکنش زیستی طبیعی مغز است و افسردگی شمرده نمی‌شود.",
+        examImpact: [
+          "ذخیره انرژی پردازشی کافی برای جنگ بر سر نمره در ساعات آخر دفترچه‌های اختصاصی.",
+          "تمرکز عمیق ذهنی و پیگیری متداولی برای تست‌های محاسباتی چندمرحله‌ای."
+        ],
+        remedies: [
+          "پافشاری بر پومودوروهای روزانه کنکور.",
+          "تخصیص جوایز خرد دوپامینی (ملاقات با دوستان موفق یا تماشای فیلم خانوادگی مناسب).",
+          "تمرین خلاق خلاصه‌نویسی تنه اصلی مباحث."
+        ],
+        medicalAdvice: "نیازی به مداخله دارویی نیست. ادامه روش تغذیه‌ای غنی و ورزش متوسط برای حفظ شادابی توصیه می‌شود."
+      };
+      if (score <= 13) return {
+        level: "فرسودگی تحصیلی متوسط (Burnout)",
+        levelColor: "text-orange-700 bg-orange-50 border-orange-100",
+        clinicalAnalysis: "افسردگی هورمونی خفیف یا خستگی مفرط تحصیلی بر سلول‌های عصبی شما سایه انداخته است. سرکوب دوپامینی ناشی از یکنواختی مفرط برنامه یا ترس مداوم، مانع تمرکز دیپ-فلو می‌شود.",
+        examImpact: [
+          "حس رهاسازی زودرس در مواجه با صورت تست‌های حجیم زیست و ادبیات آزمون.",
+          "کندی در بازیابی پاسخ‌ها به دلیل قفل حواس موقت.",
+          "بی تفاوتی عمیق نسبت به نمره و درصد به علت کلافگی عصبی."
+        ],
+        remedies: [
+          "پیاده‌سازی الگوی ریکاوری میکرو کایزن: نصف کردن موقت بودجه تکلیفی جهت استراحت قشر پردازشگر مغز.",
+          "درج یک روز استراحت مطلق در ماه جهت خروج دوپامین از استپ رقابتی.",
+          "تغییر محیط فیزیکی درس خواندن و مطالعه در سالن‌های جمعی یا کتابخانه‌ها."
+        ],
+        medicalAdvice: "ضروری است مربی تحصیلی تراز درسی شما را ملایم کند؛ انجام آزمایش بررسی ویتامین D3، تست هورمونی تیروئید و آهن خون بالینی ضرورت دارد."
+      };
+      return {
+        level: "افسردگی شدید بالینی و تخلیه انرژی مغزی",
+        levelColor: "text-rose-700 bg-rose-50 border-rose-100",
+        clinicalAnalysis: "شدت فرسودگی تحصیلی و بدبینی روحی داوطلب به مرز بالینی حاد رسیده است. عدم حضور فلوئیدهای شادابی در سیناپس‌های ترشح سروتونین مغز، یادگیری عمیق را کاملاً فلج کرده است.",
+        examImpact: [
+          "عدم قابلیت تمرکز ممتد بیش از ۳۰ دقیقه و رها کردن صندلی آزمون در میان راه.",
+          "ناراحتی و گریه‌های خاموش، انفعال پایتختی و عدم توانایی حل سوالات تک ایده‌ای آسان زیست.",
+          "کندی شدید روانی-حرکتی (حل یک کوییز ۱۰ سواله برای شما بیش از ۵۰ دقیقه طول می‌کشد)."
+        ],
+        remedies: [
+          "توقف کامل امتحانات شبیه‌ساز کنکور یا فیدبک‌های تندکار به مدت ۱ هفته جهت استراحت غشا مغز.",
+          "تکه تکه کردن تمامی کتاب‌ها به جزوه‌های درختی کوچک ۱۰ دقیقه‌ای.",
+          "اجبار فیزیکال به پیاده‌روی در معرض نور مستقیم خورشید قبل از ساعت ۸ صبح جهت کوپل هورمونی."
+        ],
+        medicalAdvice: "نیازمند ممیزی فوری و ارجاع تخصصی بالینی نزد پزشک متخصص روانپزشکی. مداخله دارویی با مهارکننده‌های سروتونین (SSRIها همانند فلوکستین، سرترالین یا اس‌سیتالوپرام با هدف احیاء سیناپسی نوروترانسمیترها) تحت نظر روانپزشک و پشتیبان روانشناختی کنکور بسیار حیاتی است."
+      };
+    }
+  },
+  ocd: {
+    title: "تست وسواس تکرار و تردید مرضی مطالعه (Yale-Brown Modified)",
+    subtitle: "ارزیابی روانشناختی دوباره‌خوانی وسواسی، شک مداوم تستی، قفل بر روی تسک و دوباره‌کاری‌های فرساینده (وسواس تکرار)",
+    intro: "این ابزار بالینی بروز رفتارهای وسواس‌گونه تحصیلی و تکرار مرضی کارها (وسواس تکرار، دوباره‌خوانی وسواسی، شک‌های ممتد و قفل بر روی یک تسک) را ممیزی کرده، آثار فاجعه‌بار آن بر هدررفت وقت تستی کنکور را شرح داده و راه‌حل مهار آن را به صورت علمی ارائه می‌کند.",
+    questions: [
+      { id: 1, text: "دوباره‌خوانی و چندین‌باره‌خوانی وسواسی یک پاراگراف یا فرمول، حتی زمانی که معنی آن را عمیقاً فهمیده‌اید اما ندایی وسواسی به شما بازگو می‌کند که مجدداً بخوانید." },
+      { id: 2, text: "بررسی و ممیزی وسواسی مجدد و مکرر پاسخ‌برگ و حل چندباره تست‌های نسبتاً ساده، از ترس مداوم بابت خطاهای فاحش بدوی." },
+      { id: 3, text: "اتلاف وقت سنگین برای کارهای جانبی نظیر خلاصه‌نویسی‌های وسواسی مجدد، نقاشی حاشیه‌های خطوط یا مرتب کردن چیدمان تحصیلی به اندازه ساعات طولانی." },
+      { id: 4, text: "پاک کردن چهل‌باره یادداشت‌ها، پاره کردن خلاصه نویسی‌ها بابت ناهمواری دست‌خط و شروع نوشتن برگه از ابتدا با اصرار برای کمال‌گرایی کاذب." },
+      { id: 5, text: "شک پسینی وسواسی به گزینه‌هایی که انتخاب کرده‌اید که باعث جابجایی دائم گزینه‌ها و تغییر پاسخ‌های صحیح به غلط در انتهای آزمون می‌شود." },
+      { id: 6, text: "قفل کردن عاجزانه روی یک مبحث درسی سخت و امتناع شدید از عبور از آن، به نحوی که کل مابقی برنامه درسی آن روز قربانی همان یک پارت گردد." },
+      { id: 7, text: "وسواس توازن زمانی فتیش‌وار؛ مثلاً صبر می‌کنید تا زمان کاملاً رند شود تا درس شروع شود و اگر دقیقه‌ای بگذرد کل پارت مطالعاتی را تعلیق می‌کنید." }
+    ],
+    getFeedback: (score: number) => {
+      if (score <= 6) return {
+        level: "دقت بالا و ممیزی منظم علمی (دقت رتبه برتر)",
+        levelColor: "text-emerald-700 bg-emerald-50 border-emerald-100",
+        clinicalAnalysis: "رفتارهای کنترلی شما در رده دقت علمی بهینه تحصیلی است. این دقت بالا، درصد خطاهای محاسباتی تصادفی شما را با مهار وسواس تکرار، کاهش می‌دهد.",
+        examImpact: [
+          "کاهش قاطع فوت وقت‌های کاذب در امتحانات تشخیصی.",
+          "ثبت با اطمینان گزینه‌ها از شروع جوابدهی بدون ترس لرزان ثانویه.",
+          "انتخاب راحت و حرکت گام به گام روی کل بدنه سوالات."
+        ],
+        remedies: [
+          "ثبات در سیستم یادداشت مکتوب حین حل حل مسئله ریاضی.",
+          "ضربدر زدن کنار تست‌های اتمام یافته جهت مهر موم ذهنی."
+        ],
+        medicalAdvice: "عدم نیاز به هرگونه مداخله روان‌پزشکی یا دارویی."
+      };
+      if (score <= 13) return {
+        level: "وسواس تکرار و شک تحصیلی متوسط",
+        levelColor: "text-amber-700 bg-amber-50 border-amber-100",
+        clinicalAnalysis: "شما در آستانه ابتلا به وسواس عملی مطالعه (رفتار کنترلی تکرار مرضی تسک‌ها) هستید. عدم توانایی مغز در صادر کردن سیگنال اتمام کار (Completion Signal) ناشی از ناهماهنگی شیمیایی در هسته دم‌دار مغز است.",
+        examImpact: [
+          "کمبود شدید وقت مکرر در تمام دروس عمومی و کنکور.",
+          "نرسیدن به تست‌های ردیف ۲ انتهای دفترچه‌ها علیرغم تسلط علمی کامل.",
+          "خستگی مفرط عضلانی چشم‌ها و سر سنگینی شدید در دقایق پایانی آزمون."
+        ],
+        remedies: [
+          "رعایت سختگیرانه پروتکل ERP (مواجهه و جلوگیری از پاسخ): خواندن زیست با پوشش کارت مشکی روی سطور قبلی جهت انسداد فیزیکی حرکت دوباره چشم به عقب.",
+          "مهر و موم کردن هر تست حل شده با علامت تیک بزرگ و ممانعت تام از تجدید حل آن تستی.",
+          "بستن قرارداد زمانی صلب (تکنیک جعبه زمانی تستی) برای حل هر دسته تست."
+        ],
+        medicalAdvice: "اصلاح رفتاری با کمک مربی متخصص جهت افزایش پذیرش خطاهای جزئی محاسباتی؛ تمرین رهاسازی شناختی از مهار تردیدهای کاذب."
+      };
+      return {
+        level: "وسواس عملی شدید تحصیلی (وسواس تکرار و تردید وسواسی مفرط)",
+        levelColor: "text-rose-700 bg-rose-50 border-rose-100",
+        clinicalAnalysis: "شما دچار وسواس فکری-عملی شدید (OCD تحصیلی) در تکرار پیاپی تسک‌ها هستید. اختلال در مدارهای عصبی کورتیکو-استریاتو-تالامو-کورتیکال (CSTC) مغز باعث پایداری 'چرخه خطا' شده و مغز علیرغم فهمیدن علمی، تشنه تکرار مجدد و غیرضروری می‌گردد.",
+        examImpact: [
+          "هدررفت بیش از ۶۰ تا ۸۰ دقیقه وقت گرانبها در آزمون‌ها بابت ریدینگ‌های وسواسی و مجدد صورت سوالات تستی.",
+          "پاره کردن متناوب دفترچه، پاک کردن مکرر و هیستریک و تغییر بیش از ۸ گزینه صحیح به غلط ناشی از شک جهنمی گزینه‌ای.",
+          "سوختن روزانه بیش از ۷۰ درصد از برنامه زمانی مطالعاتی مشاور به علت قفل روانی بی‌ثمر روی یک برگ کتب."
+        ],
+        remedies: [
+          "تمرین فشرده مواجهه و جلوگیری از پاسخ (ERP) با کمک مداخله روان‌شناختی پشتیبان.",
+          "تست‌زنی اجباری با مدادی بدون مجهز بودن به پاک‌کن (حل تست بدون مجاز بودن به اصلاح یا تغییر بعد انتخاب).",
+          "استفاده از خلاصه‌نویسی تلفظی صوتی بجای وسواس سیاه یا چنگی مکرر روی برگه ها.",
+          "استراحت عالی و پاشیدن آب سرد به صورت جهت انقطاع مدارهای فکری وسواسی."
+        ],
+        medicalAdvice: "درمان این سطح حاد از وسواس تکرار کارها (OCD) بدون همگامی دارویی با خط درمانی روانپزشکی عموماً بی‌اثر می‌ماند. مراجعه مبرم به روانپزشک جهت ارزیابی بالینی مفاخر دارویی تراز مهار وسواس (مانند کلومیپرامین، قرص فلووکسامین یا مهارکننده‌های سروتونین SSRIs با دوزهای بالینی کنترل مکرر مرضی کارهای تکراری) در همسویی کامل با پروتکل درمانی تخصصی CBT-ERP."
+      };
+    }
+  }
+};
+
+export default function AssessmentView({ student, role, onNavigateChange }: AssessmentViewProps) {
+  const [activeTab, setActiveTab] = useState<"exam-diagnostic" | "ai-synthesis" | "breathing" | "smart-profile" | "scientific-analysis" | "re-design-showcase" | "clinical-tests">("re-design-showcase");
+
+  // Clinical Test states
+  const [activeTestKey, setActiveTestKey] = useState<"anxiety" | "depression" | "ocd" | null>(null);
+  const [currentTestQIndex, setCurrentTestQIndex] = useState(0);
+  const [testAnswers, setTestAnswers] = useState<number[]>([]);
+  const [testCompleted, setTestCompleted] = useState(false);
+
+  // Counselor interview states
+  const [activeClinicalSubTab, setActiveClinicalSubTab] = useState<"screenings" | "interviews">("screenings");
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
+  const [observeTitle, setObserveTitle] = useState("");
+  const [observeNotes, setObserveNotes] = useState("");
+  const [observeDiagnosis, setObserveDiagnosis] = useState("");
+  const [observeSeverity, setObserveSeverity] = useState<"critical" | "warning" | "mild">("warning");
+  const [customPrescripts, setCustomPrescripts] = useState<string[]>([]);
+  const [newPrescriptText, setNewPrescriptText] = useState("");
+  const [interviews, setInterviews] = useState<any[]>(() => {
+    const saved = localStorage.getItem(`taranom_psychology_interviews_${student.id}`);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return []; }
+    }
+    return [
+      {
+        id: "INT-304",
+        date: "۱۴۰۶/۰۳/۰۵",
+        title: "بررسی افت ساعت مطالعه و خستگی حاد مفرط",
+        symptoms: ["افت ساعت مطالعه", "بی‌قراری و تنش فیزیکی", "فرسودگی و کلافگی شدید"],
+        notes: "در مصاحبه حضوری مشخص شد داوطلب به علت فشار مستمر هفته‌های پایانی منتهی به آزمون جامع دچار خستگی حاد چشم و کاهش انگیزه گردیده است. ساعت خواب شبانه او به ۵ ساعت افت کرده است.",
+        diagnosis: "خستگی مزمن ذهن و فرسودگی تحصیلی دور پایانی (Burnout)",
+        prescriptions: [
+          "اجرای روزانه ۲ نوبت تنفس تعاملی بیوفیدبک ۴ ثانیه‌ای",
+          "کاهش ساعت مطالعه تجمعی به ۱۰ ساعت برای ایجاد بازیابی ذهنی",
+          "مصرف دمنوش بادرنجبویه شبانه جهت تثبیت فاکتور خواب"
+        ],
+        severity: "warning"
+      }
+    ];
+  });
+  const [printPreviewInterview, setPrintPreviewInterview] = useState<any | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(`taranom_psychology_interviews_${student.id}`, JSON.stringify(interviews));
+  }, [interviews, student.id]);
 
   // Get the latest mock exam based on student's field
   const latestExam: Exam = useMemo(() => {
@@ -508,6 +752,15 @@ export default function AssessmentView({ student, onNavigateChange }: Assessment
             <span>نقد و تحول همدلی (نسخه جدید)</span>
           </button>
           <button
+            onClick={() => setActiveTab("clinical-tests")}
+            className={`flex-1 md:flex-initial px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shrink-0 ${
+              activeTab === "clinical-tests" ? "bg-rose-600 text-white shadow-md shadow-rose-650/10" : "text-slate-450 hover:text-slate-200"
+            }`}
+          >
+            <ShieldAlert size={14} className="text-rose-400" />
+            <span>سنجش بالینی و مصاحبه مشاور</span>
+          </button>
+          <button
             onClick={() => setActiveTab("exam-diagnostic")}
             className={`flex-1 md:flex-initial px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shrink-0 ${
               activeTab === "exam-diagnostic" ? "bg-indigo-600 text-white shadow-md shadow-indigo-650/10" : "text-slate-450 hover:text-slate-200"
@@ -622,7 +875,7 @@ export default function AssessmentView({ student, onNavigateChange }: Assessment
                         </div>
                         
                         <div className="space-y-2">
-                          <h4 className="text-sm font-black text-amber-950">مريم حسینی عزیز، خسته نباشی مسبب رتبه برتر! 🌸</h4>
+                          <h4 className="text-sm font-black text-amber-950">{student.name} عزیز، خسته نباشی مسبب رتبه برتر! 🌸</h4>
                           <p className="text-xs font-bold leading-relaxed text-slate-700">
                             کارنامه‌ات نشون میده تلاش فوق‌العاده‌ای داشتی و پتانسیل علمیت عالیه، اما راستش رو بخوای <span className="text-rose-600 font-extrabold underline">دست‌کم تفکر و بازخوانی آزمونت کمی سطحی بوده!</span> تراز ۶۱۸۰ و رتبه ۸۹۰ خیلی خوبه، ولی زیست‌شناسی ۵۵ درصد لایق پتانسیل واقعی تو نیست.
                           </p>
@@ -994,6 +1247,875 @@ export default function AssessmentView({ student, onNavigateChange }: Assessment
               </div>
 
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === "clinical-tests" && (
+          <motion.div
+            key="clinical-tests-tab"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-6 text-right relative z-10"
+          >
+            {/* Top diagnostic header */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 text-white relative overflow-hidden shadow-xl" id="diagnostic-header-card">
+              <div className="absolute top-0 left-0 bg-rose-600/10 w-64 h-64 rounded-full blur-3xl -z-10" />
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/20 text-[10px] font-black rounded-lg">کیت جامع عصب‌شناختی ترنم</span>
+                    <span className="px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-[10px] font-black rounded-lg">استاندارد APA / DSM-5</span>
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-100 flex items-center gap-2 mt-2">
+                    سنجش بالینی سلامت روان و ثبت مصاحبه‌های فیدبک
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-2xl">
+                    این بازو با ادغام مقیاس‌های علمی استاندارد بک و ییل-براون، ابزاری جامع را برای اندازه‌گیری سطوح اضطراب، فرسودگی تحصیلی و وسواس تکرار داوطلب فرآهم می‌سازد. مربیان گرامی نیز می‌توانند از مینی‌پورتال مصاحبه‌ها برای مستندسازی مشاوره‌ها بهره‌مند شوند.
+                  </p>
+                </div>
+                
+                {/* Sub tab toggles */}
+                <div className="flex bg-slate-950 p-1.5 rounded-2xl border border-slate-800 self-start md:self-center gap-1 shrink-0">
+                  <button
+                    onClick={() => {
+                      setActiveClinicalSubTab("screenings");
+                      setActiveTestKey(null);
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+                      activeClinicalSubTab === "screenings" 
+                        ? "bg-rose-600 text-white shadow-lg" 
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Activity size={14} />
+                    <span>آزمون‌های خودارزیابی بالینی</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveClinicalSubTab("interviews")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+                      activeClinicalSubTab === "interviews" 
+                        ? "bg-rose-600 text-white shadow-lg" 
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <ClipboardList size={14} />
+                    <span>میز کارتابل و مصاحبه مشاور</span>
+                    {role === "counselor" && (
+                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Subtab Content A: Screenings */}
+            {activeClinicalSubTab === "screenings" && (
+              <div className="space-y-8">
+                {activeTestKey === null ? (
+                  // Mode A.1: Test Selection screen
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Anxiety Test BAI */}
+                    <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm flex flex-col justify-between hover:border-rose-200 hover:shadow-md transition-all group relative overflow-hidden" id="anxiety-test-card">
+                      <div className="absolute top-0 left-0 bg-rose-500/5 w-24 h-24 rounded-full blur-xl" />
+                      <div className="space-y-4">
+                        <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <AlertCircle size={24} />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-base font-black text-slate-900 leading-snug">{PSY_TESTS.anxiety.title}</h3>
+                          <p className="text-[11px] text-indigo-600 font-bold leading-relaxed">
+                            {PSY_TESTS.anxiety.subtitle}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-2xl text-[10px] text-slate-500 font-semibold leading-relaxed">
+                          این غربالگری روان‌شناختی وضعیت انقباض عضلانی، اضطراب شناختی و فاجعه‌سازی ذهنی شما را در جلسات آزمون پایش می‌کند.
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setActiveTestKey("anxiety");
+                          setCurrentTestQIndex(0);
+                          setTestAnswers([]);
+                          setTestCompleted(false);
+                        }}
+                        className="w-full mt-6 bg-slate-900 hover:bg-rose-600 text-white text-xs font-black py-3 rounded-xl transition-all active:scale-95 cursor-pointer text-center shadow-sm"
+                      >
+                        شروع غربالگری اضطراب بک
+                      </button>
+                    </div>
+
+                    {/* Depression Test BDI */}
+                    <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm flex flex-col justify-between hover:border-amber-200 hover:shadow-md transition-all group relative overflow-hidden" id="depression-test-card">
+                      <div className="absolute top-0 left-0 bg-amber-500/5 w-24 h-24 rounded-full blur-xl" />
+                      <div className="space-y-4">
+                        <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <TrendingUp size={24} />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-base font-black text-slate-900 leading-snug">{PSY_TESTS.depression.title}</h3>
+                          <p className="text-[11px] text-amber-600 font-bold leading-relaxed">
+                            {PSY_TESTS.depression.subtitle}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-2xl text-[10px] text-slate-500 font-semibold leading-relaxed">
+                          ارزیابی سطوح بی‌رمقی ذهنی، فقدان انگیزه تحصیلی و خستگی مفرط ناشی از فرسودگی مستمر در اواخر ماراتن کنکور.
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setActiveTestKey("depression");
+                          setCurrentTestQIndex(0);
+                          setTestAnswers([]);
+                          setTestCompleted(false);
+                        }}
+                        className="w-full mt-6 bg-slate-900 hover:bg-amber-600 text-white text-xs font-black py-3 rounded-xl transition-all active:scale-95 cursor-pointer text-center shadow-sm"
+                      >
+                        شروع ارزیابی فرسودگی بک
+                      </button>
+                    </div>
+
+                    {/* OCD Test Y-BOCS */}
+                    <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm flex flex-col justify-between hover:border-teal-200 hover:shadow-md transition-all group relative overflow-hidden" id="ocd-test-card">
+                      <div className="absolute top-0 left-0 bg-teal-500/5 w-24 h-24 rounded-full blur-xl" />
+                      <div className="space-y-4">
+                        <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <RefreshCw size={24} />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-base font-black text-slate-900 leading-snug">{PSY_TESTS.ocd.title}</h3>
+                          <p className="text-[11px] text-teal-600 font-bold leading-relaxed">
+                            {PSY_TESTS.ocd.subtitle}
+                          </p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-2xl text-[10px] text-slate-500 font-semibold leading-relaxed">
+                          ریشه‌یابی تکرار مرضی تسک‌ها از جمله دوباره‌خوانی وسواسی، شک‌های ممتد محاسباتی و قفل اتلاف‌کننده وقت روی یک مسئله.
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setActiveTestKey("ocd");
+                          setCurrentTestQIndex(0);
+                          setTestAnswers([]);
+                          setTestCompleted(false);
+                        }}
+                        className="w-full mt-6 bg-slate-900 hover:bg-teal-600 text-white text-xs font-black py-3 rounded-xl transition-all active:scale-95 cursor-pointer text-center shadow-sm"
+                      >
+                        شروع ارزیابی وسواس مطالعه
+                      </button>
+                    </div>
+                  </div>
+                ) : !testCompleted ? (
+                  // Mode A.2: Active Question Walker
+                  <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-150 shadow-lg space-y-8 relative" id="test-question-walker">
+                    <div className="absolute top-0 right-0 left-0 h-1.5 bg-rose-100 rounded-t-3xl overflow-hidden">
+                      <div 
+                        className="h-full bg-rose-500 transition-all duration-300" 
+                        style={{ width: `${((currentTestQIndex + 1) / PSY_TESTS[activeTestKey].questions.length) * 100}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                      <div>
+                        <h3 className="text-base font-black text-slate-950">{PSY_TESTS[activeTestKey].title}</h3>
+                        <p className="text-[10px] text-slate-400 font-bold mt-1">خودارزیابی تخصصی بالینی ترنم فلو</p>
+                      </div>
+                      <button
+                        onClick={() => setActiveTestKey(null)}
+                        className="text-xs text-slate-500 hover:text-slate-800 font-black border border-slate-200 px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
+                      >
+                        خروج و انصراف
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-black text-rose-500 tracking-wider">عبارت خوداظهاری شماره {toPersianNum(currentTestQIndex + 1)}:</span>
+                      <p className="text-lg font-bold text-slate-800 leading-relaxed pt-1">
+                        {PSY_TESTS[activeTestKey].questions[currentTestQIndex].text}
+                      </p>
+                    </div>
+
+                    {/* Radio answer options */}
+                    <div className="grid gap-3 pt-2">
+                      {[
+                        { text: "اصلاً یا به ندرت (هیچ علائمی در خود احساس نمی‌کنم)", value: 0, badge: "طبیعی" },
+                        { text: "خفیف (آزاردهنده نیست اما گهگاه وجود دارد)", value: 1, badge: "کم" },
+                        { text: "متوسط (زجر‌آور است و راندمان را آشکارا کاهش می‌دهد)", value: 2, badge: "متوسط" },
+                        { text: "شدید (فرساینده و فلج‌کننده روانی است، تمرکز را از بین می‌برد)", value: 3, badge: "شدید بالینی" }
+                      ].map((opt, idx) => (
+                        <button
+                          key={idx}
+                          role="radio"
+                          aria-checked={testAnswers[currentTestQIndex] === opt.value}
+                          onClick={() => {
+                            const updated = [...testAnswers];
+                            updated[currentTestQIndex] = opt.value;
+                            setTestAnswers(updated);
+
+                            if (currentTestQIndex < PSY_TESTS[activeTestKey].questions.length - 1) {
+                              setCurrentTestQIndex(prev => prev + 1);
+                            } else {
+                              setTestCompleted(true);
+                              addSystemLog(
+                                `تست بالینی ${activeTestKey}`,
+                                student.name,
+                                `پایان ارزیابی با نمره کل ${updated.reduce((a, b) => a + b, 0)}`
+                              );
+                            }
+                          }}
+                          className={`w-full p-4 border rounded-2xl flex justify-between items-center text-right group active:scale-[0.99] transition-all cursor-pointer ${
+                            testAnswers[currentTestQIndex] === opt.value 
+                              ? "bg-rose-50/50 border-rose-300 text-rose-950 ring-2 ring-rose-500/10" 
+                              : "border-slate-150 hover:bg-slate-50 hover:border-slate-350"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-colors ${
+                              testAnswers[currentTestQIndex] === opt.value 
+                                ? "bg-rose-600 text-white" 
+                                : "bg-slate-550/10 text-slate-500 group-hover:bg-slate-200"
+                            }`}>
+                              {toPersianNum(idx + 1)}
+                            </span>
+                            <span className="text-xs font-bold leading-relaxed">{opt.text}</span>
+                          </div>
+                          
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${
+                            opt.value === 3 ? "bg-red-100 text-red-600" :
+                            opt.value === 2 ? "bg-amber-100 text-amber-600" :
+                            opt.value === 1 ? "bg-indigo-100 text-indigo-600" : "bg-emerald-100 text-emerald-600"
+                          }`}>
+                            {opt.badge}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                      <button
+                        onClick={() => {
+                          if (currentTestQIndex > 0) {
+                            setCurrentTestQIndex(prev => prev - 1);
+                          }
+                        }}
+                        disabled={currentTestQIndex === 0}
+                        className="text-xs font-black text-slate-450 hover:text-slate-800 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                      >
+                        ← سوال قبلی
+                      </button>
+                      <span className="text-[10px] text-slate-400 font-bold">پیشرفت: {toPersianNum(Math.round((currentTestQIndex / PSY_TESTS[activeTestKey].questions.length) * 100))}%</span>
+                    </div>
+                  </div>
+                ) : (
+                  // Mode A.3: Test Report Screen
+                  (() => {
+                    const totalScore = testAnswers.reduce((sum, v) => sum + v, 0);
+                    const maxPossible = PSY_TESTS[activeTestKey].questions.length * 3;
+                    const feedback = PSY_TESTS[activeTestKey].getFeedback(totalScore);
+
+                    return (
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="test-report-screen">
+                        {/* Gauge Card left */}
+                        <div className="lg:col-span-4 bg-white p-6 rounded-3xl border border-slate-150 shadow-md flex flex-col justify-between items-center text-center">
+                          <div className="w-full flex justify-between items-center border-b border-slate-100 pb-3">
+                            <span className="text-[9px] font-black bg-rose-50 text-rose-700 px-2.5 py-1 rounded-md border border-rose-100">کارنامه تشخیص بالینی</span>
+                            <span className="text-[9px] font-mono text-slate-400">کد پرونده: PX-{totalScore * 9}</span>
+                          </div>
+
+                          <div className="my-8 relative flex items-center justify-center">
+                            <svg className="w-36 h-36 transform -rotate-90">
+                              <circle cx="72" cy="72" r="60" stroke="#f1f5f9" strokeWidth="12" fill="transparent" />
+                              <circle
+                                cx="72"
+                                cy="72"
+                                r="60"
+                                stroke={totalScore > 13 ? "#ef4444" : totalScore > 6 ? "#f59e0b" : "#10b981"}
+                                strokeWidth="12"
+                                fill="transparent"
+                                strokeDasharray={2 * Math.PI * 60}
+                                strokeDashoffset={2 * Math.PI * 60 * (1 - totalScore / maxPossible)}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000"
+                              />
+                            </svg>
+                            <div className="absolute text-center">
+                              <span className="text-4xl font-extrabold text-slate-900 tracking-tight">{toPersianNum(totalScore)}</span>
+                              <span className="text-slate-400 text-[10px] font-bold block mt-0.5">از {toPersianNum(maxPossible)} امتیاز</span>
+                            </div>
+                          </div>
+
+                          <div className="w-full space-y-4">
+                            <div className={`p-3 rounded-2xl text-xs font-black border text-center ${feedback.levelColor}`}>
+                              خروجی: {feedback.level}
+                            </div>
+                            
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setTestCompleted(false);
+                                  setCurrentTestQIndex(0);
+                                  setTestAnswers([]);
+                                }}
+                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-[11px] font-black text-slate-700 rounded-xl transition active:scale-95 cursor-pointer text-center"
+                              >
+                                تکرار این آزمون
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveTestKey(null);
+                                  setTestCompleted(false);
+                                }}
+                                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black rounded-xl transition active:scale-95 cursor-pointer text-center"
+                              >
+                                بازگشت به لیست
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Analysis right */}
+                        <div className="lg:col-span-8 space-y-6">
+                          {/* Card 1: Clinical analysis */}
+                          <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm space-y-4">
+                            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                              <Brain size={18} className="text-rose-500" />
+                              <h3 className="text-xs font-black text-slate-900">آنالیز روان‌شناختی بالینی</h3>
+                            </div>
+                            <p className="text-xs font-semibold leading-relaxed text-slate-600 bg-slate-50 p-4 rounded-2xl border border-slate-100 leading-relaxed">
+                              {feedback.clinicalAnalysis}
+                            </p>
+                          </div>
+
+                          {/* Card 2: Impact */}
+                          <div className="p-6 rounded-3xl bg-amber-50/50 border border-amber-100 shadow-sm space-y-4">
+                            <div className="flex items-center gap-2 border-b border-amber-200/45 pb-3">
+                              <AlertCircle size={18} className="text-amber-600" />
+                              <h3 className="text-xs font-black text-amber-950">تاثیر مستقیم این الگو بر کارنامه کنکور شما</h3>
+                            </div>
+                            <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {feedback.examImpact.map((impact, ind) => (
+                                <li key={ind} className="flex gap-2.5 items-start p-3 bg-white hover:bg-slate-50 rounded-xl border border-amber-100 transition-colors">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-2" />
+                                  <span className="text-[11px] text-slate-600 font-bold leading-relaxed">{impact}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {/* Card 3: Remedies */}
+                          <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm space-y-4">
+                            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                              <Award size={18} className="text-teal-600" />
+                              <h3 className="text-xs font-black text-slate-900">راه‌حل‌های شناختی و رفتاری مهار (CBT / ERP)</h3>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              {feedback.remedies.map((remedy, ind) => (
+                                <div key={ind} className="p-4 bg-slate-50 hover:bg-slate-100/50 border border-slate-100 rounded-2xl transition-transform cursor-default relative">
+                                  <span className="absolute top-2 left-3 font-serif text-[10px] text-rose-300 font-black">#0{ind + 1}</span>
+                                  <h4 className="text-[10px] font-black text-rose-950 mb-1">گام اصلاحی {toPersianNum(ind+1)}</h4>
+                                  <p className="text-[10px] text-slate-500 font-bold leading-relaxed">{remedy}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Card 4: Medical protocol */}
+                          <div className="bg-slate-900 p-6 rounded-3xl text-white shadow-lg space-y-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 bg-rose-600/10 w-24 h-24 rounded-full blur-2xl" />
+                            <div className="flex items-center gap-2 border-b border-white/5 pb-3">
+                              <Wind size={18} className="text-rose-400" />
+                              <h3 className="text-xs font-black text-rose-300">پروتکل مراقبت بالینی و دارویی تاییدشده روانپزشکی</h3>
+                            </div>
+                            <p className="text-xs font-semibold leading-relaxed text-slate-300">
+                              {feedback.medicalAdvice}
+                            </p>
+                            <div className="pt-2 flex items-center gap-2 text-[9px] text-slate-500 font-bold leading-relaxed border-t border-white/5">
+                              <Check className="text-emerald-500 w-4 h-4" />
+                              <span>این ارزیابی بر پایه استانداردهای تشخیصی بالینی نوین ممیزی شده و جایگزین درمان بالینی پزشک نمی‌باشد.</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            )}
+
+            {/* Subtab Content B: Interviews Recorder */}
+            {activeClinicalSubTab === "interviews" && (
+              <div className="space-y-6">
+                
+                {/* Authorization Barrier */}
+                {role !== "counselor" && role !== "admin" && role !== "teacher" ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-3xl p-8 max-w-2xl mx-auto text-center space-y-4" id="counselor-tab-lock">
+                    <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto scale-110">
+                      <ShieldAlert size={28} />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-black text-slate-900">دسترسی محدود به کارتابل رسمی مشاور ارشد کانون</h3>
+                      <p className="text-xs text-slate-550 font-bold leading-relaxed max-w-md mx-auto pt-1">
+                        رول فعلی شما در سامانه <span className="text-amber-700 font-extrabold font-serif">[{role === "student" ? "داوطلب" : role === "parent" ? "والدین" : "ناشناس"}]</span> شناسایی شده است. این میز پایش صرفاً جهت ثبت مصاحبه‌های عصب‌شناختی، مداخلات بالینی و ثبت نسخ کایزنی مربیان تحصیلی رتبه‌برتر واجد صلاحیت طراحی شده است.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <span className="text-[10px] text-slate-400 font-semibold italic">سوابق مشاوره‌ها به صورت رمزنگاری‌شده در پرونده الکترونیکی شما برای مربی مجاز قابل رویت است.</span>
+                    </div>
+                  </div>
+                ) : (
+                  // Authorized Counselor Hub layout
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="counselor-interviews-hub">
+                    
+                    {/* Left: History list (lg:col-span-5) */}
+                    <div className="lg:col-span-5 space-y-4">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Eye size={16} className="text-rose-500" />
+                          <h3 className="text-xs font-black text-slate-900">سوابق پرونده‌های روان‌شناختی داوطلب</h3>
+                        </div>
+                        <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">{toPersianNum(interviews.length)} مورد پرونده ثبت‌شده</span>
+                      </div>
+
+                      <div className="space-y-4 max-h-[640px] overflow-y-auto pr-1">
+                        {interviews.length === 0 ? (
+                          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-center text-xs text-slate-400 font-bold">
+                            هیچ پرونده مصاحبه‌ای ثبت نشده است. از جعبه روبه‌رو اولین مورد را ثبت کنید.
+                          </div>
+                        ) : (
+                          interviews.map((item, index) => (
+                            <div 
+                              key={item.id} 
+                              className={`bg-white border rounded-2xl p-4 transition-all relative ${
+                                item.severity === "critical" ? "border-red-200 shadow-sm" :
+                                item.severity === "warning" ? "border-amber-200 shadow-sm" : "border-slate-150"
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-4">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono text-slate-400 font-black">{item.id}</span>
+                                    <span className="text-[10px] font-bold text-slate-400">{item.date}</span>
+                                    
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
+                                      item.severity === "critical" ? "bg-red-50 text-red-600 border border-red-100" :
+                                      item.severity === "warning" ? "bg-amber-50 text-amber-600 border border-amber-100" :
+                                      "bg-teal-50 text-teal-600 border border-teal-100"
+                                    }`}>
+                                      {item.severity === "critical" ? "بحرانی" : item.severity === "warning" ? "مخاطره" : "پایش مستمر"}
+                                    </span>
+                                  </div>
+                                  <h4 className="text-xs font-black text-indigo-950 pt-1">{item.title}</h4>
+                                </div>
+
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => setPrintPreviewInterview(item)}
+                                    title="مشاهده و پرینت نسخه درمانی"
+                                    className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-150 cursor-pointer active:scale-95 transition-transform"
+                                  >
+                                    <Printer size={13} />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm("آیا مایل به حذف این پرونده مصاحبه از تاریخچه هستید؟")) {
+                                        const updated = interviews.filter(it => it.id !== item.id);
+                                        setInterviews(updated);
+                                        addSystemLog("حذف مصاحبه", student.name, `پرونده ${item.id} با موفقیت آرشیو/حذف شد.`);
+                                      }
+                                    }}
+                                    title="حذف پرونده"
+                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-150 cursor-pointer active:scale-95 transition-transform"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100 text-[11px] text-slate-600 leading-relaxed font-semibold">
+                                <div className="text-[10px] font-black text-rose-600 mb-1">ریشه عارضه شناختی:</div>
+                                {item.diagnosis}
+                              </div>
+
+                              {/* Symptoms pills */}
+                              <div className="flex flex-wrap gap-1 mt-3">
+                                {item.symptoms.map((sym, sIdx) => (
+                                  <span key={sIdx} className="text-[8px] font-black bg-slate-150 text-slate-600 px-1.5 py-0.5 rounded">
+                                    {sym}
+                                  </span>
+                                ))}
+                              </div>
+
+                              <div className="mt-3 border-t border-slate-100 pt-3 flex items-center justify-between">
+                                <span className="text-[9px] text-slate-400 font-bold">بیمارنما/دانش‌آموز: {student.name}</span>
+                                <span className="text-[9px] font-serif font-black text-rose-500 hover:underline cursor-pointer flex items-center gap-0.5" onClick={() => setPrintPreviewInterview(item)}>
+                                  جزئیات نسخه مربی ←
+                                </span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Logger Form (lg:col-span-7) */}
+                    <div className="lg:col-span-7 bg-white p-6 rounded-3xl border border-slate-150 shadow-md space-y-6" id="interview-logger-form">
+                      <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <FileText size={18} className="text-rose-500" />
+                        <div>
+                          <h3 className="text-xs font-black text-slate-900">دفترچه رسمی ثبت مصاحبه و نسخه روان‌شناختی</h3>
+                          <p className="text-[9px] text-slate-400 font-bold mt-0.5">ثبت آنی فیدبک بالینی برای رفع عارضه مطالعه دانش‌آموزان گروه الف</p>
+                        </div>
+                      </div>
+
+                      {/* 1. Title/Subject */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 block">موضوع یا سرفصل مصاحبه بالینی:</label>
+                        <input
+                          type="text"
+                          value={observeTitle}
+                          onChange={(e) => setObserveTitle(e.target.value)}
+                          placeholder="مثلاً: کاهش تمرکز ناشی از کم‌خوابی و استرس آزمون جامع بهمنی"
+                          className="w-full p-3 border border-slate-150 rounded-xl text-xs font-black bg-slate-50 focus:bg-white focus:ring-1 focus:ring-rose-500 text-slate-800"
+                        />
+                      </div>
+
+                      {/* 2. Check Symptoms */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 block">نشانه‌ها و علائم بالینی مشاهده شده (چندگزینه‌ای):</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {[
+                            "افت ساعت مطالعه", "بی‌قراری و تنش فیزیکی", "وسواس تکرار آزمون",
+                            "سرزنش شخصی مداوم", "ترس شدید از تستی غلط", "خستگی و کسالت چشم",
+                            "افت مقطعی تراز", "امتناع از پر کردن گزارش", "فشار مخرب خانواده"
+                          ].map((sym) => {
+                            const active = selectedSymptoms.includes(sym);
+                            return (
+                              <button
+                                key={sym}
+                                onClick={() => {
+                                  if (active) {
+                                    setSelectedSymptoms(selectedSymptoms.filter(x => x !== sym));
+                                  } else {
+                                    setSelectedSymptoms([...selectedSymptoms, sym]);
+                                  }
+                                }}
+                                className={`p-2.5 rounded-xl border text-[10px] font-black transition-all text-center ${
+                                  active 
+                                    ? "bg-rose-500 text-white border-rose-500 shadow-sm" 
+                                    : "bg-slate-50 border-slate-150 hover:bg-slate-100 text-slate-650"
+                                }`}
+                              >
+                                {sym}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 3. Symptoms presets */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 block">تشخیص و ریشه عارضه شناختی داوطلب (کلیک جهت درج سریع):</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { name: "خستگی مزمن ذهن و فرسودگی تحصیلی دور پایانی (Burnout)", diag: "کاهش ترشح هورمون دوپامین به دلیل بودجه درسی طولانی و بدون استراحت ناشی از پدید آمدن تله کمال گرایی منفی." },
+                            { name: "اضطراب شدید شناختی بالینی (BAI 18+)", diag: "ترشح حاد هورمون کورتیزول و آدرنالین بدنی در مجاورت دروس پرفشار مانند زیست و شیمی محاسباتی که غشا کورتکس را متوقف می‌کند." },
+                            { name: "وسواس تکرار عملی و خوانش ۱۰ باره (OCD)", diag: "ناهماهنگی در مدارهای مغزی CSTC کورتکس که مغز را به تجدید حل و روخوانی فرساینده تست‌های ابتدایی ترغیب می‌سازد." }
+                          ].map((pre) => (
+                            <button
+                              key={pre.name}
+                              onClick={() => {
+                                setObserveDiagnosis(pre.name);
+                                setObserveNotes(pre.diag);
+                              }}
+                              className="px-2.5 py-1 bg-slate-50 border border-slate-150 rounded-lg text-[9px] font-black text-slate-500 hover:border-rose-400 hover:text-rose-600 transition-colors"
+                            >
+                              {pre.name.split(" ")[0]}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          value={observeDiagnosis}
+                          onChange={(e) => setObserveDiagnosis(e.target.value)}
+                          placeholder="مثلاً: کمال‌گرایی منفی کاهنده سرعت تست"
+                          className="w-full p-3 border border-slate-150 rounded-xl text-xs font-black bg-slate-50 focus:bg-white focus:ring-1 focus:ring-rose-500 text-slate-800"
+                        />
+                      </div>
+
+                      {/* 4. Notes */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 block">ملاحظات مصاحبه و شواهد عینی مربی تحصیلی:</label>
+                        <textarea
+                          rows={4}
+                          value={observeNotes}
+                          onChange={(e) => setObserveNotes(e.target.value)}
+                          placeholder="ملاحظات بالینی خود را بنویسید..."
+                          className="w-full p-3 border border-slate-150 rounded-xl text-xs font-semibold bg-slate-50 focus:bg-white focus:ring-1 focus:ring-rose-500 text-slate-800 leading-relaxed"
+                        />
+                      </div>
+
+                      {/* 5. CBT / Kaizen Interventions */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 block">شیوه‌نامه درمانی و توصیه‌های رفتاری کایزن (CBT):</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newPrescriptText}
+                            onChange={(e) => setNewPrescriptText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                if (newPrescriptText.trim()) {
+                                  setCustomPrescripts([...customPrescripts, newPrescriptText.trim()]);
+                                  setNewPrescriptText("");
+                                }
+                              }
+                            }}
+                            placeholder="مثال: اجرای روزانه ۲ نوبت تنفس تعاملی بیوفیدبک مربعی"
+                            className="flex-1 p-3 border border-slate-150 rounded-xl text-xs font-black bg-slate-50 focus:bg-white text-slate-800"
+                          />
+                          <button
+                            onClick={() => {
+                              if (newPrescriptText.trim()) {
+                                setCustomPrescripts([...customPrescripts, newPrescriptText.trim()]);
+                                setNewPrescriptText("");
+                              }
+                            }}
+                            className="bg-slate-900 hover:bg-rose-600 text-white font-black px-4 rounded-xl cursor-pointer transition-colors text-xs flex items-center justify-center gap-1 shrink-0"
+                          >
+                            <Plus size={14} />
+                            افزودن
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-1.5">
+                          {customPrescripts.map((pr, pIdx) => (
+                            <span 
+                              key={pIdx} 
+                              className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-100 rounded-lg text-[9px] font-bold flex items-center gap-1"
+                            >
+                              <span>{pr}</span>
+                              <button 
+                                onClick={() => setCustomPrescripts(customPrescripts.filter((_, i) => i !== pIdx))}
+                                className="text-rose-500 hover:text-rose-800 font-extrabold focus:outline-none"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 6. Severity & Save Button */}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t border-slate-100 pt-4">
+                        <div className="flex items-center gap-4">
+                          <span className="text-[10px] font-black text-slate-500">سطح هشدار پرونده:</span>
+                          <div className="flex gap-2 bg-slate-100 p-1 rounded-xl border border-slate-150">
+                            {[
+                              { label: "بحرانی حاد", val: "critical", color: "bg-red-500 text-white" },
+                              { label: "مخاطره", val: "warning", color: "bg-amber-500 text-white" },
+                              { label: "پایش عادی", val: "mild", color: "bg-emerald-500 text-white" }
+                            ].map((sev) => {
+                              const active = observeSeverity === sev.val;
+                              return (
+                                <button
+                                  key={sev.val}
+                                  onClick={() => setObserveSeverity(sev.val as any)}
+                                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all cursor-pointer ${
+                                    active ? sev.color : "text-slate-500 hover:text-slate-950"
+                                  }`}
+                                >
+                                  {sev.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (!observeTitle.trim() || !observeDiagnosis.trim() || !observeNotes.trim()) {
+                              alert("لطفاً فیلدهای الزامی (عنوان مصاحبه، تشخیص عارضه، ملاحظات مربی) را پر کنید.");
+                              return;
+                            }
+                            const newRecord = {
+                              id: `INT-${Math.floor(100 + Math.random() * 900)}`,
+                              date: new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
+                              title: observeTitle.trim(),
+                              symptoms: selectedSymptoms.length > 0 ? selectedSymptoms : ["ارزیابی کلی مقطعی"],
+                              diagnosis: observeDiagnosis.trim(),
+                              notes: observeNotes.trim(),
+                              prescriptions: customPrescripts.length > 0 ? customPrescripts : ["ادامه برنامه تحصیلی پیشین تحت نظارت مداوم"],
+                              severity: observeSeverity
+                            };
+                            setInterviews([newRecord, ...interviews]);
+                            
+                            // Reset form
+                            setObserveTitle("");
+                            setSelectedSymptoms([]);
+                            setObserveDiagnosis("");
+                            setObserveNotes("");
+                            setCustomPrescripts([]);
+                            
+                            alert(`پرونده تشخیصی ${newRecord.id} با موفقیت در سیستم الکترونیکی ثبت و ذخیره گردید.`);
+                            addSystemLog("ثبت مصاحبه روانشناختی", student.name, `موضوع: ${newRecord.title}`);
+                          }}
+                          className="w-full md:w-auto px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-all active:scale-95 cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                        >
+                          <Check size={16} />
+                          ثبت نهایی پرونده روان‌شناختی
+                        </button>
+                      </div>
+
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
+            )}
+
+            {/* Print Prescription Preview Modal Mockup */}
+            {printPreviewInterview && (
+              <div 
+                className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+                onClick={() => setPrintPreviewInterview(null)}
+              >
+                <div 
+                  className="bg-white rounded-3xl border-8 border-slate-900 w-full max-w-2xl overflow-hidden shadow-2xl relative transition-transform duration-300"
+                  onClick={(e) => e.stopPropagation()}
+                  id="prescription-receipt-print-frame"
+                >
+                  
+                  {/* Decorative Rx watermark header */}
+                  <div className="bg-slate-900 p-6 md:p-8 text-white relative flex justify-between items-center">
+                    <div className="space-y-1 text-right">
+                      <span className="text-[10px] bg-rose-500 text-white px-2.5 py-0.5 rounded-md font-black tracking-widest font-serif">نسخه درمانی روان‌شناختی</span>
+                      <h3 className="text-xl font-black text-slate-100 flex items-center gap-1">آکادمی هوشمند مربیگری ترنم</h3>
+                      <p className="text-[10px] text-slate-400 font-bold leading-relaxed">برنامه درمانی اختصاصی مهار اضطراب بالینی در آزمون‌های شبیه‌ساز</p>
+                    </div>
+                    
+                    <div className="font-serif font-black text-4xl text-rose-500 opacity-60 flex select-none shrink-0 border border-rose-500/30 p-2.5 rounded-2xl">
+                      Rx
+                    </div>
+                  </div>
+
+                  {/* Body Content resembling medical certificate */}
+                  <div className="p-8 space-y-6 text-right">
+                    
+                    {/* Student details top grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b border-dashed border-slate-200 text-xs">
+                      <div>
+                        <span className="text-slate-400 block font-bold">نام و نشان داوطلب:</span>
+                        <span className="font-black text-slate-900 block mt-1">{student.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">تاریخ ویزیت:</span>
+                        <span className="font-black text-slate-900 block mt-1">{printPreviewInterview.date}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">رشته تحصیلی:</span>
+                        <span className="font-black text-slate-900 block mt-1">
+                          {student.field === "ensani" ? "علوم انسانی" : student.field === "riazi" ? "علوم ریاضی" : "علوم تجربی الف"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-bold">کد نسخه:</span>
+                        <span className="font-mono font-black text-rose-600 block mt-1">{printPreviewInterview.id}</span>
+                      </div>
+                    </div>
+
+                    {/* Symptoms observed list */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-2">
+                        <span className="w-1.5 h-3 bg-rose-500 rounded" />
+                        نشانه‌ها و علائم بالینی (Observed Symptoms)
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {printPreviewInterview.symptoms.map((sym, index) => (
+                          <span key={index} className="text-[10px] font-black bg-rose-50 text-rose-700 px-3 py-1 rounded-lg border border-rose-100">
+                            {sym}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Diagnosis Block */}
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-black text-slate-900 flex items-center gap-2">
+                        <span className="w-1.5 h-3 bg-rose-500 rounded" />
+                        ریشه عارضه شناختی (Diagnostic Assessment)
+                      </h3>
+                      <div className="p-4 bg-slate-50 border border-slate-150 rounded-2xl relative">
+                        <h4 className="text-xs font-black text-rose-950 underline decoration-rose-500/40">{printPreviewInterview.diagnosis}</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed font-bold mt-2 font-semibold">
+                          {printPreviewInterview.notes}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action recommendations prescriptions */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-2">
+                        <span className="w-1.5 h-3 bg-rose-500 rounded" />
+                        دستورالعمل‌های اصلاحی کایزنی (Rx Interventions)
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        {printPreviewInterview.prescriptions.map((pr, index) => (
+                          <div key={index} className="flex gap-3 items-start p-3 bg-slate-50 border border-slate-150 rounded-xl leading-relaxed">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 font-serif flex items-center justify-center text-[10px] font-black shrink-0">
+                              {toPersianNum(index + 1)}
+                            </span>
+                            <span className="text-[10px] text-slate-650 font-bold leading-relaxed">{pr}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Signature and official stamp block */}
+                    <div className="flex justify-between items-center border-t border-slate-100 pt-6 mt-8">
+                      <div className="space-y-1 text-right">
+                        <span className="text-[10px] text-slate-400 block font-bold">مهر و امضای مشاور مجاز:</span>
+                        <span className="text-xs font-black text-slate-800 block">مربی ارشد دپارتمان ترنم</span>
+                        <div className="pt-2 text-[10px] text-emerald-600 font-bold flex items-center gap-1 font-semibold">
+                          <Check className="w-4.5 h-4.5 text-emerald-500" />
+                          <span>تاییدیه الکترونیک رسمی صادر شد</span>
+                        </div>
+                      </div>
+
+                      {/* Seal badge mock */}
+                      <div className="w-20 h-20 rounded-full border-4 border-rose-500/25 flex items-center justify-center text-center transform -rotate-12 border-dashed relative select-none">
+                        <span className="absolute text-[8px] text-rose-500 font-black top-2 tracking-widest leading-none">ترنم همدلی</span>
+                        <span className="text-rose-500 font-serif font-black text-sm">APPROVED</span>
+                        <span className="absolute text-[8px] text-rose-500 font-black bottom-2 tracking-widest leading-none">۱۴۰۶ / رسمی</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Print footer handles in modal */}
+                  <div className="bg-slate-50 p-4 border-t border-slate-150 flex justify-between items-center">
+                    <button
+                      onClick={() => setPrintPreviewInterview(null)}
+                      className="text-xs text-slate-500 hover:text-slate-800 font-black border border-slate-250 px-4 py-2 rounded-xl transition"
+                    >
+                      بستن پنجره
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        window.print();
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow"
+                    >
+                      <Printer size={14} />
+                      چاپ فیزیکی و خروجی نسخه PDF
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
           </motion.div>
         )}
 

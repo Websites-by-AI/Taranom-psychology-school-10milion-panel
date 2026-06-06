@@ -2,111 +2,46 @@ import React, { useState } from "react";
 import { 
   Users, Sparkles, BookOpen, HeartPulse, Brain, Plus, Calendar, 
   Settings, Database, Compass, CheckCircle2, ChevronLeft, 
-  HelpCircle, UserCheck, GraduationCap, AlertCircle, ClipboardList, FileSpreadsheet, Target
+  HelpCircle, UserCheck, GraduationCap, AlertCircle, ClipboardList, FileSpreadsheet, Target,
+  Edit2, Shield, Award, Briefcase, MapPin, Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
+import { getCounselorProfile, saveCounselorProfile, CounselorProfile, getProfileMetadata, getHydratedStudent } from "../lib/userProfiles";
 
-// Mock student base so the counselor can easily switch
-const STUDENTS_UNDER_SUPERVISION: Student[] = [
-  { 
-    id: "1", 
-    name: "مریم حسینی", 
-    code: "9812405", 
-    field: "tajrobi", 
-    grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰",
-    city: "تهران",
-    age: 18,
-    academicProfile: {
-      studyHoursPerDay: 11,
-      educationLevel: "پایه دوازدهم",
-      currentGpa: 19.8,
-      targetGpa: 20.0,
-      currentTraz: 10450,
-      targetTraz: 11200
-    },
-    parentalContext: {
-      fatherAlive: true,
-      motherAlive: true,
-      childrenCount: 2,
-      fatherEducation: "کارشناسی ارشد (مهندسی)",
-      motherEducation: "دکتری (پزشک عمومی)",
-      householdIncome: "excellent",
-      familySupportLevel: "high"
-    },
-    goals: {
-      studentVision: "قبولی در رشته پزشکی دانشگاه علوم پزشکی تهران",
-      familyExpectation: "تحصیل در مدارج عالی پزشکی تخصصی"
-    },
-    familyContext: "محیط خانه آرام و حامی؛ داوطلب اتاق مطالعه مستقل دارد و نظارت مستمر انجام می‌شود.",
-    additionalNotes: "نیاز تجمعي به پایش تله‌های تستی زیست‌شناسی تخصصی و مهار استرس آزمون در دقایق پایانی دارد."
-  },
-  { 
-    id: "2", 
-    name: "علیرضا رضایی", 
-    code: "9786431", 
-    field: "riazi", 
-    grade: "رتبه فرضی ۲۴ کشوری - تراز ۱۰/۱۲۰",
-    city: "مشهد",
-    age: 17,
-    academicProfile: {
-      studyHoursPerDay: 10,
-      educationLevel: "پایه یازدهم متمم کنکور",
-      currentGpa: 19.45,
-      targetGpa: 19.9,
-      currentTraz: 10120,
-      targetTraz: 10800
-    },
-    parentalContext: {
-      fatherAlive: true,
-      motherAlive: true,
-      childrenCount: 1,
-      fatherEducation: "دیپلم (آزاد)",
-      motherEducation: "کارشناسی (فرهنگی)",
-      householdIncome: "mid",
-      familySupportLevel: "medium"
-    },
-    goals: {
-      studentVision: "مهندسی کامپیوتر دانشگاه صنعتی شریف",
-      familyExpectation: "ورود مستقیم به بازار کار فناوری اطلاعات"
-    },
-    familyContext: "حمایت عالی مادری؛ استرس کلی متوسط است اما نیاز به افزایش ساعت مطالعه دارد.",
-    additionalNotes: "ضعف اندک در مباحث هندسه پایه و حسابان گزارش شده است."
-  },
-  { 
-    id: "3", 
-    name: "امیرمحمد اکبری", 
-    code: "9921477", 
-    field: "ensani", 
-    grade: "رتبه فرضی ۱۲ کشوری - تراز ۹/۹۵۰",
-    city: "اصفهان",
-    age: 18,
-    academicProfile: {
-      studyHoursPerDay: 9,
-      educationLevel: "پایه دوازدهم",
-      currentGpa: 19.2,
-      targetGpa: 19.8,
-      currentTraz: 9950,
-      targetTraz: 10400
-    },
-    parentalContext: {
-      fatherAlive: true,
-      motherAlive: true,
-      childrenCount: 3,
-      fatherEducation: "کارشناسی (کارمند)",
-      motherEducation: "دیپلم (خانه دار)",
-      householdIncome: "mid",
-      familySupportLevel: "high"
-    },
-    goals: {
-      studentVision: "رشته حقوق دانشگاه تهران",
-      familyExpectation: "قبولی در دانشگاه‌های تراز اول پایتخت برای حقوق"
-    },
-    familyContext: "محیط خانه پرجمعیت اما صمیمی؛ تمرکز بالا است و نوسان تراز کمی دارد.",
-    additionalNotes: "نیاز به تقویت عروض فشرده و تندخوانی دروس تخصصی دارد."
+// Mock student dynamic generator - dynamically hydrated to prevent static placeholders and support live registrations
+const getSupervisedStudents = (): Student[] => {
+  const baseStudents = [
+    { id: "1", name: "مریم حسینی", code: "9812405", field: "tajrobi" as const },
+    { id: "2", name: "علیرضا رضایی", code: "9786431", field: "riazi" as const },
+    { id: "3", name: "امیرمحمد اکبری", code: "9921477", field: "ensani" as const }
+  ];
+
+  let newlyRegistered: Student[] = [];
+  try {
+    const data = localStorage.getItem("arateb_new_registrations");
+    if (data) {
+      newlyRegistered = JSON.parse(data);
+    }
+  } catch (e) {
+    console.error(e);
   }
-];
+
+  const all = [...baseStudents];
+  newlyRegistered.forEach(ns => {
+    if (!all.some(s => s.id === ns.id || s.code === ns.code)) {
+      all.push({
+        id: ns.id,
+        name: ns.name,
+        code: ns.code,
+        field: ns.field
+      });
+    }
+  });
+
+  return all.map(s => getHydratedStudent(s));
+};
 
 interface CounselorDashboardViewProps {
   student: Student;
@@ -115,8 +50,45 @@ interface CounselorDashboardViewProps {
 }
 
 export default function CounselorDashboardView({ student, onNavigate, onUpdateStudent }: CounselorDashboardViewProps) {
-  const [activeStudent, setActiveStudent] = useState<Student>(student);
+  const studentsUnderSupervision = getSupervisedStudents();
+  // Ensure the active student profile is fully hydrated
+  const [activeStudent, setActiveStudent] = useState<Student>(() => {
+    return getHydratedStudent(student);
+  });
   
+  // Counselor custom profile state (derived dynamically using the requested helper function pattern)
+  const [counselorProfile, setCounselorProfile] = useState<CounselorProfile>(() => {
+    return getProfileMetadata("counselor") as CounselorProfile;
+  });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  
+  // Form states for Counselor Profile Settings
+  const [cName, setCName] = useState(counselorProfile.name);
+  const [cLicense, setCLicense] = useState(counselorProfile.licenseNumber);
+  const [cField, setCField] = useState(counselorProfile.fieldOfStudy);
+  const [cExperience, setCExperience] = useState(counselorProfile.experienceYears);
+  const [cWorkplace, setCWorkplace] = useState(counselorProfile.workplace);
+  const [cWorkHours, setCWorkHours] = useState(counselorProfile.workHours);
+  const [cSpecialty, setCSpecialty] = useState(counselorProfile.specialty);
+  
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: CounselorProfile = {
+      id: counselorProfile.id,
+      name: cName,
+      licenseNumber: cLicense,
+      fieldOfStudy: cField,
+      experienceYears: Number(cExperience),
+      workplace: cWorkplace,
+      workHours: cWorkHours,
+      specialty: cSpecialty,
+    };
+    saveCounselorProfile(updated);
+    setCounselorProfile(updated);
+    setIsEditingProfile(false);
+    alert("کارت عضویت و اطلاعات هویتی مشاور ارشد در سیستم مرکزی با موفقیت به‌روزرسانی شد!");
+  };
+
   // Counselor custom diagnostic tools
   const [noteText, setNoteText] = useState("");
   const [severity, setSeverity] = useState<"critical" | "warning" | "mild">("warning");
@@ -157,24 +129,159 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
       <div className="bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 rounded-[35px] p-8 text-white relative overflow-hidden shadow-xl border border-white/5">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[80px]" />
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black border border-indigo-500/10">
-              <UserCheck size={12} />
-              <span>پورتال اختصاصی و نظارت مشاوران ارشد</span>
-            </span>
-            <h1 className="text-2xl md:text-3xl font-black">سلام همکار گرامی، به اتاق مشاوره {BRAND_CONFIG.name} خوش آمدید</h1>
-            <p className="text-slate-400 text-xs max-w-2xl leading-relaxed">
-              در این بخش می‌توانید اطلاعات علمی، روحی-روانشناختی، پیشینه خانوادگی و تله‌های تستی داوطلبان را پایش کرده، تصمیمات درمانی آموزشی اتخاذ کنید و توصیه‌نامه‌های بلادرنگ صادر نمایید.
+          <div className="space-y-3 flex-grow">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black border border-indigo-500/10">
+                <UserCheck size={12} />
+                <span>پورتال اختصاصی و نظارت مشاوران ارشد</span>
+              </span>
+              <button 
+                onClick={() => setIsEditingProfile(!isEditingProfile)}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 text-[10px] font-black border border-amber-500/20 transition-all cursor-pointer shadow-xs"
+              >
+                <Edit2 size={10} />
+                <span>{isEditingProfile ? "بستن فرم ویرایش" : "ویرایش کارت شناسایی و امضا"}</span>
+              </button>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black">سلام {counselorProfile.name} گرامی، به اتاق مشاورهٔ کایزن خوش آمدید</h1>
+            <p className="text-slate-450 text-xs max-w-2xl leading-relaxed">
+              تخصص شما: <span className="text-amber-300 font-bold">{counselorProfile.specialty}</span> | سابقه: <span className="text-emerald-300 font-extrabold">{counselorProfile.experienceYears} سال مربیگری رتبه برترها</span>
+            </p>
+            <p className="text-slate-400 text-[11px] leading-relaxed max-w-2xl">
+              ساعات حضور و ویزیت پورتال: <span className="text-slate-200 font-bold font-mono">{counselorProfile.workHours}</span>
             </p>
           </div>
-          <div className="bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl border border-slate-750 text-right min-w-[180px]">
-             <span className="text-[9px] text-slate-400 block font-bold mb-1">کد یکتا مشاور فعال</span>
-             <span className="text-xs font-black font-mono text-amber-400">COUNSELOR_ID_8842</span>
+          <div className="bg-slate-800/60 backdrop-blur-md p-5 rounded-2xl border border-slate-700/50 text-right min-w-[240px] shadow-lg self-stretch flex flex-col justify-between">
+             <div>
+               <span className="text-[10px] text-slate-400 block font-bold mb-1">کد یکتا و تأییدیه نظام مشاور</span>
+               <span className="text-xs font-black font-mono text-amber-400 block">{counselorProfile.licenseNumber}</span>
+             </div>
              <div className="h-px bg-slate-700/50 my-2" />
-             <span className="text-[10px] text-emerald-400 font-bold block">سازمان تایید شده: {BRAND_CONFIG.name} مرکزی</span>
+             <div className="text-[10px] text-slate-300 font-semibold space-y-1">
+               <div className="flex items-center gap-1.5">
+                 <Award size={12} className="text-indigo-400 shrink-0" />
+                 <span className="truncate">{counselorProfile.fieldOfStudy}</span>
+               </div>
+               <div className="flex items-center gap-1.5">
+                 <MapPin size={12} className="text-emerald-400 shrink-0" />
+                 <span className="truncate">{counselorProfile.workplace}</span>
+               </div>
+             </div>
           </div>
         </div>
       </div>
+
+      {/* Toggleable Profile Editor Row */}
+      <AnimatePresence>
+        {isEditingProfile && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <form onSubmit={handleSaveProfile} className="bg-indigo-950/40 border border-indigo-900/30 p-6 rounded-[30px] space-y-4 text-white">
+              <div className="flex items-center justify-between pb-3 border-b border-indigo-900/40">
+                <h3 className="text-sm font-black text-amber-300 flex items-center gap-2">
+                  <Shield size={16} />
+                  <span>تنظیمات هویتی و ویرایش پروفایل مشاور کایزن (پویای سیستمی)</span>
+                </h3>
+                <span className="text-[9px] text-slate-350">اطلاعات این فرم به طور خودکار در تمامی پردازش‌ها و کارنامه‌ها اعمال می‌شود</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">نام و نام خانوادگی مشاور</label>
+                  <input
+                    type="text"
+                    required
+                    value={cName}
+                    onChange={(e) => setCName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">شماره نظام روان‌شناختی / مربیگری</label>
+                  <input
+                    type="text"
+                    required
+                    value={cLicense}
+                    onChange={(e) => setCLicense(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">رشته و مقطع تحصیلی</label>
+                  <input
+                    type="text"
+                    required
+                    value={cField}
+                    onChange={(e) => setCField(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">حوزه تمرکز تخصصی بالینی</label>
+                  <input
+                    type="text"
+                    required
+                    value={cSpecialty}
+                    onChange={(e) => setCSpecialty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">محل کار و دفتر مشاوره فعال</label>
+                  <input
+                    type="text"
+                    required
+                    value={cWorkplace}
+                    onChange={(e) => setCWorkplace(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">سابقه کاری موفق علمی (سال)</label>
+                  <input
+                    type="number"
+                    required
+                    value={cExperience}
+                    onChange={(e) => setCExperience(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">ساعات کاری و جدول تقویم حضور</label>
+                  <input
+                    type="text"
+                    required
+                    value={cWorkHours}
+                    onChange={(e) => setCWorkHours(e.target.value)}
+                    placeholder="مثال: روزهای زوج ۹ الی ۱۸"
+                    className="w-full px-3 py-2 bg-slate-900/80 border border-indigo-800/40 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs transition duration-150 cursor-pointer shadow-md"
+                >
+                  ذخیره و اعتباردهی به امضا دیجیتال
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -187,11 +294,11 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
                 <Users size={16} className="text-indigo-600" />
                 <span>داوطلبان تحت نظارت شما</span>
               </h3>
-              <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">تعداد: ۳ داوطلب</span>
+              <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">تعداد: {studentsUnderSupervision.length} داوطلب</span>
             </div>
 
             <div className="space-y-2">
-              {STUDENTS_UNDER_SUPERVISION.map((studentItem) => {
+              {studentsUnderSupervision.map((studentItem) => {
                 const isActive = activeStudent.id === studentItem.id;
                 return (
                   <button
