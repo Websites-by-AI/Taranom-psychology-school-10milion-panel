@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   Sparkles, Calendar, TrendingUp, AlertTriangle, CheckSquare, Target, 
   Quote, ChevronLeft, Zap, Smile, HeartPulse, Brain, Compass, BookOpen, Clock, Check, Layers, Users, ShieldAlert,
@@ -219,18 +219,122 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
   const [machineState, setMachineState] = useState<string | null>(null);
   const [hardwareAdvice, setHardwareAdvice] = useState<string>("");
 
-  const [todayTasks, setTodayTasks] = useState<DailyPlan[]>([
-    { day: "امروز", morningPlan: "مطالعه دقیق مبحث ژنتیک زیست‌شناسی (مفاهیم پایه و مسائل مندلی)", afternoonPlan: "حل تشریحی ۵۰ تست زمان‌دار ویژه استوکیومتری شیمی دوازدهم", totalQuestions: 50, completed: false },
-    { day: "امروز", morningPlan: "مرور فرمول‌های حرکت‌شناسی فیزیک و تحلیل چند نمودار سرعت-زمان", afternoonPlan: "بررسی تست‌های قرابت معنایی و آرایه‌های ادبی ادبیات فارسی اختصاصی", totalQuestions: 25, completed: true },
-    { day: "امروز", morningPlan: "مطالعه مبحث کاربرد مشتق در ریاضیات تجربی و حل مثال‌های تشریحی", afternoonPlan: "تحلیل آزمون شبیه‌ساز کنکور سراسری مرحله ۴ و پایش تراز", totalQuestions: 40, completed: false }
-  ]);
+  const dashboardTexts = useMemo(() => {
+    if (student.field === "riazi") {
+      return {
+        statusCritical: "🚨 وضعیت داوطلب: بحرانی (بازه خطای محاسباتی در حسابان و هندسه یازدهم/دوازدهم)",
+        statusWarning: "⚠️ وضعیت داوطلب: هشدار افت تندخوانی فرمول‌ها و راه‌حل‌های فیزیک",
+        recommendationMsg: "قبولی در رشته مهندسی کامپیوتر/برق دانشگاه شریف و تهران (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی درس حسابان، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.",
+        recommActionLine: "به صفحه مشاور فرآیند مراجعه کنید",
+        step1Title: "مرور تعاریف اولیه و تمرین کتاب هندسه",
+        step1Desc: "تست‌زنی تفننی بدون پایه فرمولی را متوقف کرده، کتاب‌های حسابان و هندسه را باز کرده و فرمول‌ها را دوباره بنویسید.",
+        step2Title: "ممانعت از پاسخ شتابزده به سوالات محاسباتی مبهم",
+        step2Desc: "از اصرار بر پاسخ‌گویی به سوالات طولانی مقاطع مخروطی یا مباحث مبهم گسسته خودداری کنید.",
+        step3Title: "اصلاح تعادل تستی دروس فیزیک تخصصی",
+        step3Desc: "ساعت مطالعه مجانب‌ها و مشتق‌پذیری را با فیزیک الکتریسیته بالانس نمایید تا مابقی موازنه خارج نشوند.",
+        lastAiAnalysis: "براساس نمودار فوق، درس «حسابان و ریاضیات تخصصی» به دلیل درصد پاسخ‌گویی پایین (۲۸٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی فصل‌های دیفرانسیل و مجانب‌ها معطوف کنید.",
+        coachingAdvice: "درس «فیزیک تخصصی» نیز در وضعیت هشدار (۴۲٪) است. حل روزانه حداقل ۲۵ تست شبیه‌ساز می‌تواند تراز شما را تا ۱۵٪ بهبود بخشد.",
+        card1Title: "۱. کورتکس و حل تله‌های تستی حسابان",
+        card1Desc: "به دلیل عدم تثبیت فرمول‌های حد و مشتق، بیشترین نمره منفی در آزمون ثبت شده که مطالعه تطبیقی این مبحث با منابع آکادمی آن را برطرف می‌کند.",
+        card2Title: "۲. مبانی مقاطع مخروطی و هندسه تحلیلی",
+        card2Desc: "برای درک بهتر هندسه، حتماً رسم شکل فرضی بیضی و دایره را با حل تست‌های محاسباتی بازخوانی نمایید.",
+        card3Title: "۳. فیزیک دوازدهم و مباحث نوسان",
+        card3Desc: "تسلط بر فرمول‌های نوسان و موج جهت موفقیت قطعی در آزمون‌های شبیه‌ساز مهندسی."
+      };
+    } else if (student.field === "ensani") {
+      return {
+        statusCritical: "🚨 وضعیت داوطلب: بحرانی (بازه خطای مهلک در ادبیات تخصصی و عربی انسانی)",
+        statusWarning: "⚠️ وضعیت داوطلب: هشدار افت حفظیات عروضی و مفاهیم کاربردی",
+        recommendationMsg: "قبولی در رشته حقوق/روانشناسی دانشگاه تهران و تراز اول (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی عروض و قافیه، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.",
+        recommActionLine: "به صفحه مشاور فرآیند مراجعه کنید",
+        step1Title: "ریست فکری و تمرین تقطیع هجایی منظم",
+        step1Desc: "تست‌زنی تفننی بدون پایه سماعی را فوراً متوقف کرده، دیوان شعرا را باز کنید و اختیارهای وزنی را دوباره استخراج کنید.",
+        step2Title: "بررسی قواعد منصوبات و قواعد اعراب عربی",
+        step2Desc: "از پاسخ‌گویی به تمارین طولانی قواعد تمییز و حال بدون مطالعه درسنامه‌های کوتاه کانون بپرهیزید.",
+        step3Title: "موازنه ساعات مطالعه جامعه‌شناسی و تاریخ",
+        step3Desc: "بهترین تعادل تستی و تشریحی دروس عمومی و تخصصی انسانی را طبق بودجه‌بندی ثابت نگه دارید.",
+        lastAiAnalysis: "براساس نمودار فوق، درس «ادبیات فارسی تخصصی» به دلیل درصد پاسخ‌گویی پایین (۲۶٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی اختیارهای وزنی و تقطیع هجایی عروض معطوف کنید.",
+        coachingAdvice: "درس «عربی تخصصی» نیز در وضعیت هشدار (۳۲٪) است. حل روزانه حداقل ۲۰ تست قواعد می‌تواند تراز شما را تا ۱۵٪ بهبود بخشد.",
+        card1Title: "۱. عروض سماعی و مهار تله‌های ادبیات تخصصی",
+        card1Desc: "به دلیل عدم تثبیت اختیارهای عروضی، بیشترین نمره منفی در آزمون سنجه ثبت شده که با منابع آکادمی برطرف می‌گردد.",
+        card2Title: "۲. قواعد منصوبات و ترجمه عربی",
+        card2Desc: "برای درک بهتر عربی تخصصی، حتماً قواعد منادا و اعراب ظاهری را با تست‌های کانون بازخوانی نمایید.",
+        card3Title: "۳. منطق و فلسفه و استدلال‌های مغالطه‌ای",
+        card3Desc: "تسلط بر شناخت انواع مغالطه جهت موفقیت قطعی در آزمون‌های علوم انسانی."
+      };
+    } else {
+      // tajrobi
+      return {
+        statusCritical: "🚨 وضعیت داوطلب: بحرانی (بازه خطای مهلک در زیست‌شناسی و شیمی کنکور)",
+        statusWarning: "⚠️ وضعیت داوطلب: هشدار افت تندخوانی مفاهیم زیست‌شناسی",
+        recommendationMsg: "قبولی در رشته پزشکی/دندان‌پزشکی دانشگاه تهران و ترازهای ممتاز (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی درس زیست، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.",
+        recommActionLine: "به صفحه مشاور فرآیند مراجعه کنید",
+        step1Title: "ریست فکری و مرور متن دقیق کتاب درسی",
+        step1Desc: "تست‌زنی تفننی بدون پایه مطالعاتی را فوراً متوقف کرده، کتاب‌های درسی را باز کرده و قیدهای زیست‌شناسی را دوباره بنویسید.",
+        step2Title: "بررسی زمان تلف‌شده روی پاسخ‌های اشتباه شیمی",
+        step2Desc: "از اصرار بر پاسخگویی به سوالات طولانی یا مباحث مبهم شیمی آلی خودداری کنید. گزینه‌های شک‌دار را علامت قرمزی بگذارید.",
+        step3Title: "اصلاح ساعت تعادل دروس عمومی و اختصاصی تجربی",
+        step3Desc: "ضریب تعادل دروس را با توجه به بودجه‌بندی کنکور ثابت نگه دارید تا مابقی دروس از موازنه خارج نشوند.",
+        lastAiAnalysis: "براساس نمودار فوق، درس «زیست‌شناسی» به دلیل درصد پاسخ‌گویی پایین (۲۸٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی فصل‌های ژنتیک و گیاهی معطوف کنید.",
+        coachingAdvice: "درس «شیمی» نیز در وضعیت هشدار (۳۵٪) است. حل روزانه حداقل ۳۰ تست از مبحث استوکیومتری می‌تواند تراز شما را تا ۱۵٪ بهبود بخشد.",
+        card1Title: "۱. کورتکس و حل تله‌های تستی زیست‌شناسی",
+        card1Desc: "به دلیل عدم تثبیت قیدهای زیست‌شناسی، بیشترین نمره منفی در آزمون ثبت شده که مطالعه تطبیقی این مبحث با منابع آکادمی آن را برطرف می‌کند.",
+        card2Title: "۲. مبانی استوکیومتری و مسائل شیمی",
+        card2Desc: "برای درک بهتر مسائل شیمی، حتماً واکنش‌های پایه را با حل تست‌های محاسباتی بازخوانی نمایید.",
+        card3Title: "۳. فیزیک دوازدهم و مباحث نوسان",
+        card3Desc: "تسلط بر فرمول‌های نوسان و موج جهت موفقیت قطعی در آزمون‌های شبیه‌ساز تجربی."
+      };
+    }
+  }, [student.field]);
 
-  const mockWeaknesses: Weakness[] = [
-    { topic: "ژنیتک و وراثت (ژن‌شناسی کلاسیک و مسائل مندل)", subject: "زیست‌شناسی پایه و دوازدهم (تجربی)", percentage: 28, recommendation: "بهینه‌سازی ساعات مطالعه ژنتیک همزمان با حل مسائل تستی متنوع؛ مطالعه دقیق درسنامه و حل ۵۰ تست از کنکورهای ۵ سال اخیر الزامی است.", questionsCount: 45, severity: "critical" },
-    { topic: "سینتیک شیمیایی و عوامل موثر بر سرعت واکنش", subject: "شیمی یازدهم و دوازدهم کنکور", percentage: 35, recommendation: "مرور مجدد مفاهیم غلظت و سرعت اولیه؛ تحلیل قواعد کاتالیزورها و انرژی فعال‌سازی با تست‌های استاندارد کانون قلم‌چی.", questionsCount: 30, severity: "critical" },
-    { topic: "نوسان، موج و فیزیک اتمی (فرمول‌های پایه)", subject: "فیزیک پایه و دوازدهم ریاضی/تجربی", percentage: 42, recommendation: "مرور فرمول‌های نوسان و بسامد؛ انجام ۲۵ تست شبیه‌ساز در انتهای هر مبحث تستی جهت تثبیت مفاهیم پایه فیزیک.", questionsCount: 25, severity: "warning" },
-    { topic: "حد و پیوستگی و مشتق تابع (ریاضیات پایه)", subject: "ریاضیات تجربی و حسابان ریاضی", percentage: 48, recommendation: "فهم عمیق قضایای حد و مشتق‌پذیری؛ بازخوانی دسته‌بندی توابع نمایی و لگاریتمی در کتاب‌های کمک‌آموزشی استاندارد.", questionsCount: 35, severity: "warning" }
-  ];
+  const [todayTasks, setTodayTasks] = useState<DailyPlan[]>([]);
+
+  useEffect(() => {
+    if (student.field === "riazi") {
+      setTodayTasks([
+        { day: "امروز", morningPlan: "مطالعه دقیق مبحث نظریه اعداد و ترکیبیات تخصصی (شمارش و گراف منسجم)", afternoonPlan: "حل تشریحی ۴۰ تست زمان‌دار موج و نوسان فیزیک دوازدهم ریاضی", totalQuestions: 40, completed: false },
+        { day: "امروز", morningPlan: "مرور قضیه رول و نقاط بحرانی در حسابان تخصصی", afternoonPlan: "بررسی تست‌های هندسه تحلیلی مبحث بیضی و دایره کانون", totalQuestions: 25, completed: true },
+        { day: "امروز", morningPlan: "مطالعه بخش ثابت تعادل در شیمی دوازدهم و موازنه کایزن غلظت‌ها", afternoonPlan: "تحلیل آزمون شبیه‌ساز کنکور مدل کایزن ۴ ویژه رشته ریاضی", totalQuestions: 30, completed: false }
+      ]);
+    } else if (student.field === "ensani") {
+      setTodayTasks([
+        { day: "امروز", morningPlan: "تقطیع هجایی و استخراج اختیارهای وزنی در ۲۵ بیت ادبیات فارسی تخصصی", afternoonPlan: "حل تشریحی ۳۰ تست قواعد منصوبات و حال در عربی تخصصی انسانی", totalQuestions: 30, completed: false },
+        { day: "امروز", morningPlan: "مرور مبحث مغالطه‌ها و ارزیابی استدلال‌ها در منطق و فلسفه یازدهم", afternoonPlan: "مطالعه بخش عرضه و تقاضا و مسائل سود کلان از کتاب اقتصاد دهم", totalQuestions: 20, completed: true },
+        { day: "امروز", morningPlan: "مطالعه فصل دوم جامعه‌شناسی دوازدهم (خرده فرهنگ‌ها و جوامع)", afternoonPlan: "شرکت در کارگاه صعود تراز تخصصی آزمون قلم‌چی علوم انسانی", totalQuestions: 15, completed: false }
+      ]);
+    } else {
+      setTodayTasks([
+        { day: "امروز", morningPlan: "مطالعه دقیق مبحث ژنتیک زیست‌شناسی (مفاهیم پایه و مسائل مندلی)", afternoonPlan: "حل تشریحی ۵۰ تست زمان‌دار ویژه استوکیومتری شیمی دوازدهم", totalQuestions: 50, completed: false },
+        { day: "امروز", morningPlan: "مرور فرمول‌های حرکت‌شناسی فیزیک و تحلیل چند نمودار سرعت-زمان", afternoonPlan: "بررسی تست‌های قرابت معنایی و آرایه‌های ادبی ادبیات فارسی اختصاصی", totalQuestions: 25, completed: true },
+        { day: "امروز", morningPlan: "مطالعه مبحث کاربرد مشتق در ریاضیات تجربی و حل مثال‌های تشریحی", afternoonPlan: "تحلیل آزمون شبیه‌ساز کنکور سراسری مرحله ۴ و پایش تراز", totalQuestions: 40, completed: false }
+      ]);
+    }
+  }, [student.field]);
+
+  const mockWeaknesses: Weakness[] = useMemo(() => {
+    if (student.field === "riazi") {
+      return [
+        { topic: "هندسه تحلیلی و مقاطع مخروطی (بیضی و دایره)", subject: "هندسه تحلیلی و گسسته", percentage: 28, recommendation: "رسم شکل‌ها و روابط فیثاغورث در بیضی؛ حل ۳۰ تست جدید از تست‌های داخل و خارج.", questionsCount: 45, severity: "critical" },
+        { topic: "رفع ابهام دیفرانسیل و قضایای حد در بی‌نهایت", subject: "حسابان و ریاضیات تخصصی", percentage: 35, recommendation: "پاسخ به سوالات تمرینی کانون قلم‌چی؛ فهم قضایای هم‌ارزی نیوتون.", questionsCount: 30, severity: "critical" },
+        { topic: "حرکت با شتاب غیرثابت و دینامیک سطوح شیب‌دار", subject: "فیزیک تخصصی ریاضی", percentage: 42, recommendation: "استفاده از روش سطح زیر نمودار سرعت-زمان؛ یادگیری تله‌های فرمول میانگین.", questionsCount: 25, severity: "warning" },
+        { topic: "تعادل شیمیایی و ثابت غلظتی واکنش‌ها", subject: "شیمی کنکور ریاضی", percentage: 55, recommendation: "مرور سریع فرمول‌های تعادل و غلظت تعادلی در کتاب درسی شیمی.", questionsCount: 35, severity: "warning" }
+      ];
+    } else if (student.field === "ensani") {
+      return [
+        { topic: "تشخیص اختیارهای وزنی و تقطیع هجایی شعر", subject: "ادبیات فارسی تخصصی", percentage: 26, recommendation: "تقطیع هجایی منظم و تکرار روزانه وزن‌های عروضی جهت ثبت ذهنی.", questionsCount: 45, severity: "critical" },
+        { topic: "قواعد منادا و منصوبات (حال، تمییز و مفعول مطلق)", subject: "عربی تخصصی انسانی", percentage: 32, recommendation: "شناسایی قواعد تشخیص اعراب‌های ظاهری و محلی عربی.", questionsCount: 30, severity: "critical" },
+        { topic: "فرآیند تفکر منطقی و تصمیم‌گیری عاطفی", subject: "روان‌شناسی تخصصی علوم انسانی", percentage: 46, recommendation: "مرور سریع گام‌های تفکر منطقی در برابر تله‌های انحرافی.", questionsCount: 25, severity: "warning" },
+        { topic: "تاریخ ادبیات سبک‌های هندی و ادوار بازگشت ادبی", subject: "تاریخ و فلسفه انسانی", percentage: 58, recommendation: "ترسیم نمودار درختی ادوار به همراه آثار برجسته ادبی.", questionsCount: 35, severity: "warning" }
+      ];
+    } else {
+      return [
+        { topic: "ژنیتک و وراثت (ژن‌شناسی کلاسیک و مسائل مندل)", subject: "زیست‌شناسی پایه و دوازدهم (تجربی)", percentage: 28, recommendation: "بهینه‌سازی ساعات مطالعه ژنتیک همزمان با حل مسائل تستی متنوع؛ مطالعه دقیق درسنامه و حل ۵۰ تست از کنکورهای ۵ سال اخیر الزامی است.", questionsCount: 45, severity: "critical" },
+        { topic: "سینتیک شیمیایی و عوامل موثر بر سرعت واکنش", subject: "شیمی یازدهم و دوازدهم کنکور", percentage: 35, recommendation: "مرور مجدد مفاهیم غلظت و سرعت اولیه؛ تحلیل قواعد کاتالیزورها و انرژی فعال‌سازی با تست‌های استاندارد کانون قلم‌چی.", questionsCount: 30, severity: "critical" },
+        { topic: "نوسان، موج و فیزیک اتمی (فرمول‌های پایه)", subject: "فیزیک پایه و دوازدهم ریاضی/تجربی", percentage: 42, recommendation: "مرور فرمول‌های نوسان و بسامد؛ انجام ۲۵ تست شبیه‌ساز در انتهای هر مبحث تستی جهت تثبیت مفاهیم پایه فیزیک.", questionsCount: 25, severity: "warning" },
+        { topic: "حد و پیوستگی و مشتق تابع (ریاضیات پایه)", subject: "ریاضیات تجربی و حسابان ریاضی", percentage: 48, recommendation: "فهم عمیق قضایای حد و مشتق‌پذیری؛ بازخوانی دسته‌بندی توابع نمایی و لگاریتمی در کتاب‌های کمک‌آموزشی استاندارد.", questionsCount: 35, severity: "warning" }
+      ];
+    }
+  }, [student.field]);
 
   const chartData = mockWeaknesses.map(w => {
     let name = w.subject;
@@ -518,14 +622,14 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
                 }`}>
                   <strong className="text-xs font-black block mb-2">
                     {qeiValue < 5000 
-                      ? "🚨 وضعیت داوطلب: بحرانی (بازه خطای مهلک در زیست‌شناسی و شیمی)" 
-                      : "⚠️ وضعیت داوطلب: هشدار افت تندخوانی مفاهیم"
+                      ? dashboardTexts.statusCritical 
+                      : dashboardTexts.statusWarning
                     }
                   </strong>
                   <p className="text-xs leading-relaxed">
                     {qeiValue < 5000 ? (
                       <>
-                        شاخص تراز شما در حال حاضر روی عدد <span className="font-black font-mono bg-red-100 px-1.5 py-0.5 rounded text-red-800">{toPersianNum(qeiValue)} QEI</span> است که پایین‌تر از سطح رقابت امن قبولی در پزشکی/مهندسی (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی درس زیست، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.
+                        شاخص تراز شما در حال حاضر روی عدد <span className="font-black font-mono bg-red-100 px-1.5 py-0.5 rounded text-red-800">{toPersianNum(qeiValue)} QEI</span> است که پایین‌تر از سطح رقابت امن {dashboardTexts.recommendationMsg}
                       </>
                     ) : (
                       <>
@@ -547,7 +651,7 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
                           : "text-amber-700 hover:text-amber-950"
                       }`}
                     >
-                      جهت تحلیل کارنامه فنی و کالیبراسیون برنامه درسی با هوش مصنوعی به صفحه مشاور فرآیند مراجعه کنید ←
+                      {dashboardTexts.recommActionLine} ←
                     </button>
                   </div>
                 </div>
@@ -563,9 +667,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
                           ۱
                         </span>
                         <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">ریست فکری و مرور متن کتاب درسی</strong>
+                          <strong className="text-xs font-bold text-slate-800 block">{dashboardTexts.step1Title}</strong>
                           <p className="text-[11px] text-slate-600 leading-relaxed">
-                            تست‌زنی تفننی بدون پایه مطالعاتی را فوراً متوقف کرده، کتاب‌های درسی را باز کرده و قیدهای زیست‌شناسی را دوباره بنویسید.
+                            {dashboardTexts.step1Desc}
                           </p>
                         </div>
                       </div>
@@ -575,9 +679,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
                           ۲
                         </span>
                         <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">بررسی زمان تلف‌شده روی پاسخ‌های اشتباه</strong>
+                          <strong className="text-xs font-bold text-slate-800 block">{dashboardTexts.step2Title}</strong>
                           <p className="text-[11px] text-slate-600 leading-relaxed">
-                            از اصرار بر پاسخگویی به سوالات طولانی یا مباحث مبهم شیمی آلی خودداری کنید. گزینه‌های شک‌دار را علامت قرمزی بگذارید و رد شوید.
+                            {dashboardTexts.step2Desc}
                           </p>
                         </div>
                       </div>
@@ -587,9 +691,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
                           ۳
                         </span>
                         <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">اصلاح ساعت تعادل دروس عمومی و اختصاصی</strong>
+                          <strong className="text-xs font-bold text-slate-800 block">{dashboardTexts.step3Title}</strong>
                           <p className="text-[11px] text-slate-600 leading-relaxed">
-                            ضریب تعادل دروس را با توجه به بودجه‌بندی کنکور ثابت نگه دارید تا مابقی دروس از موازنه خارج نشوند.
+                            {dashboardTexts.step3Desc}
                           </p>
                         </div>
                       </div>
@@ -999,21 +1103,21 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
         {!isOptimizing && !showCelebration && (
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 grid grid-cols-1 md:grid-cols-3 gap-4 text-right">
             <div className="space-y-1">
-              <span className="text-slate-700 text-xs font-extrabold block">۱. کورتکس و حل تله‌های تستی زیست‌شناسی</span>
+              <span className="text-slate-700 text-xs font-extrabold block">{dashboardTexts.card1Title}</span>
               <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                به دلیل عدم تثبیت قیدهای زیست‌شناسی، بیشترین نمره منفی در آزمون ثبت شده که مطالعه تطبیقی این مبحث با منابع آکادمی آن را برطرف می‌کند.
+                {dashboardTexts.card1Desc}
               </p>
             </div>
             <div className="space-y-1">
-              <span className="text-slate-700 text-xs font-extrabold block">۲. مبانی استوکیومتری و مسائل شیمی</span>
+              <span className="text-slate-700 text-xs font-extrabold block">{dashboardTexts.card2Title}</span>
               <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                برای درک بهتر مسائل شیمی، حتماً واکنش‌های پایه را با حل تست‌های محاسباتی بازخوانی نمایید.
+                {dashboardTexts.card2Desc}
               </p>
             </div>
             <div className="space-y-1">
-              <span className="text-slate-700 text-xs font-extrabold block">۳. فیزیک دوازدهم و مباحث نوسان</span>
+              <span className="text-slate-700 text-xs font-extrabold block">{dashboardTexts.card3Title}</span>
               <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                تسلط بر فرمول‌های نوسان و موج جهت موفقیت قطعی در آزمون‌های شبیه‌ساز کنکور.
+                {dashboardTexts.card3Desc}
               </p>
             </div>
           </div>
@@ -1109,7 +1213,7 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
             <div className="space-y-1">
               <strong className="text-xs font-black text-slate-900 block">آخرین تحلیل هوش مصنوعی:</strong>
               <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                براساس نمودار فوق، درس <span className="text-rose-600 font-black">«زیست‌شناسی»</span> به دلیل درصد پاسخ‌گویی پایین ({toPersianNum(28)}٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی فصل‌های ژنتیک و گیاهی معطوف کنید.
+                {dashboardTexts.lastAiAnalysis}
               </p>
             </div>
           </div>
@@ -1120,7 +1224,7 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
             <div className="space-y-1">
               <strong className="text-xs font-black text-slate-900 block">راهکار مربیگری:</strong>
               <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                درس <span className="text-amber-600 font-black">«شیمی»</span> نیز در وضعیت هشدار ({toPersianNum(35)}٪) است. حل روزانه حداقل ۳۰ تست از مبحث استوکیومتری می‌تواند تراز شما را در این درس تا ۱۵٪ بهبود بخشد.
+                {dashboardTexts.coachingAdvice}
               </p>
             </div>
           </div>

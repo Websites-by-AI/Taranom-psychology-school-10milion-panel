@@ -257,6 +257,9 @@ export default function App() {
             <nav className="hidden lg:flex gap-1" id="desktop-navbar">
               {role && navigationItems[role].map((item) => {
                 const Icon = item.icon;
+                const dynamicLabel = item.id === "traps" 
+                  ? (student?.field === "riazi" ? "تله‌های کالیبره ریاضی/فیزیک" : student?.field === "ensani" ? "تله‌های کالیبره ادبیات/عربی" : "تله‌های کالیبره زیست/شیمی")
+                  : item.label;
                 return (
                   <button
                     key={item.id}
@@ -266,7 +269,7 @@ export default function App() {
                     }`}
                   >
                     <Icon size={14} className={item.highlight ? "text-amber-500" : ""} />
-                    <span>{item.label}</span>
+                    <span>{dynamicLabel}</span>
                   </button>
                 );
               })}
@@ -446,6 +449,9 @@ export default function App() {
                     {role && navigationItems[role].map((item) => {
                       const Icon = item.icon;
                       const isActive = view === item.id;
+                      const dynamicLabel = item.id === "traps" 
+                        ? (student?.field === "riazi" ? "تله‌های کالیبره ریاضی/فیزیک" : student?.field === "ensani" ? "تله‌های کالیبره ادبیات/عربی" : "تله‌های کالیبره زیست/شیمی")
+                        : item.label;
                       return (
                         <button
                           key={item.id}
@@ -463,7 +469,7 @@ export default function App() {
                             <div className={`p-2 rounded-xl transition-all duration-300 ${isActive ? "bg-white/20 text-white" : "bg-white/5 text-slate-500 group-hover:bg-indigo-500/20 group-hover:text-indigo-400"}`}>
                               <Icon size={18} className={item.highlight ? "text-amber-400 animate-pulse" : ""} />
                             </div>
-                            <span className={`text-xs font-black transition-colors ${isActive ? "text-white" : "text-slate-300"}`}>{item.label}</span>
+                            <span className={`text-xs font-black transition-colors ${isActive ? "text-white" : "text-slate-300"}`}>{dynamicLabel}</span>
                           </div>
                           
                           {isActive && (
@@ -488,13 +494,13 @@ export default function App() {
                     <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
                     <div className="flex items-center gap-4 mb-5 text-right bg-black/40 p-4 rounded-3xl border border-white/5 shadow-inner">
                        <div className="w-11 h-11 bg-gradient-to-b from-slate-700 to-slate-800 rounded-2xl flex items-center justify-center text-white font-black overflow-hidden border border-white/10 shadow-inner">
-                         {student.name.charAt(0)}
+                         {student?.name ? student.name.charAt(0) : "دا"}
                        </div>
                        <div className="flex flex-col">
-                         <span className="text-xs font-black text-white leading-none mb-1.5">{student.name}</span>
+                         <span className="text-xs font-black text-white leading-none mb-1.5">{student?.name || "کاربر گرامی"}</span>
                          <div className="flex items-center gap-2">
-                           <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded-md border border-indigo-500/10">{student.grade}</span>
-                           <span className="text-[10px] text-slate-400 font-bold">{student.school}</span>
+                           <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded-md border border-indigo-500/10">{student?.grade || "پایه دوازدهم"}</span>
+                           <span className="text-[10px] text-slate-400 font-bold">{student?.city || "تهران"}</span>
                          </div>
                        </div>
                     </div>
