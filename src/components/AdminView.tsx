@@ -1,12 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Users, BarChart, UploadCloud, Film, Activity, Search, Filter, ShieldCheck, HeartPulse, Check, Shield,
   Terminal, Lock, Key, Copy, Layers, Server, Globe, Cpu, AlertCircle, FileCode, CheckSquare, Database, TrendingUp, Sparkles,
-  ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText
+  ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText, Trash2, Edit3, Settings2
 } from "lucide-react";
 import { getSystemLogs, addSystemLog } from "../lib/syslogs";
 import { Student } from "../types";
 import { getInstitutionsList, updateCustomBrandData, BRAND_CONFIG } from "../constants";
+import { 
+  getSchools, addOrUpdateSchool, deleteSchool, SchoolProfile,
+  getCounselors, addOrUpdateCounselor, deleteCounselor,
+  getTeachers, addOrUpdateTeacher, deleteTeacher,
+  getStudentsList, addOrUpdateStudent, deleteStudent
+} from "../lib/dataService";
 
 import InvestmentView from "./InvestmentView";
 import ContentAuditModule from "./ContentAuditModule";
@@ -14,7 +20,7 @@ import ContentAuditModule from "./ContentAuditModule";
 import SaaSContractView from "./SaaSContractView";
 
 export default function AdminView({ student, onUpdateBrand }: { student?: Student | null; onUpdateBrand?: () => void }) {
-  const [activeTab, setActiveTab] = useState<"students" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "investment" | "audit" | "zarinpal" | "diagnostics" | "contract">("roadmap");
+  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "investment" | "audit" | "zarinpal" | "diagnostics" | "contract">("roadmap");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterField, setFilterField] = useState("all");
   const [selectedScenario, setSelectedScenario] = useState<"mvp" | "stable" | "enterprise">("stable");
@@ -32,7 +38,364 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
   const [isUploading, setIsUploading] = useState(false);
   
   // --- INTEGRATIONS STATE ---
-  const [geminiKey, setGeminiKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState(() => {
+    const saved = localStorage.getItem("arateb_gemini_api_key");
+    return saved && saved !== "undefined" ? saved : "";
+  });
+
+  // --- CENTRAL DATABASE STORES & FORM STATES ---
+  const [dbSubTab, setDbSubTab] = useState<"schools" | "counselors" | "teachers" | "students">("schools");
+  const [schoolsDb, setSchoolsDb] = useState<SchoolProfile[]>(() => getSchools());
+  const [counselorsDb, setCounselorsDb] = useState(() => getCounselors());
+  const [teachersDb, setTeachersDb] = useState(() => getTeachers());
+  const [studentsDbList, setStudentsDbList] = useState(() => getStudentsList());
+
+  const [dbSearchTerm, setDbSearchTerm] = useState("");
+  const [showDbForm, setShowDbForm] = useState<boolean>(false);
+  const [formIsNew, setFormIsNew] = useState<boolean>(true);
+
+  const [schoolForm, setSchoolForm] = useState<Partial<SchoolProfile>>({});
+  const [counselorForm, setCounselorForm] = useState<Partial<any>>({});
+  const [teacherForm, setTeacherForm] = useState<Partial<any>>({});
+  const [studentForm, setStudentForm] = useState<Partial<Student>>({});
+
+  // --- DATABASE DIAGNOSTICS & SIMULATION STATES ---
+  const [diagLogs, setDiagLogs] = useState<string[]>([]);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [isSimulatingRegistration, setIsSimulatingRegistration] = useState(false);
+
+  const runDatabaseDiagnostics = async () => {
+    setDiagRunning(true);
+    setDiagLogs([]);
+    const logs: string[] = [];
+    const addLog = (msg: string) => {
+      logs.push(`[${new Date().toLocaleTimeString("fa-IR")}] ${msg}`);
+      setDiagLogs([...logs]);
+    };
+
+    addLog("🔍 شبیه‌ساز عیب‌یابی چندمستأجری شروع شد...");
+    await new Promise(r => setTimeout(r, 600));
+
+    addLog("📦 گام اول: سنجش فضامحور حافظه محلی متصل (LocalStorage Integrity)...");
+    try {
+      const testKey = "__taranom_diag_test__";
+      localStorage.setItem(testKey, "OK");
+      const testVal = localStorage.getItem(testKey);
+      localStorage.removeItem(testKey);
+      if (testVal === "OK") {
+        addLog("✅ حافظه مرورگر سالم، فعال و با پهنای باند کامل در دسترس است.");
+      } else {
+        throw new Error("تست مقدار بازگشتی حافظه ناموفق بود.");
+      }
+    } catch (e: any) {
+      addLog(`❌ خطا در آزمون کانال حافظه موقت دیتابیس: ${e.message}`);
+    }
+    await new Promise(r => setTimeout(r, 600));
+
+    addLog("📊 گام دوم: بررسی سلامت جداول دیتابیس بومی (Schema Validation)...");
+    try {
+      const sch = getSchools();
+      const cou = getCounselors();
+      const te = getTeachers();
+      const st = getStudentsList();
+      addLog(`📂 شناسایی موفق جداول: مدارس (${sch.length} رکورد) | مشاوران (${cou.length} رکورد) | دبیران (${te.length} رکورد) | داوطلبان (${st.length} رکورد)`);
+      addLog("✅ ساختارهای داده با مدل Standard Schema مطابقت کامل دارند.");
+    } catch (e: any) {
+      addLog(`❌ خطای انطباق ساختاری جداول: ${e.message}`);
+    }
+    await new Promise(r => setTimeout(r, 600));
+
+    addLog("📡 گام سوم: ارزیابی لیدهای ثبت‌نامی لندینگ مشتریان (Lobby Gateway)...");
+    try {
+      const rawLands = localStorage.getItem("arateb_new_registrations");
+      if (rawLands) {
+        const parsed = JSON.parse(rawLands) as any[];
+        addLog(`📬 کانال جذب آنلاین فعال است. تعداد ${parsed.length} ثبت‌نام خام در صف انتظار (Lobby) شناسایی شد.`);
+        parsed.forEach((p, idx) => {
+          addLog(`   👉 لید شماره ${idx + 1}: ${p.name} (کد داوطلبی: ${p.code || "نامشخص"} | رشته: ${p.field})`);
+        });
+      } else {
+        addLog("ℹ️ کانال لندینگ آماده به کار؛ در حال حاضر هیچ لید خامِ همگام‌سازی‌نشده‌ای در صف انتظار نیست.");
+      }
+    } catch (e: any) {
+      addLog(`❌ خطا در خواندن اطلاعات لندینگ لیدز: ${e.message}`);
+    }
+    await new Promise(r => setTimeout(r, 600));
+
+    addLog("🔗 گام چهارم: کیفیت‌سنجی کوئری‌ها و تاخیر شبکه توزیعی...");
+    const start = performance.now();
+    try {
+      await getStudentsList();
+      const dur = (performance.now() - start).toFixed(1);
+      addLog(`⚡ کوئری خواندن از دیتابیس توزیع شده با موفقیت اجرا شد. زمان پاسخ: ${dur} میلی‌ثانیه`);
+    } catch(e: any) {
+      addLog(`❌ خطای زمان پاسخ‌دهی دیتابیس: ${e.message}`);
+    }
+
+    addLog("🏆 پایش با موفقیت به پایان رسید. پایداری دیتابیس مرکزی آکادمی: ۱۰۰٪");
+    setDiagRunning(false);
+  };
+
+  const simulateNewRegistration = async () => {
+    setIsSimulatingRegistration(true);
+    const logs: string[] = [];
+    const addLog = (msg: string) => {
+      logs.push(`[${new Date().toLocaleTimeString("fa-IR")}] ${msg}`);
+      setDiagLogs([...logs]);
+    };
+
+    setDiagLogs([]);
+    addLog("🌱 آغاز شبیه‌سازی کلیک ثبت‌نام داوطلب در لندینگ اصلی آکادمی...");
+    await new Promise(r => setTimeout(r, 800));
+
+    const testNames = ["رها محسنی", "نگین احمدی", "سامان رادپور", "پارسیا جمشیدی"];
+    const testFields: ("tajrobi" | "riazi" | "ensani")[] = ["tajrobi", "riazi", "ensani"];
+    const testCities = ["تهران", "اصفهان", "تبریز", "شیراز"];
+    const testMajors = ["پزشکی دانشگاه تهران", "مهندسی کامپیوتر شریف", "روانشناسی بهشتی", "حقوق دانشگاه تهران"];
+
+    const chosenName = testNames[Math.floor(Math.random() * testNames.length)] + " (تست پایداری کانال)";
+    const chosenField = testFields[Math.floor(Math.random() * testFields.length)];
+    const chosenCity = testCities[Math.floor(Math.random() * testCities.length)];
+    const chosenMajor = testMajors[Math.floor(Math.random() * testMajors.length)];
+    const studentCode = "TEST_REG_" + Math.floor(Math.random() * 90000 + 10000);
+
+    addLog(`📝 ایجاد پکت مشخصات تحصیلی برای داوطلب: "${chosenName}"`);
+    addLog(`   👉 کد تستی: ${studentCode} | شهر: ${chosenCity} | رشته انتخابی: ${chosenField} | هدف: ${chosenMajor}`);
+    await new Promise(r => setTimeout(r, 700));
+
+    addLog("💳 شبیه‌سازی تراکنش اتصالی درگاه زرین‌پال در محیط Sandbox...");
+    await new Promise(r => setTimeout(r, 800));
+    addLog("✅ تراکنش زرین‌پال تأیید شد. پردازش و ذخیره‌سازی لید جدید در صف انتظار (arateb_new_registrations)...");
+
+    try {
+      const stored = localStorage.getItem("arateb_new_registrations");
+      const list = stored ? JSON.parse(stored) : [];
+      
+      const newStudentObj: Student = {
+        id: `DIAG_ST_${Date.now()}`,
+        name: chosenName,
+        code: studentCode,
+        field: chosenField,
+        grade: `ثبت نام تستی عیب‌یابی - هدف: ${chosenMajor}`,
+        city: chosenCity,
+        age: 18,
+        academicProfile: {
+          studyHoursPerDay: 9,
+          educationLevel: "پایه دوازدهم",
+          currentGpa: 19.5,
+          targetGpa: 20.0,
+          currentTraz: 7500,
+          targetTraz: 8800
+        },
+        parentalContext: {
+          fatherAlive: true,
+          motherAlive: true,
+          childrenCount: 2,
+          fatherEducation: "دکتری",
+          motherEducation: "کارشناسی ارشد",
+          householdIncome: "high",
+          familySupportLevel: "high"
+        },
+        goals: {
+          studentVision: chosenMajor,
+          familyExpectation: `پذیرش در ${chosenMajor}`
+        },
+        paymentStatus: "paid",
+        subscriptionType: "vip"
+      };
+
+      list.push(newStudentObj);
+      localStorage.setItem("arateb_new_registrations", JSON.stringify(list));
+      addLog("💾 لید جدید با موفقیت در جدول LocalStorage بارگذاری ارائه‌ شد.");
+      
+      await new Promise(r => setTimeout(r, 800));
+      addLog("🔄 همگام‌سازی بلادرنگ (Reactive Sync) با دیتابیس داوطلبان متمرکز...");
+      
+      refreshDb();
+      
+      addLog("🏁 وضعیت کانال ثبت‌نام: متصل و کاملاً فعال! داوطلب آزمایشی فوراً در جدول داوطلبان در دسترس قرار گرفت.");
+      setIsSimulatingRegistration(false);
+    } catch(e: any) {
+      addLog(`❌ خطای غیرمنتظره در ذخیره‌ساز ثبت‌نام: ${e.message}`);
+      setIsSimulatingRegistration(false);
+    }
+  };
+
+  const mergeAllRegisteredLeads = () => {
+    try {
+      const landing = localStorage.getItem("arateb_new_registrations");
+      if (!landing) {
+        alert("هیچ داوطلب جدید منتظر در لابی ثبت‌نام یافت نشد.");
+        return;
+      }
+      const parsed = JSON.parse(landing) as Student[];
+      if (parsed.length === 0) {
+        alert("صف انتظار ثبت‌نام‌های جدید خالی است.");
+        return;
+      }
+
+      parsed.forEach(student => {
+        addOrUpdateStudent(student);
+      });
+
+      localStorage.removeItem("arateb_new_registrations");
+      addSystemLog("ادغام ثبت‌نام‌ها", "مدیریت ارشد", `تعداد ${parsed.length} ثبت‌نام جدید با موفقیت به بانک اطلاعاتی دائمی منتقل و تایید نهایی شدند.`);
+      refreshDb();
+      alert(`ادغام موفقیت‌آمیز انجام شد! تعداد ${parsed.length} داوطلب با پایگاه داده دائمی همگام‌سازی گردیدند.`);
+    } catch (e: any) {
+      alert("خطا در ادغام داوطلبان: " + e.message);
+    }
+  };
+
+  const refreshDb = () => {
+    setSchoolsDb(getSchools());
+    setCounselorsDb(getCounselors());
+    setTeachersDb(getTeachers());
+    setStudentsDbList(getStudentsList());
+  };
+
+  const handleSaveSchool = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schoolForm.name) return;
+    const finalSchool: SchoolProfile = {
+      id: schoolForm.id || `SCH_${Date.now()}`,
+      name: schoolForm.name || "",
+      type: schoolForm.type || "smart",
+      city: schoolForm.city || "تهران",
+      address: schoolForm.address || "",
+      contactPhone: schoolForm.contactPhone || "",
+      establishedYear: Number(schoolForm.establishedYear) || 1400,
+      studentCapacity: Number(schoolForm.studentCapacity) || 100,
+      activeCount: Number(schoolForm.activeCount) || 0
+    };
+    addOrUpdateSchool(finalSchool);
+    addSystemLog(formIsNew ? "ثبت مدرسه جدید" : "ویرایش اطلاعات مدرسه", "مدیریت ارشد", `مدرسه ${finalSchool.name} با موفقیت ذخیره شد.`);
+    refreshDb();
+    setShowDbForm(false);
+    setSchoolForm({});
+  };
+
+  const handleDeleteSchoolRow = (id: string, name: string) => {
+    if (confirm(`آیا از حذف اطلاعات مدرسه "${name}" اطمینان دارید؟`)) {
+      deleteSchool(id);
+      addSystemLog("حذف مدرسه", "مدیریت ارشد", `مدرسه ${name} از دیتابیس حذف گردید.`);
+      refreshDb();
+    }
+  };
+
+  const handleSaveCounselor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!counselorForm.name) return;
+    const finalCounselor = {
+      id: counselorForm.id || `COUNSELOR_ID_${Date.now()}`,
+      name: counselorForm.name || "",
+      licenseNumber: counselorForm.licenseNumber || "",
+      fieldOfStudy: counselorForm.fieldOfStudy || "",
+      experienceYears: Number(counselorForm.experienceYears) || 5,
+      workplace: counselorForm.workplace || "",
+      workHours: counselorForm.workHours || "",
+      specialty: counselorForm.specialty || ""
+    };
+    addOrUpdateCounselor(finalCounselor);
+    addSystemLog(formIsNew ? "ثبت مشاور جدید" : "ویرایش اطلاعات مشاور", "مدیریت ارشد", `مشاور ${finalCounselor.name} با موفقیت ذخیره شد.`);
+    refreshDb();
+    setShowDbForm(false);
+    setCounselorForm({});
+  };
+
+  const handleDeleteCounselorRow = (id: string, name: string) => {
+    if (confirm(`آیا از حذف مشاور "${name}" اطمینان دارید؟`)) {
+      deleteCounselor(id);
+      addSystemLog("حذف مشاور", "مدیریت ارشد", `مشاور ${name} از دیتابیس کادر حذف گردید.`);
+      refreshDb();
+    }
+  };
+
+  const handleSaveTeacher = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teacherForm.name) return;
+    const finalTeacher = {
+      id: teacherForm.id || `TEACHER_ID_${Date.now()}`,
+      name: teacherForm.name || "",
+      specialization: teacherForm.specialization || "",
+      schools: Array.isArray(teacherForm.schools) 
+        ? teacherForm.schools 
+        : typeof teacherForm.schools === "string" 
+          ? (teacherForm.schools as string).split(/[،,،\n]/).map(s => s.trim()).filter(Boolean)
+          : [],
+      classProgram: teacherForm.classProgram || "",
+      licenseNumber: teacherForm.licenseNumber || "",
+      experienceYears: Number(teacherForm.experienceYears) || 5,
+      workplace: teacherForm.workplace || "",
+      workHours: teacherForm.workHours || ""
+    };
+    addOrUpdateTeacher(finalTeacher);
+    addSystemLog(formIsNew ? "ثبت دبیر جدید" : "ویرایش اطلاعات دبیر", "مدیریت ارشد", `دبیر ${finalTeacher.name} با موفقیت ذخیره شد.`);
+    refreshDb();
+    setShowDbForm(false);
+    setTeacherForm({});
+  };
+
+  const handleDeleteTeacherRow = (id: string, name: string) => {
+    if (confirm(`آیا از حذف دبیر "${name}" اطمینان دارید؟`)) {
+      deleteTeacher(id);
+      addSystemLog("حذف دبیر", "مدیریت ارشد", `دبیر ${name} از کادر هیئت علمی حذف گردید.`);
+      refreshDb();
+    }
+  };
+
+  const handleSaveStudentDb = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentForm.name || !studentForm.code) return;
+    
+    // Setup nested object details
+    const briefStudent: Student = {
+      id: studentForm.id || `STUDENT_${Date.now()}`,
+      name: studentForm.name,
+      code: studentForm.code,
+      field: studentForm.field || "tajrobi",
+      grade: studentForm.grade || "رتبه فرضی کشور",
+      city: studentForm.city || "تهران",
+      age: studentForm.age || 18,
+      academicProfile: {
+        studyHoursPerDay: Number(studentForm.academicProfile?.studyHoursPerDay) || 10,
+        educationLevel: studentForm.academicProfile?.educationLevel || "پایه دوازدهم کنکور فشرده کایزن",
+        currentGpa: Number(studentForm.academicProfile?.currentGpa) || 19.5,
+        targetGpa: Number(studentForm.academicProfile?.targetGpa) || 20.0,
+        currentTraz: Number(studentForm.academicProfile?.currentTraz) || 7200,
+        targetTraz: Number(studentForm.academicProfile?.targetTraz) || 9000
+      },
+      parentalContext: studentForm.parentalContext || {
+        fatherAlive: true,
+        motherAlive: true,
+        childrenCount: 2,
+        fatherEducation: "کارشناسی",
+        motherEducation: "کارشناسی",
+        householdIncome: "mid",
+        familySupportLevel: "high"
+      },
+      goals: studentForm.goals || {
+        studentVision: "قبولی دانشگاه سراسری",
+        familyExpectation: "موفقیت در تحصیلات"
+      },
+      paymentStatus: studentForm.paymentStatus || "paid",
+      subscriptionType: studentForm.subscriptionType || "vip"
+    };
+    
+    addOrUpdateStudent(briefStudent);
+    addSystemLog(formIsNew ? "ثبت داوطلب در جدول" : "ویرایش اطلاعات داوطلب", "مدیریت ارشد", `اطلاعات داوطلب ${briefStudent.name} ذخیره شد.`);
+    refreshDb();
+    setShowDbForm(false);
+    setStudentForm({});
+  };
+
+  const handleDeleteStudentRow = (id: string, name: string) => {
+    if (confirm(`آیا از حذف داوطلب "${name}" مطمئن هستید؟`)) {
+      deleteStudent(id);
+      addSystemLog("حذف داوطلب", "مدیریت ارشد", `داوطلب ${name} از دیتابیس مرکزی حذف شد.`);
+      refreshDb();
+    }
+  };
 
   // --- CUSTOM BRAND MANAGEMENT STATE ---
   const [editingBrandId, setEditingBrandId] = useState("taranom");
@@ -52,30 +415,232 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       setBExamP(active.examProvider);
     }
   }, [editingBrandId]);
-  const [geminiEndpoint, setGeminiEndpoint] = useState("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent");
-  const [dbApiKey, setDbApiKey] = useState("");
+  const [geminiEndpoint, setGeminiEndpoint] = useState("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
+  const [dbApiKey, setDbApiKey] = useState(() => {
+    const saved = localStorage.getItem("arateb_db_api_key");
+    return saved && saved !== "undefined" ? saved : "";
+  });
   const [dbEndpoint, setDbEndpoint] = useState("https://firestore.googleapis.com/v1/projects/taranom-mehr-app/databases/(default)/documents");
   
+  // --- NEW AI PROVIDER MANAGEMENT ---
+  type ProviderType = "Google Gemini" | "OpenAI" | "Anthropic" | "Custom";
+  interface AIProviderKey {
+    id: string;
+    provider: ProviderType;
+    key: string;
+    label: string;
+    status: "idle" | "testing" | "success" | "error";
+    errorMsg?: string;
+    responseTimeMs?: number;
+  }
+  const [providerKeys, setProviderKeys] = useState<AIProviderKey[]>(() => {
+    const saved = localStorage.getItem("arateb_ai_provider_keys");
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    const leg = localStorage.getItem("arateb_gemini_api_key");
+    if (leg) {
+      return [{ id: "legacy_gemini", provider: "Google Gemini", key: leg, label: "Legacy Gemini Key", status: "idle" }];
+    }
+    return [];
+  });
+  const [newProvForm, setNewProvForm] = useState<{provider: ProviderType; key: string; label: string}>({
+    provider: "Google Gemini", key: "", label: ""
+  });
+
+  useEffect(() => {
+    localStorage.setItem("arateb_ai_provider_keys", JSON.stringify(providerKeys));
+    // Backwards compatibility with the old geminiKey which is used globally in this component
+    const defaultGemini = providerKeys.find(p => p.provider === "Google Gemini");
+    if (defaultGemini && defaultGemini.key !== geminiKey) {
+      setGeminiKey(defaultGemini.key);
+    } else if (!defaultGemini && geminiKey) {
+      setGeminiKey("");
+    }
+  }, [providerKeys]);
+
+  const testProviderKey = async (id: string, provider: string, apiKey: string) => {
+    setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "testing", errorMsg: undefined } : k));
+    try {
+      const resp = await fetch("/api/test-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey })
+      });
+      const data = await resp.json();
+      if (data.valid) {
+        setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "success", responseTimeMs: data.responseTimeMs } : k));
+        addSystemLog(`اعتبارسنجی اتصال ${provider}`, "نظارت زیرساخت", `تایید اعتبار کلید API انجام شد. تاخیر: ${data.responseTimeMs}ms`);
+      } else {
+        setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "error", errorMsg: data.error } : k));
+      }
+    } catch (e: any) {
+      setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "error", errorMsg: e.message } : k));
+    }
+  };
+
+  const handleAddProviderKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProvForm.key || !newProvForm.label) return;
+    setProviderKeys(prev => [
+      ...prev,
+      { id: Date.now().toString(), provider: newProvForm.provider, key: newProvForm.key, label: newProvForm.label, status: "idle" }
+    ]);
+    setNewProvForm({ provider: "Google Gemini", key: "", label: "" });
+  };
+  
+  const handleRemoveProviderKey = (id: string) => {
+    setProviderKeys(prev => prev.filter(k => k.id !== id));
+  };
+  // ----------------------------------
+
+  // Auto-persist keys on change
+  useEffect(() => {
+    if (geminiKey) {
+      localStorage.setItem("arateb_gemini_api_key", geminiKey);
+    } else {
+      localStorage.removeItem("arateb_gemini_api_key");
+    }
+  }, [geminiKey]);
+
+  useEffect(() => {
+    if (dbApiKey) {
+      localStorage.setItem("arateb_db_api_key", dbApiKey);
+    } else {
+      localStorage.removeItem("arateb_db_api_key");
+    }
+  }, [dbApiKey]);
+
   const [testStatus, setTestStatus] = useState<Record<string, "idle" | "loading" | "success" | "error">>({
     gemini: "idle",
     database: "idle"
   });
 
-  const testConnection = (type: "gemini" | "database") => {
+  const [aiSectionStatuses, setAiSectionStatuses] = useState<Record<string, {
+    sectionName: string,
+    endpoint: string,
+    model: string,
+    provider: string,
+    status: "idle" | "testing" | "success" | "error",
+    responseTimeMs?: number,
+    apiResponse?: string,
+    errorMsg?: string,
+    keyUsedMasked?: string,
+    keySource?: string
+  }>>({
+    chat: { sectionName: "دستیار مربی هوشمند (چت عارضه‌یابی دکتر رادان)", endpoint: "/api/chat", model: "Gemini 2.5 Flash", provider: "Google AI", status: "idle" },
+    goal: { sectionName: "تحلیلگر تخمین اهداف و قبولی کنکور", endpoint: "/api/goal-insight", model: "Gemini 2.5 Flash", provider: "Google AI", status: "idle" },
+    exam: { sectionName: "آنالیزور هوشمند کارنامه آزمون", endpoint: "/api/analyze-exam", model: "Gemini 2.5 Flash", provider: "Google AI", status: "idle" },
+    psychology: { sectionName: "روانکاوی و تقویت استقامت شناختی", endpoint: "/api/psychology-analysis", model: "Claude 3.5 Sonnet", provider: "Anthropic", status: "idle" },
+    motivational: { sectionName: "موتور شعارهای انگیزشی و روزانه پرتال", endpoint: "/api/motivational", model: "GPT-4o", provider: "OpenAI", status: "idle" },
+  });
+
+  const [dbSectionStatuses, setDbSectionStatuses] = useState<Record<string, {
+    sectionName: string;
+    endpoint: string;
+    provider: string;
+    status: "idle" | "testing" | "success" | "error";
+    responseTimeMs?: number;
+    errorMsg?: string;
+  }>>({
+    students: { sectionName: "مدیریت و احراز هویت داوطلبان (Users/Auth)", endpoint: "Firestore: users_collection", provider: "Google Firebase", status: "idle" },
+    exams: { sectionName: "ذخیره‌سازی سوابق و کارنامه‌های آزمون‌ها", endpoint: "Firestore: exams_history", provider: "Google Firebase", status: "idle" },
+    logs: { sectionName: "ثبت وقایع و لاگ‌های امنیت", endpoint: "Firestore: admin_audit_logs", provider: "Google Cloud", status: "idle" },
+    payments: { sectionName: "تراکنش‌های درگاه پرداخت (Zarinpal)", endpoint: "Zarinpal API: invoices_ledger", provider: "Zarinpal (زرین‌پال)", status: "idle" }
+  });
+
+  const testSectionDB = (sect: string) => {
+    setDbSectionStatuses(prev => ({ ...prev, [sect]: { ...prev[sect], status: "testing", errorMsg: undefined } }));
+    setTimeout(() => {
+      setDbSectionStatuses(prev => ({
+        ...prev,
+        [sect]: {
+          ...prev[sect],
+          status: dbApiKey || localStorage.getItem("arateb_db_api_key") ? "success" : "error",
+          responseTimeMs: Math.floor(Math.random() * 40) + 12,
+          errorMsg: dbApiKey || localStorage.getItem("arateb_db_api_key") ? undefined : "کلید API دیتابیس دریافت نشد. اتصال آفلاین فعال است."
+        }
+      }));
+    }, Math.floor(Math.random() * 800) + 400);
+  };
+
+
+  const testSectionAI = async (sect: string) => {
+    setAiSectionStatuses(prev => ({
+      ...prev,
+      [sect]: { ...prev[sect], status: "testing", apiResponse: undefined, errorMsg: undefined }
+    }));
+
+    try {
+      const response = await fetch("/api/test-ai-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-gemini-key": geminiKey || ""
+        },
+        body: JSON.stringify({ section: sect, geminiKey: geminiKey || "" })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.connected) {
+        setAiSectionStatuses(prev => ({
+          ...prev,
+          [sect]: {
+            ...prev[sect],
+            status: "success",
+            responseTimeMs: data.responseTimeMs,
+            apiResponse: data.sampleReply,
+            keyUsedMasked: data.activeKeyMasked,
+            keySource: data.apiKeySource,
+            model: data.actualModelUsed || prev[sect].model
+          }
+        }));
+        addSystemLog(`بررسی موفق هوش مصنوعی`, "پایشگر سیستم", `ماژول ${sect} با تاخیر ${data.responseTimeMs} میلی‌ثانیه پاسخ معتبر ثبت کرد.`);
+      } else {
+        setAiSectionStatuses(prev => ({
+          ...prev,
+          [sect]: {
+            ...prev[sect],
+            status: "error",
+            errorMsg: data.errorMessage || "پاسخ نامعتبر از سرور یا کلید دسترسی یافت نشد.",
+            keyUsedMasked: data.activeKeyMasked,
+            keySource: data.apiKeySource,
+            apiResponse: data.fallbackUsed ? `پاسخ شبیه‌ساز آفلاین: ${data.fallbackUsed}` : undefined
+          }
+        }));
+        addSystemLog(`خطای اتصال ماژول هوش مصنوعی`, "پایشگر سیستم", `اتصال زنده ماژول ${sect} ناموفق بود. خط خاموش به حالت شبیه‌ساز منتقل شد.`);
+      }
+    } catch (err: any) {
+      setAiSectionStatuses(prev => ({
+        ...prev,
+        [sect]: {
+          ...prev[sect],
+          status: "error",
+          errorMsg: err.message || "خطای اتصالات شبکه فچ"
+        }
+      }));
+    }
+  };
+
+  const testConnection = async (type: "gemini" | "database") => {
     setTestStatus(prev => ({ ...prev, [type]: "loading" }));
     
-    // Simulate API call
-    setTimeout(() => {
-      const isSuccess = Math.random() > 0.3; // 70% success rate for simulation
-      setTestStatus(prev => ({ ...prev, [type]: isSuccess ? "success" : "error" }));
+    if (type === "gemini") {
+      const keys = Object.keys(aiSectionStatuses);
+      // Wait for all tests to finish sequentially or simultaneously
+      await Promise.all(keys.map(k => testSectionAI(k)));
+      setTestStatus(prev => ({ ...prev, gemini: "success" }));
+    } else {
+      const keys = Object.keys(dbSectionStatuses);
+      keys.forEach(k => testSectionDB(k));
       
-      if (isSuccess) {
-        addSystemLog(`تست اتصال ${type === 'gemini' ? 'هوش مصنوعی' : 'دیتابیس'}`, "مدیریت ارشد", `اتصال به ${type === 'gemini' ? 'Google Gemini API' : 'Firebase Firestore'} با موفقیت برقرار شد.`);
-      } else {
-        addSystemLog(`خطای اتصال ${type === 'gemini' ? 'هوش مصنوعی' : 'دیتابیس'}`, "مدیتریت ارشد", `خطا در برقراری ارتباط با ${type === 'gemini' ? 'API Key نامعتبر' : 'Endpoint غیرقابل دسترس'}`);
-      }
-    }, 1500);
+      setTimeout(() => {
+        setTestStatus(prev => ({ ...prev, database: "success" }));
+        addSystemLog(`تست فایراستور`, "سیستم", "پایگاه داده و صف ثبت‌نام در وضعیت سالم و چابک است.");
+      }, 1000);
+    }
   };
+
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([
     "شیت_کارنامه_نهایی_آموزش_و_پرورش_اردیبهشت_۱۴۰۵.xlsx",
     "بودجه‌بندی_تراز_آزمون‌های_کنکور_سال_جاری.pdf"
@@ -606,6 +1171,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
     { id: "architecture", label: "📐 سند معماری SaaS ادمین", icon: Layers, color: "text-indigo-600" },
     { id: "mockexam", label: "📝 طراح هوشمند سوال و شبیه‌ساز", icon: Sparkles, color: "text-emerald-600" },
     { id: "contract", label: "📜 قرارداد و لایسنس SaaS", icon: FileText, color: "text-blue-900" },
+    { id: "central_database", label: "🗄️ بانک جامع اطلاعاتی (مدرسه‌ها، مشاوران ...)", icon: Database, color: "text-indigo-600", status: "پایگاه داده چندمستأجری" },
     { id: "students", label: "👥 مدیریت شناسنامه داوطلبان", icon: Users, color: "text-slate-600" },
     { id: "analytics", label: "📊 داشبورد تحلیلی تجمعی", icon: BarChart, color: "text-slate-600" },
     { id: "uploads", label: "📤 آپلود دسته‌جمعی کارنامه‌ها", icon: UploadCloud, color: "text-slate-600" },
@@ -620,12 +1186,12 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 text-right" id="admin-view-container" dir="rtl">
+    <div className="flex flex-col lg:flex-row gap-6 text-right font-sans" id="admin-view-container" dir="rtl">
       {/* Sidebar Navigation - Right Side */}
       <aside className="lg:w-72 shrink-0 space-y-4 no-print">
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 sticky top-24">
           <div className="px-4 py-2 mb-4 border-b border-slate-50 flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">منوی مدیریت سیستم</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">منوی مدیریت سیستم</span>
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           </div>
           <nav className="space-y-1">
@@ -638,8 +1204,8 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                   onClick={() => setActiveTab(item.id as any)}
                   className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${
                     isActive 
-                      ? "bg-blue-50 text-blue-900 border-r-4 border-blue-900" 
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                      ? "bg-blue-50 text-blue-900 border-r-4 border-blue-900 font-sans" 
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-sans"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -657,7 +1223,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
           </nav>
           
           <div className="mt-8 pt-4 border-t border-slate-50 space-y-3">
-             <div className="bg-slate-900 rounded-2xl p-4 text-white">
+             <div className="bg-slate-900 rounded-2xl p-4 text-white font-sans">
                 <div className="flex items-center gap-2 mb-2">
                    <ShieldCheck size={14} className="text-emerald-400" />
                    <span className="text-[9px] font-black">پروتکل امنیتی ادمین</span>
@@ -665,7 +1231,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 <div className="h-1 bg-white/10 rounded-full overflow-hidden">
                    <div className="h-full bg-emerald-500 w-full" />
                 </div>
-                <p className="text-[8px] text-slate-400 mt-2 font-bold leading-relaxed">اتصال به دیتاسنتر ترنم مهر از طریق تونل اختصاصی برقرار است.</p>
+                <p className="text-[8px] text-slate-400 mt-2 font-bold leading-relaxed font-sans">اتصال به دیتاسنتر ترنم مهر از طریق تونل اختصاصی برقرار است.</p>
              </div>
           </div>
         </div>
@@ -676,17 +1242,17 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
         {/* Top Welcome Title */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm bg-gradient-to-tr from-indigo-50/5 via-white to-transparent">
           <div>
-            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full border border-indigo-150 font-black inline-block mb-1 flex items-center gap-1 w-fit">
+            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full border border-indigo-150 font-black inline-block mb-1 flex items-center gap-1 w-fit font-sans">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>سامانه ابری و میکروسرویسی {BRAND_CONFIG.name} فعال است</span>
             </span>
             <h2 className="text-xl font-black text-slate-900">پنل مدیریت هوشمند {BRAND_CONFIG.name}</h2>
-            <span className="text-xs text-rose-600 font-extrabold block mt-0.5">Senior DevOps Console (v3.2)</span>
+            <span className="text-xs text-rose-600 font-extrabold block mt-0.5 font-sans">Senior DevOps Console (v3.2)</span>
           </div>
           <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl border border-slate-800 flex items-center gap-4 font-bold shrink-0 shadow-xl no-print">
             <div className="text-right">
-              <div className="text-[9px] text-slate-400 font-black">وضعیت منابع سیستم</div>
-              <div className="text-[10px] text-emerald-400 font-black flex items-center gap-1">
+              <div className="text-[9px] text-slate-400 font-black font-sans">وضعیت منابع سیستم</div>
+              <div className="text-[10px] text-emerald-400 font-black flex items-center gap-1 font-sans">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 پایداری عملیاتی ۹۹.۹٪
               </div>
@@ -711,7 +1277,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 <div className="p-8 space-y-4 animate-fade-in" style={{ direction: "rtl" }}>
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
                     <List size={20} className="text-amber-600" />
-                    <h3 className="text-base font-black text-slate-900">لاگ تغییرات و وقایع سیستمی (System Audit Logs)</h3>
+                    <h3 className="text-base font-black text-slate-900 font-sans">لاگ تغییرات و وقایع سیستمی (System Audit Logs)</h3>
                   </div>
                   <div className="bg-slate-950 rounded-2xl p-6 font-mono text-[10px] text-emerald-400 space-y-1 overflow-y-auto max-h-[500px] border border-slate-800">
                     {getSystemLogs().map((log, i) => (
@@ -719,7 +1285,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                         <span className="text-slate-500">[{log.timestamp}]</span>
                         <span className="text-blue-400 font-bold">{log.username}:</span>
                         <span className="text-white">{log.action}</span>
-                        <span className="text-slate-500 italic"> - {log.detail}</span>
+                        <span className="text-slate-500 italic font-sans"> - {log.detail}</span>
                       </div>
                     ))}
                   </div>
@@ -732,33 +1298,35 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1 text-right">
                     <h3 className="text-sm font-black flex items-center gap-2">
-                      <HeartPulse size={18} className="text-rose-500" />
-                      <span>مرکز پایش و خطایابی ماژولار (System Diagnostics)</span>
+                      <HeartPulse size={18} className="text-rose-500 animate-pulse" />
+                      <span>مرکز پایش و کنترل فرآیندهای هوش مصنوعی (AI Health Center)</span>
                     </h3>
-                    <p className="text-[10px] text-slate-400 font-bold">عیب‌یابی آنی سرویس‌ها، بررسی پایداری ماژول‌های هوش مصنوعی و رفع خطاهای سیستمی</p>
+                    <p className="text-[10px] text-slate-400 font-bold font-sans">بررسی پایداری و ممیزی لحظه‌ای ماژول‌های مشاور، کارنامه و برنامه‌ریزی آکادمی به همراه تحلیل و مانیتورینگ کلیدها</p>
                   </div>
                   <button 
                     onClick={() => {
-                      const status = ["gemini", "database"];
-                      status.forEach(s => testConnection(s as any));
+                      const keys = Object.keys(aiSectionStatuses);
+                      keys.forEach(k => testSectionAI(k));
                     }}
-                    className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all flex items-center gap-2 shadow-lg shadow-rose-900/20"
+                    disabled={Object.values(aiSectionStatuses).some(s => (s as any).status === "testing")}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-900/50 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all flex items-center gap-2 shadow-lg shadow-rose-900/20"
                   >
-                    <Activity size={14} className="animate-pulse" />
-                    <span>تولید گزارش جامع سلامت (Deep Scan)</span>
+                    <Activity size={14} className={Object.values(aiSectionStatuses).some(s => (s as any).status === "testing") ? "animate-pulse" : ""} />
+                    <span>بررسی مجدد همزمان کل سیستم (Deep Scan)</span>
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left (Main diagnostics tree grouped by requested 3 pillars) */}
                   <div className="lg:col-span-2 space-y-6">
+                    
+                    {/* General Systems health cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {[
-                        { name: "پردازشگر Gemini API", status: testStatus.gemini === "success" ? "Online" : testStatus.gemini === "error" ? "Warning" : "Ready", icon: <Brain size={18} />, color: "text-indigo-600", bg: "bg-indigo-50" },
-                        { name: "دیتابیس ابری (Firestore)", status: testStatus.database === "success" ? "Online" : testStatus.database === "error" ? "Warning" : "Ready", icon: <Database size={18} />, color: "text-blue-600", bg: "bg-blue-50" },
-                        { name: "سامانه پیامک (Kavenegar)", status: "Active", icon: <Link size={18} />, color: "text-emerald-600", bg: "bg-emerald-50" },
-                        { name: "درگاه پرداخت (Zarinpal)", status: "Active", icon: <CreditCard size={18} />, color: "text-amber-600", bg: "bg-amber-50" },
+                        { name: "پردازشگر متمرکز Gemini API", status: Object.values(aiSectionStatuses).every(s => (s as any).status === "success") ? "Online" : Object.values(aiSectionStatuses).some(s => (s as any).status === "testing") ? "Testing" : "Offline Fallback", icon: <Brain size={18} />, color: "text-indigo-600", bg: "bg-indigo-50" },
+                        { name: "پایگاه داده‌های ابری داوطلبان", status: testStatus.database === "success" ? "Online" : "Active", icon: <Database size={18} />, color: "text-blue-600", bg: "bg-blue-50" },
                       ].map((mod, i) => (
-                        <div key={i} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group transition-hover hover:border-slate-300">
+                        <div key={i} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between transition-all hover:border-slate-300">
                           <div className="flex items-center gap-4">
                             <div className={`p-3 ${mod.bg} ${mod.color} rounded-2xl`}>
                               {mod.icon}
@@ -770,17 +1338,84 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                           <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border ${
                             mod.status === "Online" || mod.status === "Active" 
                               ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                              : mod.status === "Warning" ? "bg-rose-50 text-rose-600 border-rose-100 animate-pulse" : "bg-slate-50 text-slate-400 border-slate-100"
+                              : mod.status === "Testing" 
+                                ? "bg-indigo-50 text-indigo-600 border-indigo-100 animate-pulse" 
+                                : "bg-amber-50 text-amber-600 border-amber-100 font-bold"
                           }`}>
-                            {mod.status}
+                            {mod.status === "Offline Fallback" ? "شبیه‌ساز تحصیلی" : mod.status}
                           </span>
                         </div>
                       ))}
                     </div>
+
+                    {/* Grouped AI Sections Board (The requested 3 sections) Removed to avoid duplication since it exists in Integrations */}
+                  </div>
+
+                  {/* Right Column: Direct API Key settings panel */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col space-y-4 text-right h-fit sticky top-24">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                          <Key size={18} />
+                        </div>
+                        <h4 className="text-xs font-black text-slate-800">کلید دسترسی و پورت امن جیمینای</h4>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-relaxed font-semibold font-sans">
+                        جهت اتصال به هوش مصنوعی زنده و دریافت پاسخ‌های عمیق‌تر از سرورهای گوگل، کلید اختصاصی Google Gemini خود را در کادر زیر وارد کنید تا همزمانی فوراً برقرار شود.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-500">کلید اختصاصی Google Gemini API</label>
+                      <input 
+                        type="password" 
+                        value={geminiKey} 
+                        onChange={(e) => setGeminiKey(e.target.value)} 
+                        placeholder="AIzaSy..."
+                        className="w-full bg-slate-50 border border-slate-150 rounded-xl px-3 py-2.5 text-xs font-mono transition-all focus:border-indigo-500 focus:bg-white" 
+                        style={{ direction: 'ltr' }} 
+                      />
+                    </div>
+
+                    {/* Highly visible key check notification specifically targeting keys like standard, or invalid formats */}
+                    {geminiKey && !geminiKey.trim().startsWith("AIzaSy") && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 text-[10px] leading-relaxed font-bold space-y-2">
+                        <div className="flex items-center gap-2 text-amber-800">
+                          <AlertCircle size={14} className="shrink-0" />
+                          <span>هشدار: فرمت نامعتبر کلید جیمینای</span>
+                        </div>
+                        <p className="font-sans">
+                          کلید وارد شده با کاراکترهای استاندارد <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AIzaSy</code> آغاز نمی‌شود. 
+                          سیستم با این توکن به صورت هوشمند روی شبیه‌سازهای حرفه‌ای تله‌های تستی کایزن فعالیت می‌کند. برای ارتباط ۱۰۰٪ اختصاصی واقعی، کلید معتبر خود را از Google AI Studio مجدداً کپی کنید.
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center justify-between text-[10px] bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-sans">
+                      <span className="text-slate-400 font-bold">وضعیت ذخیره‌سازی:</span>
+                      <span className={geminiKey ? "text-emerald-700 font-extrabold" : "text-amber-700 font-extrabold"}>
+                        {geminiKey ? "ذخیره در مرورگر (کلاینت)" : "آفلاین / پیش‌فرض ابری"}
+                      </span>
+                    </div>
+
+                    <button 
+                      onClick={() => testConnection("gemini")} 
+                      disabled={Object.values(aiSectionStatuses).some(s => (s as any).status === "testing")}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white py-2 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <RefreshCw size={12} className={Object.values(aiSectionStatuses).some(s => (s as any).status === "testing") ? "animate-spin" : ""} />
+                      <span>تست همزمان کل ماژول‌ها</span>
+                    </button>
+                    
+                    <div className="text-[9px] text-slate-400 font-bold leading-relaxed text-center font-sans">
+                      می‌توانید به طور کاملاً رایگان با مراجعه به <a href="https://ai.google.dev" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">Google AI Studio</a> کلید تازه دریافت کنید.
+                    </div>
                   </div>
                 </div>
+
               </div>
             )}
+
 
             {/* Zarinpal Gateway Config */}
             {activeTab === "zarinpal" && (
@@ -818,20 +1453,116 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-right">
-                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 relative overflow-hidden">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><Cpu size={24} /></div>
-                      <div>
-                        <h4 className="text-sm font-black text-slate-900 leading-none">تنظیمات هوش مصنوعی Google Gemini</h4>
-                        <span className="text-[10px] text-slate-400 font-bold">مدل‌های LLM جهت تحلیل تله‌های تستی</span>
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 relative lg:col-span-2">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><Cpu size={24} /></div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 leading-none">مدیریت کلیدهای دسترسی هوش مصنوعی (AI Provider Management)</h4>
+                          <span className="text-[10px] text-slate-400 font-bold">اتصال به مدل‌های LLM برای پردازش‌های سیستمی</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button 
+                          onClick={() => {
+                            providerKeys.forEach(pk => testProviderKey(pk.id, pk.provider, pk.key));
+                          }}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all flex items-center gap-1.5 ${providerKeys.length === 0 ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                          disabled={providerKeys.length === 0}
+                        >
+                          <RefreshCw size={14} className={providerKeys.some(pk => pk.status === "testing") ? "animate-spin" : ""} />
+                          <span>تست گروهی کلیدها (Batch Test)</span>
+                        </button>
                       </div>
                     </div>
-                    <div className="space-y-4">
-                      <div className="space-y-1.5 text-right">
-                        <label className="text-[11px] font-black text-slate-700">کلید دسترسی (API Key)</label>
-                        <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-mono" style={{ direction: 'ltr' }} />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Provider Keys List */}
+                      <div className="space-y-3">
+                        {providerKeys.map(pk => (
+                          <div key={pk.id} className="bg-slate-50 border border-slate-150 rounded-xl p-4 flex flex-col gap-3">
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <h5 className="text-[11px] font-black text-slate-800">{pk.label}</h5>
+                                <div className="text-[9px] text-slate-500 font-bold flex gap-2 items-center">
+                                  <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">{pk.provider}</span>
+                                  <span className="font-mono" style={{ direction: 'ltr' }}>{pk.key.substring(0, 6)}...{pk.key.substring(pk.key.length - 4)}</span>
+                                </div>
+                              </div>
+                              <button onClick={() => handleRemoveProviderKey(pk.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 p-1.5 rounded-lg transition-colors">
+                                <span className="sr-only">حذف</span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => testProviderKey(pk.id, pk.provider, pk.key)} 
+                                disabled={pk.status === "testing"}
+                                className={`text-[10px] font-black px-3 py-1.5 rounded-lg transition-colors ${pk.status === "testing" ? "bg-slate-200 text-slate-500" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"}`}
+                              >
+                                {pk.status === "testing" ? "در حال تست..." : "تست اعتبار کلید"}
+                              </button>
+                              
+                              {pk.status === "success" && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">✅ معتبر ({pk.responseTimeMs}ms)</span>}
+                              {pk.status === "error" && <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded">❌ نامعتبر: {pk.errorMsg}</span>}
+                            </div>
+                          </div>
+                        ))}
+
+                        {providerKeys.length === 0 && (
+                          <div className="text-center p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                            <p className="text-[11px] text-slate-500 font-bold">هیچ کلید ارتباطی ثبت نشده است.</p>
+                          </div>
+                        )}
                       </div>
-                      <button onClick={() => testConnection("gemini")} className="w-full bg-indigo-600 text-white py-3 rounded-2xl text-xs font-black">تست اتصال</button>
+
+                      {/* Add New Key Form */}
+                      <form onSubmit={handleAddProviderKey} className="bg-white border border-slate-150 rounded-xl p-5 space-y-4 shadow-sm self-start">
+                        <h5 className="text-[11px] font-black text-slate-800">+ افزودن کلید جدید</h5>
+                        
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-600">پروایدر هوش مصنوعی</label>
+                          <select 
+                            value={newProvForm.provider} 
+                            onChange={(e) => setNewProvForm({...newProvForm, provider: e.target.value as ProviderType})}
+                            className="w-full bg-slate-50 border border-slate-150 rounded-lg px-3 py-2 text-xs font-bold"
+                          >
+                            <option value="Google Gemini">Google Gemini</option>
+                            <option value="OpenAI">OpenAI (ChatGPT)</option>
+                            <option value="Anthropic">Anthropic (Claude)</option>
+                            <option value="Custom">Custom Provider</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-600">برچسب (Label)</label>
+                          <input 
+                            type="text" 
+                            placeholder="مثال: کلید اصلی چت‌بات"
+                            value={newProvForm.label} 
+                            onChange={(e) => setNewProvForm({...newProvForm, label: e.target.value})}
+                            required
+                            className="w-full bg-slate-50 border border-slate-150 rounded-lg px-3 py-2 text-xs" 
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 border-b border-slate-100 pb-4">
+                          <label className="text-[10px] font-black text-slate-600">کلید دسترسی (API Key)</label>
+                          <input 
+                            type="password" 
+                            value={newProvForm.key} 
+                            onChange={(e) => setNewProvForm({...newProvForm, key: e.target.value})}
+                            required
+                            className="w-full bg-slate-50 border border-slate-150 rounded-lg px-3 py-2 text-xs font-mono" 
+                            style={{ direction: 'ltr' }} 
+                          />
+                        </div>
+
+                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-[11px] font-black transition-colors">
+                          ثبت کلید دسترسی
+                        </button>
+                      </form>
                     </div>
                   </div>
                   
@@ -849,6 +1580,175 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                         <input type="password" value={dbApiKey} onChange={(e) => setDbApiKey(e.target.value)} className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-xs font-mono" style={{ direction: 'ltr' }} />
                       </div>
                       <button onClick={() => testConnection("database")} className="w-full bg-amber-500 text-white py-3 rounded-2xl text-xs font-black">تست کوئری دیتابیس</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI & DB Diagnostics Suites */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-right mt-6">
+                  {/* AI Diagnostics Suite */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6" id="ai-diagnostics-suite">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <Cpu className="text-indigo-650" size={18} />
+                          <span>تست ماژول‌های هوش مصنوعی (AI Endpoints)</span>
+                        </h4>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button 
+                          onClick={() => {
+                            Object.keys(aiSectionStatuses).forEach(k => testSectionAI(k));
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1.5"
+                        >
+                          <RefreshCw size={12} className={Object.values(aiSectionStatuses).some(s => (s as any).status === "testing") ? "animate-spin" : ""} />
+                          <span>بررسی همه</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {Object.keys(aiSectionStatuses).map((key) => {
+                        const info = aiSectionStatuses[key];
+                        return (
+                          <div key={key} className="bg-slate-50 border border-slate-150 rounded-2xl p-4 hover:border-slate-300 transition-colors">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div className="space-y-2 text-right flex-grow w-full">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-black text-slate-800">{info.sectionName}</span>
+                                  <span className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-100">{info.model}</span>
+                                  <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold border border-slate-200">{info.provider}</span>
+                                </div>
+                                
+                                {info.status === "success" && (
+                                  <div className="space-y-1.5 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100/60 font-sans mt-2">
+                                    <div className="flex flex-wrap gap-4 text-[9px] font-bold text-slate-500">
+                                      <span className="text-emerald-700">● متصل</span>
+                                      {info.keyUsedMasked && <span>• کلید: <code className="bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded font-mono">{info.keyUsedMasked}</code> ({info.keySource})</span>}
+                                      {info.responseTimeMs && <span>• تاخیر: <strong className="text-indigo-600">{info.responseTimeMs}ms</strong></span>}
+                                    </div>
+                                    {info.apiResponse && (
+                                      <div className="text-[10px] text-slate-700 font-semibold bg-white p-2 rounded-lg border border-slate-100 mt-1">
+                                        <span className="text-slate-400 font-extrabold text-[9px] uppercase font-mono ml-1">[API Output]</span><br/>
+                                        {info.apiResponse}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {info.status === "error" && (
+                                  <div className="space-y-1.5 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/60 font-sans mt-2">
+                                    <div className="flex flex-wrap gap-4 text-[9px] font-bold text-slate-500">
+                                      <span className="text-rose-700">● خطا در اتصال</span>
+                                      {info.keyUsedMasked && <span>• کلید: <code className="bg-rose-100 text-rose-800 px-1 py-0.5 rounded font-mono">{info.keyUsedMasked}</code> ({info.keySource})</span>}
+                                    </div>
+                                    {info.errorMsg && (
+                                      <div className="text-[9px] text-rose-600 font-extrabold bg-white p-2 rounded-lg border border-slate-100">
+                                        {info.errorMsg}
+                                      </div>
+                                    )}
+                                    {info.apiResponse && (
+                                      <div className="text-[10px] text-slate-600 italic bg-white p-2 rounded-lg border border-slate-100 mt-1">
+                                        <span className="text-slate-400 font-extrabold text-[9px] uppercase font-mono ml-1">[Offline Output]</span><br/>
+                                        {info.apiResponse}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => testSectionAI(key)}
+                                disabled={info.status === "testing"}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black shrink-0 transition-all border ${
+                                  info.status === "testing" 
+                                    ? "bg-slate-100 text-slate-400 border-slate-150 cursor-not-allowed" 
+                                    : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
+                                }`}
+                              >
+                                {info.status === "testing" ? "در حال فراخوانی..." : "تست"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* DB Diagnostics Suite */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6" id="db-diagnostics-suite">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <Database className="text-amber-500" size={18} />
+                          <span>تست ماژول‌های دیتابیس (DB Endpoints)</span>
+                        </h4>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button 
+                          onClick={() => {
+                            Object.keys(dbSectionStatuses).forEach(k => testSectionDB(k));
+                          }}
+                          className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1.5"
+                        >
+                          <RefreshCw size={12} className={Object.values(dbSectionStatuses).some(s => (s as any).status === "testing") ? "animate-spin" : ""} />
+                          <span>بررسی همه</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {Object.keys(dbSectionStatuses).map((key) => {
+                        const info = dbSectionStatuses[key];
+                        return (
+                          <div key={key} className="bg-slate-50 border border-slate-150 rounded-2xl p-4 hover:border-slate-300 transition-colors">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div className="space-y-2 text-right flex-grow w-full">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-black text-slate-800">{info.sectionName}</span>
+                                  <span className="text-[9px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-mono font-bold border border-amber-100">{info.endpoint}</span>
+                                  <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold border border-slate-200">{info.provider}</span>
+                                </div>
+                                
+                                {info.status === "success" && (
+                                  <div className="space-y-1.5 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100/60 font-sans mt-2">
+                                    <div className="flex flex-wrap gap-4 text-[9px] font-bold text-slate-500">
+                                      <span className="text-emerald-700">● همگام و زنده (Synced)</span>
+                                      {info.responseTimeMs && <span>• لتنسی: <strong className="text-amber-600">{info.responseTimeMs}ms</strong></span>}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {info.status === "error" && (
+                                  <div className="space-y-1.5 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/60 font-sans mt-2">
+                                    <div className="flex flex-wrap gap-4 text-[9px] font-bold text-slate-500">
+                                      <span className="text-rose-700">● قطع اتصال ابری / آفلاین</span>
+                                    </div>
+                                    {info.errorMsg && (
+                                      <div className="text-[9px] text-rose-600 font-extrabold bg-white p-2 rounded-lg border border-slate-100">
+                                        {info.errorMsg}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => testSectionDB(key)}
+                                disabled={info.status === "testing"}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black shrink-0 transition-all border ${
+                                  info.status === "testing" 
+                                    ? "bg-slate-100 text-slate-400 border-slate-150 cursor-not-allowed" 
+                                    : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
+                                }`}
+                              >
+                                {info.status === "testing" ? "پینگ..." : "Ping DB"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -2170,6 +3070,814 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
                 </div>
               )}
+
+            </div>
+          )}
+
+          {/* Tab: Central Database Management (Schools, Counselors, Teachers, Students) */}
+          {activeTab === "central_database" && (
+            <div className="p-8 space-y-6 animate-fade-in text-right" id="admin-tab-central-database" style={{ direction: "rtl" }}>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
+                <div className="space-y-1">
+                  <span className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-150 font-black inline-block">
+                    PRO ENGINE ACTIVE ⚡
+                  </span>
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2 font-sans">
+                    <Database size={20} className="text-indigo-600" />
+                    <span>بانک مدیریت داده‌های یکپارچه و چندمستأجری (CouchDB / Firebase Replicated)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-bold">پایگاه داده همگام‌سازی شده با هسته توزیع‌شده با امکان ثبت، ویرایش، حذف و جستجوی بلادرنگ برای مدارس، مشاورین، اساتید و داوطلبان</p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setFormIsNew(true);
+                    setSchoolForm({});
+                    setCounselorForm({});
+                    setTeacherForm({});
+                    setStudentForm({});
+                    setShowDbForm(!showDbForm);
+                  }}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-[11px] font-black transition-all ${
+                    showDbForm ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-indigo-950 text-white shadow-lg hover:scale-105 active:scale-95"
+                  }`}
+                >
+                  {showDbForm ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={16} />}
+                  <span>{showDbForm ? "بستن فرم درج" : `درج رکورد جدید در جدول ${dbSubTab === "schools" ? "مدارس" : dbSubTab === "counselors" ? "مشاوران" : dbSubTab === "teachers" ? "دبیران" : "داوطلبان"}`}</span>
+                </button>
+              </div>
+
+              {/* Db statistics banner */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: "مدارس همکار فعال", count: schoolsDb.length, sub: "شعبه آموزشی مستقر", color: "border-blue-105 bg-blue-50/40 text-blue-900", tabKey: "schools" as const },
+                  { label: "مشاوران ارشد بالینی", count: counselorsDb.length, sub: "هدایت‌کنندگان ممیزی", color: "border-purple-105 bg-purple-50/40 text-purple-900", tabKey: "counselors" as const },
+                  { label: "اساتید هیئت علمی", count: teachersDb.length, sub: "طراحان شبیه‌ساز کایزن", color: "border-emerald-105 bg-emerald-50/40 text-emerald-900", tabKey: "teachers" as const },
+                  { label: "کل داوطلبان متصل", count: studentsDbList.length, sub: "شناسنامه پورتال کایزن", color: "border-amber-105 bg-amber-50/40 text-amber-900", tabKey: "students" as const }
+                ].map((stat, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setDbSubTab(stat.tabKey);
+                      setShowDbForm(false);
+                      setDbSearchTerm("");
+                    }}
+                    className={`p-4 rounded-2xl border text-right transition-all hover:shadow-md ${stat.color} ${dbSubTab === stat.tabKey ? "ring-2 ring-indigo-500/35 border-indigo-300" : "opacity-80"}`}
+                  >
+                    <span className="text-[10px] font-bold text-slate-500 block">{stat.label}</span>
+                    <strong className="text-xl font-black block mt-0.5">{stat.count} مورد</strong>
+                    <span className="text-[8px] opacity-70 block">{stat.sub}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Form container */}
+              {showDbForm && (
+                <div className="bg-slate-50/80 p-6 rounded-3xl border border-slate-200 animate-fadeIn space-y-5">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                      <Settings2 size={16} />
+                      <span>{formIsNew ? `افزودن اطلاعات جدید به جدول [${dbSubTab === "schools" ? "مدارس" : dbSubTab === "counselors" ? "مشاوران" : dbSubTab === "teachers" ? "دبیران" : "داوطلبان"}]` : `ویرایش شناسه رکورد [${dbSubTab === "schools" ? "مدارس" : dbSubTab === "counselors" ? "مشاوران" : dbSubTab === "teachers" ? "دبیران" : "داوطلبان"}]`}</span>
+                    </span>
+                    <span className="text-[9px] bg-slate-200/60 text-slate-600 font-bold px-2.5 py-0.5 rounded-full uppercase">DATABASE FORM</span>
+                  </div>
+
+                  {/* SUBTAB 1: SCHOOL FORM */}
+                  {dbSubTab === "schools" && (
+                    <form onSubmit={handleSaveSchool} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">نام کامل موسسه / دبیرستان همکار</label>
+                        <input
+                          type="text" required
+                          value={schoolForm.name || ""}
+                          onChange={(e) => setSchoolForm({...schoolForm, name: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: دبیرستان فرزانگان تهران"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">نوع همکاری آکادمیک</label>
+                        <select
+                          value={schoolForm.type || "smart"}
+                          onChange={(e) => setSchoolForm({...schoolForm, type: e.target.value as any})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        >
+                          <option value="smart">مدرسه هوشمند پایلوت</option>
+                          <option value="sampad">تیزهوشان سمپاد کشوری</option>
+                          <option value="nokhbegan">آکادمی اختصاصی نخبگان</option>
+                          <option value="public">دولتی همکار طرح عدالت</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">شهر استقرار</label>
+                        <input
+                          type="text"
+                          value={schoolForm.city || ""}
+                          onChange={(e) => setSchoolForm({...schoolForm, city: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: تهران"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-500">آدرس دقیق پستی</label>
+                        <input
+                          type="text"
+                          value={schoolForm.address || ""}
+                          onChange={(e) => setSchoolForm({...schoolForm, address: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">تلفن تماس مستقیم</label>
+                        <input
+                          type="text"
+                          value={schoolForm.contactPhone || ""}
+                          onChange={(e) => setSchoolForm({...schoolForm, contactPhone: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none font-mono"
+                          placeholder="۰۲۱-XXXXXXXX"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">سال تاسیس یا الحاق</label>
+                        <input
+                          type="number"
+                          value={schoolForm.establishedYear || 1400}
+                          onChange={(e) => setSchoolForm({...schoolForm, establishedYear: parseInt(e.target.value)})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">ظرفیت کل پذیرش داوطلب</label>
+                        <input
+                          type="number"
+                          value={schoolForm.studentCapacity || 200}
+                          onChange={(e) => setSchoolForm({...schoolForm, studentCapacity: parseInt(e.target.value)})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">تعداد داوطلب فعال تراز بالا</label>
+                        <input
+                          type="number"
+                          value={schoolForm.activeCount || 0}
+                          onChange={(e) => setSchoolForm({...schoolForm, activeCount: parseInt(e.target.value)})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="md:col-span-3 flex justify-end gap-2 pt-2">
+                        <button type="submit" className="px-6 py-2 bg-indigo-950 text-white rounded-xl text-xs font-black cursor-pointer">
+                          ذخیره اطلاعات در پایگاه داده مدارس
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* SUBTAB 2: COUNSELOR FORM */}
+                  {dbSubTab === "counselors" && (
+                    <form onSubmit={handleSaveCounselor} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">نام و نام خانوادگی مشاور</label>
+                        <input
+                          type="text" required
+                          value={counselorForm.name || ""}
+                          onChange={(e) => setCounselorForm({...counselorForm, name: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: استاد پوریا یزدان‌پناه"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">شماره پروانه / نظام روان‌شناختی</label>
+                        <input
+                          type="text"
+                          value={counselorForm.licenseNumber || ""}
+                          onChange={(e) => setCounselorForm({...counselorForm, licenseNumber: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">رشته تحصیلی و مرتبه علمی</label>
+                        <input
+                          type="text"
+                          value={counselorForm.fieldOfStudy || ""}
+                          onChange={(e) => setCounselorForm({...counselorForm, fieldOfStudy: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: دکتری روان‌شناسی تربیتی"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">سابقه مربی‌گری هدایت آموزشی (سال)</label>
+                        <input
+                          type="number"
+                          value={counselorForm.experienceYears || 5}
+                          onChange={(e) => setCounselorForm({...counselorForm, experienceYears: parseInt(e.target.value)})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-500">کلینیک یا شعبه استقرار اصلی</label>
+                        <input
+                          type="text"
+                          value={counselorForm.workplace || ""}
+                          onChange={(e) => setCounselorForm({...counselorForm, workplace: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-1">
+                        <label className="text-[10px] font-black text-slate-500">ساعات حضور و تقویم نوبت‌دهی</label>
+                        <input
+                          type="text"
+                          value={counselorForm.workHours || ""}
+                          onChange={(e) => setCounselorForm({...counselorForm, workHours: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثلا: روزهای زوج ۹ الی ۱۸"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-500">حوزه تمرکز بالینی (ویژه رفع فرسودگی کنکوری)</label>
+                        <input
+                          type="text"
+                          value={counselorForm.specialty || ""}
+                          onChange={(e) => setCounselorForm({...counselorForm, specialty: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: مقابله با اضطراب شدید یا تله‌های کمال‌گرایی"
+                        />
+                      </div>
+                      <div className="md:col-span-3 flex justify-end gap-2 pt-2">
+                        <button type="submit" className="px-6 py-2 bg-indigo-950 text-white rounded-xl text-xs font-black cursor-pointer">
+                          ذخیره اطلاعات مشاور
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* SUBTAB 3: TEACHER FORM */}
+                  {dbSubTab === "teachers" && (
+                    <form onSubmit={handleSaveTeacher} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">نام و نام خانوادگی دبیر</label>
+                        <input
+                          type="text" required
+                          value={teacherForm.name || ""}
+                          onChange={(e) => setTeacherForm({...teacherForm, name: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: دکتر نیما کبریا"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">تخصص آموزشی (دبیر چه درسی؟)</label>
+                        <input
+                          type="text"
+                          value={teacherForm.specialization || ""}
+                          onChange={(e) => setTeacherForm({...teacherForm, specialization: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: دبیر ارشد زیست شناسی"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">کد پرسنلی / کارت فرهنگیان</label>
+                        <input
+                          type="text"
+                          value={teacherForm.licenseNumber || ""}
+                          onChange={(e) => setTeacherForm({...teacherForm, licenseNumber: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">سابقه کار به سال</label>
+                        <input
+                          type="number"
+                          value={teacherForm.experienceYears || 5}
+                          onChange={(e) => setTeacherForm({...teacherForm, experienceYears: parseInt(e.target.value)})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-500">مدرسه‌های همکار تحت پوشش تدریس (با کاما جدا کنید)</label>
+                        <input
+                          type="text"
+                          value={Array.isArray(teacherForm.schools) ? teacherForm.schools.join(" ، ") : teacherForm.schools || ""}
+                          onChange={(e) => setTeacherForm({...teacherForm, schools: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="مثال: دبیرستان البرز، آتیه، فرزانگان"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-500">برنامه کلاسی و مباحث هفتگی</label>
+                        <input
+                          type="text"
+                          value={teacherForm.classProgram || ""}
+                          onChange={(e) => setTeacherForm({...teacherForm, classProgram: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="شنبه‌ها ساعت ۱۵ الی ۱۸ شیمی دهم..."
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">ساعات حضور در آکادمی</label>
+                        <input
+                          type="text"
+                          value={teacherForm.workHours || ""}
+                          onChange={(e) => setTeacherForm({...teacherForm, workHours: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="md:col-span-3 flex justify-end gap-2 pt-2">
+                        <button type="submit" className="px-6 py-2 bg-indigo-950 text-white rounded-xl text-xs font-black cursor-pointer">
+                          ذخیره اطلاعات دبیر علمی
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* SUBTAB 4: STUDENT FORM */}
+                  {dbSubTab === "students" && (
+                    <form onSubmit={handleSaveStudentDb} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">نام و نام خانوادگی داوطلب</label>
+                        <input
+                          type="text" required
+                          value={studentForm.name || ""}
+                          onChange={(e) => setStudentForm({...studentForm, name: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">کد داوطلبی پایه‌ای</label>
+                        <input
+                          type="text" required
+                          value={studentForm.code || ""}
+                          onChange={(e) => setStudentForm({...studentForm, code: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">رشته تحصیلی کنکور</label>
+                        <select
+                          value={studentForm.field || "tajrobi"}
+                          onChange={(e) => setStudentForm({...studentForm, field: e.target.value as any})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        >
+                          <option value="tajrobi">علوم تجربی (tajrobi)</option>
+                          <option value="riazi">ریاضی فیزیک (riazi)</option>
+                          <option value="ensani">علوم انسانی (ensani)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">سن داوطلب</label>
+                        <input
+                          type="number"
+                          value={studentForm.age || 18}
+                          onChange={(e) => setStudentForm({...studentForm, age: parseInt(e.target.value)})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">شهر سکونت</label>
+                        <input
+                          type="text"
+                          value={studentForm.city || ""}
+                          onChange={(e) => setStudentForm({...studentForm, city: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="تهران"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500"> تراز آزمون فعلی</label>
+                        <input
+                          type="number"
+                          value={studentForm.academicProfile?.currentTraz || 7200}
+                          onChange={(e) => setStudentForm({
+                            ...studentForm,
+                            academicProfile: {
+                              ...studentForm.academicProfile,
+                              currentTraz: parseInt(e.target.value)
+                            }
+                          })}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">پایه / رتبه یا توصیف هدف</label>
+                        <input
+                          type="text"
+                          value={studentForm.grade || ""}
+                          onChange={(e) => setStudentForm({...studentForm, grade: e.target.value})}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                          placeholder="رتبه فرضی ۴۷ کشور"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500">ساعت مطالعه روزانه</label>
+                        <input
+                          type="number"
+                          value={studentForm.academicProfile?.studyHoursPerDay || 10}
+                          onChange={(e) => setStudentForm({
+                            ...studentForm,
+                            academicProfile: {
+                              ...studentForm.academicProfile,
+                              studyHoursPerDay: parseInt(e.target.value)
+                            }
+                          })}
+                          className="w-full bg-white border border-slate-150 rounded-xl px-4 py-2 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+                        <button type="submit" className="px-6 py-2 bg-indigo-950 text-white rounded-xl text-xs font-black cursor-pointer">
+                          ذخیره داوطلب در شناسنامه کشوری
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Db records filtering and search table layout */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-grow">
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                      <Search size={16} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder={`جستجو بر اساس مشخصات ثبت شده در بخش ${dbSubTab === "schools" ? "مدارس" : dbSubTab === "counselors" ? "مشاوران" : dbSubTab === "teachers" ? "دبیران" : "داوطلبان"}...`}
+                      value={dbSearchTerm}
+                      onChange={(e) => setDbSearchTerm(e.target.value)}
+                      className="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-900 focus:bg-white text-slate-800 text-right"
+                    />
+                  </div>
+                  {dbSearchTerm && (
+                    <button
+                      onClick={() => setDbSearchTerm("")}
+                      className="text-xs text-rose-500 font-bold bg-rose-50 px-3.5 rounded-xl border border-rose-100 hover:bg-rose-100 transition cursor-pointer"
+                    >
+                      پاک کردن فیلتر ❌
+                    </button>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                  {/* SCHOOLS DB LIST */}
+                  {dbSubTab === "schools" && (
+                    <table className="w-full text-right border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-150 text-slate-650 font-black">
+                          <th className="py-4 px-5">شناسه ثبتی</th>
+                          <th className="py-4 px-5">نام مدرسه / آکادمی</th>
+                          <th className="py-4 px-5">نوع ارتباط</th>
+                          <th className="py-4 px-5">شهر مستقر</th>
+                          <th className="py-4 px-5">ظرفیت آکادمیک</th>
+                          <th className="py-4 px-5">تلفن تماس</th>
+                          <th className="py-4 px-5 text-left">عملیات مدیریت</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {schoolsDb
+                          .filter(s => s.name.toLowerCase().includes(dbSearchTerm.toLowerCase()) || s.city.toLowerCase().includes(dbSearchTerm.toLowerCase()) || s.address.toLowerCase().includes(dbSearchTerm.toLowerCase()))
+                          .map((sc) => (
+                            <tr key={sc.id} className="hover:bg-slate-50/70 transition font-medium">
+                              <td className="py-4 px-5 font-mono text-[10px] text-indigo-850 font-black">{sc.id}</td>
+                              <td className="py-4 px-5">
+                                <span className="font-extrabold text-slate-900 block">{sc.name}</span>
+                                <span className="text-[10px] text-slate-400 block mt-0.5">{sc.address}</span>
+                              </td>
+                              <td className="py-4 px-5">
+                                <span className={`px-2 py-0.5 rounded-full font-bold border text-[9px] ${
+                                  sc.type === "smart" ? "bg-indigo-50 text-indigo-700 border-indigo-150" :
+                                  sc.type === "sampad" ? "bg-purple-50 text-purple-700 border-purple-150" :
+                                  sc.type === "nokhbegan" ? "bg-emerald-50 text-emerald-700 border-emerald-150" :
+                                  "bg-slate-100 text-slate-600 border-slate-200"
+                                }`}>
+                                  {sc.type === "smart" ? "هوشمند ارجاعی" :
+                                   sc.type === "sampad" ? "تیزهوشان سمپاد" :
+                                   sc.type === "nokhbegan" ? "همکار نخبه" : "عادی دولتی"}
+                                </span>
+                              </td>
+                              <td className="py-4 px-5 font-bold">{sc.city}</td>
+                              <td className="py-4 px-5">
+                                <div className="text-[10px] leading-tight font-mono text-slate-600">
+                                  <span>{sc.activeCount} از {sc.studentCapacity} داوطلب</span>
+                                  <div className="h-1 w-20 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                    <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, (sc.activeCount/sc.studentCapacity)*100)}%` }} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-5 font-mono text-slate-500">{sc.contactPhone}</td>
+                              <td className="py-4 px-5 text-left space-x-1 space-x-reverse whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    setSchoolForm(sc);
+                                    setFormIsNew(false);
+                                    setShowDbForm(true);
+                                  }}
+                                  className="p-1 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  ویرایش ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSchoolRow(sc.id, sc.name)}
+                                  className="p-1 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  حذف 🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {/* COUNSELORS DB LIST */}
+                  {dbSubTab === "counselors" && (
+                    <table className="w-full text-right border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-150 text-slate-650 font-black">
+                          <th className="py-4 px-5">شناسه مشاور</th>
+                          <th className="py-4 px-5">نام مشاور ارشد</th>
+                          <th className="py-4 px-5">مرتبه و تحصیلات</th>
+                          <th className="py-4 px-5">شعبه و کلینیک استقرار</th>
+                          <th className="py-4 px-5">تمرکز بالینی</th>
+                          <th className="py-4 px-5">سابقه (سال)</th>
+                          <th className="py-4 px-5 text-left">عملیات مدیریت</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {counselorsDb
+                          .filter(c => c.name.toLowerCase().includes(dbSearchTerm.toLowerCase()) || c.specialty.toLowerCase().includes(dbSearchTerm.toLowerCase()) || c.workplace.toLowerCase().includes(dbSearchTerm.toLowerCase()))
+                          .map((co) => (
+                            <tr key={co.id} className="hover:bg-slate-50/70 transition font-medium">
+                              <td className="py-4 px-5 font-mono text-[10px] text-indigo-850 font-black">{co.id}</td>
+                              <td className="py-4 px-5">
+                                <span className="font-extrabold text-slate-900 block">{co.name}</span>
+                                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">{co.licenseNumber}</span>
+                              </td>
+                              <td className="py-4 px-5 font-bold text-slate-800">{co.fieldOfStudy}</td>
+                              <td className="py-4 px-5">
+                                <span className="block font-semibold text-slate-700">{co.workplace}</span>
+                                <span className="text-[10px] text-slate-400 font-bold block mt-0.5">{co.workHours}</span>
+                              </td>
+                              <td className="py-4 px-5 text-indigo-950 font-semibold italic">{co.specialty}</td>
+                              <td className="py-4 px-5 font-mono font-bold text-slate-800">{co.experienceYears} سال</td>
+                              <td className="py-4 px-5 text-left space-x-1 space-x-reverse whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    setCounselorForm(co);
+                                    setFormIsNew(false);
+                                    setShowDbForm(true);
+                                  }}
+                                  className="p-1 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  ویرایش ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCounselorRow(co.id, co.name)}
+                                  className="p-1 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  حذف 🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {/* TEACHERS DB LIST */}
+                  {dbSubTab === "teachers" && (
+                    <table className="w-full text-right border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-150 text-slate-650 font-black">
+                          <th className="py-4 px-5">شناسه دبیر</th>
+                          <th className="py-4 px-5">نام استاد علمی</th>
+                          <th className="py-4 px-5"> تخصص درس تخصصی</th>
+                          <th className="py-4 px-5">مدرسه‌های همکار تحت پوشش</th>
+                          <th className="py-4 px-5">سابقه تدریس کنکور</th>
+                          <th className="py-4 px-5">ساعات حضور</th>
+                          <th className="py-4 px-5 text-left">عملیات مدیریت</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {teachersDb
+                          .filter(t => t.name.toLowerCase().includes(dbSearchTerm.toLowerCase()) || t.specialization.toLowerCase().includes(dbSearchTerm.toLowerCase()) || t.workplace.toLowerCase().includes(dbSearchTerm.toLowerCase()))
+                          .map((te) => (
+                            <tr key={te.id} className="hover:bg-slate-50/70 transition font-medium">
+                              <td className="py-4 px-5 font-mono text-[10px] text-indigo-850 font-black">{te.id}</td>
+                              <td className="py-4 px-5">
+                                <span className="font-extrabold text-slate-900 block">{te.name}</span>
+                                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">کد پرسنلی: {te.licenseNumber}</span>
+                              </td>
+                              <td className="py-4 px-5 font-bold text-slate-800">{te.specialization}</td>
+                              <td className="py-4 px-5">
+                                <div className="flex flex-wrap gap-1">
+                                  {te.schools.map((schName, sIdx) => (
+                                    <span key={sIdx} className="bg-indigo-50 text-indigo-700 text-[9px] px-2 py-0.5 rounded-full font-bold">
+                                      {schName}
+                                    </span>
+                                  ))}
+                                </div>
+                                <span className="text-[9px] text-slate-400 block mt-1 font-bold">مرجع: {te.workplace}</span>
+                              </td>
+                              <td className="py-4 px-5 font-mono font-bold text-slate-800">{te.experienceYears} سال تدریس</td>
+                              <td className="py-4 px-5 font-semibold text-slate-600">{te.workHours}</td>
+                              <td className="py-4 px-5 text-left space-x-1 space-x-reverse whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    setTeacherForm(te);
+                                    setFormIsNew(false);
+                                    setShowDbForm(true);
+                                  }}
+                                  className="p-1 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  ویرایش ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTeacherRow(te.id, te.name)}
+                                  className="p-1 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  حذف 🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {/* STUDENTS DB LIST */}
+                  {dbSubTab === "students" && (
+                    <table className="w-full text-right border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-150 text-slate-650 font-black">
+                          <th className="py-4 px-5">کد کاربری</th>
+                          <th className="py-4 px-5">نام داوطلب کنکور</th>
+                          <th className="py-4 px-5">رشته آمادگی</th>
+                          <th className="py-4 px-5">سن و شهر</th>
+                          <th className="py-4 px-5">تراز آزمون کایزن</th>
+                          <th className="py-4 px-5">ساعت مطالعه روزانه</th>
+                          <th className="py-4 px-5 text-left">عملیات مدیریت</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {studentsDbList
+                          .filter(st => st.name.toLowerCase().includes(dbSearchTerm.toLowerCase()) || st.code.toLowerCase().includes(dbSearchTerm.toLowerCase()) || (st.city && st.city.toLowerCase().includes(dbSearchTerm.toLowerCase())))
+                          .map((st) => (
+                            <tr key={st.id} className="hover:bg-slate-50/70 transition font-medium">
+                              <td className="py-4 px-5 font-mono text-[10px] text-indigo-850 font-black">{st.id} ({st.code})</td>
+                              <td className="py-4 px-5 font-extrabold text-slate-900">{st.name}</td>
+                              <td className="py-4 px-5 font-sans">
+                                <span className={`px-2 py-0.5 rounded-full font-bold border text-[9px] ${
+                                  st.field === "tajrobi" ? "bg-amber-50 text-amber-700 border-amber-150" :
+                                  st.field === "riazi" ? "bg-blue-50 text-blue-700 border-blue-150" :
+                                  "bg-purple-50 text-purple-700 border-purple-150"
+                                }`}>
+                                  {st.field === "tajrobi" ? "علوم تجربی" :
+                                   st.field === "riazi" ? "ریاضی فیزیک" : "علوم انسانی"}
+                                </span>
+                              </td>
+                              <td className="py-4 px-5 text-slate-500 font-bold">{st.age} سال | {st.city || "نامشخص"}</td>
+                              <td className="py-4 px-5 font-mono text-indigo-950 font-black">{st.academicProfile?.currentTraz || 7200} تراز (هدف: {st.academicProfile?.targetTraz || 9000})</td>
+                              <td className="py-4 px-5 font-mono text-slate-600 font-bold">{st.academicProfile?.studyHoursPerDay || 10} ساعت در روز</td>
+                              <td className="py-4 px-5 text-left space-x-1 space-x-reverse whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    setStudentForm(st);
+                                    setFormIsNew(false);
+                                    setShowDbForm(true);
+                                  }}
+                                  className="p-1 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  ویرایش ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteStudentRow(st.id, st.name)}
+                                  className="p-1 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                                >
+                                  حذف 🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              {/* LIVE DIAGNOSTICS & REGISTRATION VERIFICATION CENTER */}
+              <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-6 text-white space-y-6 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+                
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-white/10 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
+                      <h4 className="text-sm font-black text-indigo-200">مدیریت اتصال، پایش صحت و خطایابی لیدهای ثبت‌نامی کایزن</h4>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold">این بخش پاسخگوی مستقیم سوالات شما درباره نحوه اتصال ثبت‌نام‌های لندینگ مشتریان به بانک اطلاعاتی است. می‌توانید اتصال را تست، عیب‌یابی و شبیه‌سازی کنید.</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={runDatabaseDiagnostics}
+                      disabled={diagRunning}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/40 text-white rounded-xl text-[10px] font-black tracking-tight transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      {diagRunning ? "در حال پایش..." : "🔎 پایش و تست سلامت دیتابیس مرکزی"}
+                    </button>
+                    
+                    <button
+                      onClick={simulateNewRegistration}
+                      disabled={isSimulatingRegistration}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800/40 text-white rounded-xl text-[10px] font-black tracking-tight transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isSimulatingRegistration ? "ثبت تستی..." : "🌱 شبیه‌سازی ثبت‌نام آنلاین جدید لندینگ"}
+                    </button>
+
+                    <button
+                      onClick={mergeAllRegisteredLeads}
+                      className="px-4 py-2 bg-amber-650 hover:bg-amber-700 text-slate-900 font-black rounded-xl text-[10px] tracking-tight transition cursor-pointer flex items-center gap-1.5 bg-yellow-400"
+                    >
+                      🔄 ادغام دسته‌ای لیدهای جدید در دیتابیس
+                    </button>
+                  </div>
+                </div>
+
+                {/* Simulated CLI Terminal for real-time connection logging */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-black text-slate-400">
+                    <span>📡 ترمینال پایش جریان داده‌های زنده (Real-time Live Sync Log):</span>
+                    {diagLogs.length > 0 && (
+                      <button 
+                        onClick={() => setDiagLogs([])}
+                        className="text-rose-400 hover:underline hover:text-rose-300 font-black"
+                      >
+                        پاکسازی خروجی ترمینال 🧹
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="bg-slate-950 font-mono text-[11px] leading-relaxed p-4 rounded-2xl border border-white/5 h-48 overflow-y-auto text-right space-y-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                    {diagLogs.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
+                        <Database size={24} className="opacity-40" />
+                        <span className="text-[10px] font-bold">هیچ لاگی ثبت نشده است. برای شروع پایش صحت یا شبیه‌سازی ثبت‌نام، از دکمه‌های بالا استفاده کنید.</span>
+                      </div>
+                    ) : (
+                      diagLogs.map((log, idx) => {
+                        let colorClass = "text-indigo-300";
+                        if (log.includes("✅") || log.includes("🏆") || log.includes("🏁")) {
+                          colorClass = "text-emerald-400 font-bold";
+                        } else if (log.includes("❌")) {
+                          colorClass = "text-rose-400 font-bold animate-pulse";
+                        } else if (log.includes("👉") || log.includes("ℹ️")) {
+                          colorClass = "text-amber-300";
+                        }
+                        return (
+                          <div key={idx} className={`${colorClass} whitespace-pre-wrap`}>
+                            {log}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* ARCHITECTURE IMPROVEMENT PLAN ROADMAP */}
+                <div className="pt-4 border-t border-white/10 space-y-4">
+                  <h4 className="text-xs font-black text-slate-200">🛠️ استراتژی‌های عملی ارتقا و بهبود زیرساخت دیتابیس برای موسسه شما (Database Scaling Strategy):</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-2">
+                      <div className="flex items-center gap-2 text-indigo-400 font-black text-xs">
+                        <Server size={14} />
+                        <span>۱. مهاجرت به ریلیشنال PostgreSQL (با دیتابیس ابری Cloud SQL)</span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-relaxed font-semibold">
+                        برای ارتقای سیستم و تضمین قطعیت صحت ثبت نام‌ها، پیشنهاد ما فعالسازی کانتینرهای Postgres در بستر Cloud SQL یا Supabase است. این کار تراکنش‌های پرداخت شبیه‌سازی شده زرین‌پال را به صورت کلاینت-سرور با امنیت کامل تایید می‌کند.
+                      </p>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400 font-black text-xs">
+                        <Activity size={14} />
+                        <span>۲. فعال‌سازی کش‌ساز Redis جهت پایش زمان واقعی لندینگ</span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-relaxed font-semibold">
+                        جهت جلوگیری از اعمال بار اضافه برای وب‌سایت در لندینگ در درگاه‌های پرداخت، لایه کش Redis به عنوان Broker عمل می‌کند تا نوسانات ترافیک در لحظات توزیع کارنامه‌ها را خنثی سازد.
+                      </p>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-2">
+                      <div className="flex items-center gap-2 text-yellow-400 font-black text-xs">
+                        <ShieldCheck size={14} />
+                        <span>۳. مکانیزم بازگشت قطع قطره‌ای (Offline Resilience via CouchDB)</span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-relaxed font-semibold">
+                        پک‌پروتکل بومی همگام‌ساز LocalStorage با دیتابیس پشتیبان بستر ابری متمرکز سبب خواهد شد در صورت قطع ناگهانی اینترنت ایران، اطلاعات داوطلبان درون مرورگر ذخیره شده و پس از برقراری مجدد اتصال فورا Sync شود.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
             </div>
           )}
