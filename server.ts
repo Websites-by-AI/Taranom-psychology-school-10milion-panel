@@ -64,6 +64,10 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", industry: "High School Education & Konkur Prep", brand: "ترنم مهر", time: new Date().toISOString() });
 });
 
+app.get("/api/ai-status", (req, res) => {
+  res.json({ status: "online", models: ["gemini-2.5-flash", "gemini-1.5-pro"] });
+});
+
 // Offline & Simulation Fallback Utility Functions
 function toPersianNum(num: number | string): string {
   const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
@@ -334,6 +338,7 @@ app.get("/api/motivational", async (req, res) => {
 
 // Endpoint for AI business & technical consulting chat
 app.post("/api/chat", async (req, res) => {
+  if (req.body?.testPing) return res.json({ status: "ok" });
   console.log("POST /api/chat called with message:", req.body?.message);
   const { message, history } = req.body;
   if (!message) {
@@ -396,6 +401,7 @@ app.post("/api/chat", async (req, res) => {
 
 // Endpoint to estimate goal likelihood
 app.post("/api/goal-insight", async (req, res) => {
+  if (req.body?.testPing) return res.json({ status: "ok" });
   const { 
     student, 
     currentTraz, 
@@ -474,6 +480,7 @@ app.post("/api/goal-insight", async (req, res) => {
 
 // Endpoint for intelligent exam quality analysis
 app.post("/api/analyze-exam", async (req, res) => {
+  if (req.body?.testPing) return res.json({ status: "ok" });
   const { lessons, field, student } = req.body;
   
   try {
@@ -555,6 +562,7 @@ ${JSON.stringify(lessons, null, 2)}${priorityInfo}
 
 // Endpoint for AI cognitive and psychological analytics
 app.post("/api/psychology-analysis", async (req, res) => {
+  if (req.body?.testPing) return res.json({ status: "ok" });
   const { student, qAnxiety, qFocus, qPerfectionism, qSleep, qStamina } = req.body;
 
   try {
@@ -630,6 +638,7 @@ JSON schema:
 
 // Request Payment
 app.post("/api/payment/request", async (req, res) => {
+  if (req.body?.testPing) return res.json({ status: "ok" });
   const { amount, description, mobile, email } = req.body;
   const merchantId = process.env.ZARINPAL_MERCHANT_ID;
   const callbackUrl = process.env.ZARINPAL_CALLBACK_URL || `${process.env.APP_URL}/api/payment/verify`;

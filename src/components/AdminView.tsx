@@ -16,11 +16,13 @@ import {
 
 import InvestmentView from "./InvestmentView";
 import ContentAuditModule from "./ContentAuditModule";
+import StorageMonitorView from "./StorageMonitorView";
+import BackgroundApiMonitor from "./BackgroundApiMonitor";
 
 import SaaSContractView from "./SaaSContractView";
 
 export default function AdminView({ student, onUpdateBrand }: { student?: Student | null; onUpdateBrand?: () => void }) {
-  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "investment" | "audit" | "zarinpal" | "diagnostics" | "contract">("roadmap");
+  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "storage" | "diagnostics" | "investment" | "audit" | "zarinpal" | "contract">("storage");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterField, setFilterField] = useState("all");
   const [selectedScenario, setSelectedScenario] = useState<"mvp" | "stable" | "enterprise">("stable");
@@ -42,6 +44,9 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
     const saved = localStorage.getItem("arateb_gemini_api_key");
     return saved && saved !== "undefined" ? saved : "";
   });
+  
+  const [liveValidationStatus, setLiveValidationStatus] = useState<"idle" | "testing" | "valid" | "invalid">("idle");
+  const [liveValidationMessage, setLiveValidationMessage] = useState("");
 
   // --- CENTRAL DATABASE STORES & FORM STATES ---
   const [dbSubTab, setDbSubTab] = useState<"schools" | "counselors" | "teachers" | "students">("schools");
@@ -467,7 +472,15 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider, apiKey })
       });
-      const data = await resp.json();
+      
+      let data;
+      const text = await resp.text();
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        throw new Error(`پاسخ نامعتبر از سرور: ${text ? text.substring(0, 50) : "پاسخ خالی"}`);
+      }
+      
       if (data.valid) {
         setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "success", responseTimeMs: data.responseTimeMs } : k));
         addSystemLog(`اعتبارسنجی اتصال ${provider}`, "نظارت زیرساخت", `تایید اعتبار کلید API انجام شد. تاخیر: ${data.responseTimeMs}ms`);
@@ -501,6 +514,54 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
     } else {
       localStorage.removeItem("arateb_gemini_api_key");
     }
+
+    if (!geminiKey || geminiKey.trim() === "") {
+      setLiveValidationStatus("idle");
+      setLiveValidationMessage("");
+      return;
+    }
+    
+    // Quick heuristic for custom providers or missing AIzaSy / new AQ. keys
+    if (!geminiKey.trim().startsWith("AIza") && !geminiKey.trim().startsWith("AQ.")) {
+      setLiveValidationStatus("invalid");
+      setLiveValidationMessage("فرمت کلید نامعتبر است (نیازمند AIza... یا AQ...)");
+      return;
+    }
+
+    setLiveValidationStatus("testing");
+    setLiveValidationMessage("در حال اعتبارسنجی زنده...");
+    
+    const timeoutId = setTimeout(async () => {
+      try {
+        const resp = await fetch("/api/test-provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: "Google Gemini", apiKey: geminiKey })
+        });
+        let data;
+        const text = await resp.text();
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          setLiveValidationStatus("invalid");
+          setLiveValidationMessage("پاسخ نامشخص سرور");
+          return;
+        }
+
+        if (data.valid) {
+          setLiveValidationStatus("valid");
+          setLiveValidationMessage(`سالم و معتبر (${data.responseTimeMs}ms)`);
+        } else {
+          setLiveValidationStatus("invalid");
+          setLiveValidationMessage(data.error || "کلید نامعتبر");
+        }
+      } catch (e: any) {
+         setLiveValidationStatus("invalid");
+         setLiveValidationMessage("خطا در ارتباط با سرور");
+      }
+    }, 1200);
+
+    return () => clearTimeout(timeoutId);
   }, [geminiKey]);
 
   useEffect(() => {
@@ -1180,6 +1241,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
     { id: "syslogs", label: "📜 لاگ تغییرات سیستمی", icon: List, color: "text-amber-600" },
     { id: "integrations", label: "🔌 تنظیمات اتصال و AI", icon: Globe, color: "text-indigo-600" },
     { id: "diagnostics", label: "🔎 خطایابی و پایش ماژول‌ها", icon: Zap, color: "text-rose-600" },
+    { id: "storage", label: "🗄️ پایش دیتابیس و ذخیره‌سازی", icon: Database, color: "text-blue-600" },
     { id: "zarinpal", label: "💳 تنظیمات درگاه زرین‌پال", icon: Wallet, color: "text-yellow-600" },
     { id: "audit", label: "🛡️ پایش امنیتی محتوا", icon: Shield, color: "text-rose-600" },
     { id: "investment", label: "💎 مشارکت و سرمایه‌گذاری", icon: TrendingUp, color: "text-emerald-600" },
@@ -1190,10 +1252,10 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       {/* Sidebar Navigation - Right Side */}
       <aside className="lg:w-72 shrink-0 space-y-4 no-print">
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 sticky top-24">
-          <div className="px-4 py-2 mb-4 border-b border-slate-50 flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">منوی مدیریت سیستم</span>
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
+                  <div className="px-4 py-2 mb-4 border-b border-slate-50 flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">منوی مدیریت سیستم</span>
+                    <BackgroundApiMonitor />
+                  </div>
           <nav className="space-y-1">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
@@ -1375,18 +1437,41 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                         className="w-full bg-slate-50 border border-slate-150 rounded-xl px-3 py-2.5 text-xs font-mono transition-all focus:border-indigo-500 focus:bg-white" 
                         style={{ direction: 'ltr' }} 
                       />
+                      
+                      {/* Live Validation Indicator */}
+                      {geminiKey && (
+                        <div className={`flex items-center gap-1.5 text-[9px] font-black mt-2 transition-colors ${
+                          liveValidationStatus === "valid" ? "text-emerald-600" :
+                          liveValidationStatus === "invalid" ? "text-rose-600" :
+                          liveValidationStatus === "testing" ? "text-indigo-500" :
+                          "text-slate-500"
+                        }`}>
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            liveValidationStatus === "valid" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" :
+                            liveValidationStatus === "invalid" ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" :
+                            liveValidationStatus === "testing" ? "bg-indigo-400 animate-pulse" :
+                            "bg-slate-300"
+                          }`}></div>
+                          <span>
+                            {liveValidationStatus === "testing" && <RefreshCw size={10} className="inline mr-1 animate-spin" />}
+                            {liveValidationStatus === "valid" && <Check size={10} className="inline mr-1" />}
+                            {liveValidationStatus === "invalid" && <AlertCircle size={10} className="inline mr-1" />}
+                            اعتبارسنجی زنده: {liveValidationMessage}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Highly visible key check notification specifically targeting keys like standard, or invalid formats */}
-                    {geminiKey && !geminiKey.trim().startsWith("AIzaSy") && (
+                    {geminiKey && !geminiKey.trim().startsWith("AIza") && !geminiKey.trim().startsWith("AQ.") && (
                       <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 text-[10px] leading-relaxed font-bold space-y-2">
                         <div className="flex items-center gap-2 text-amber-800">
                           <AlertCircle size={14} className="shrink-0" />
                           <span>هشدار: فرمت نامعتبر کلید جیمینای</span>
                         </div>
                         <p className="font-sans">
-                          کلید وارد شده با کاراکترهای استاندارد <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AIzaSy</code> آغاز نمی‌شود. 
-                          سیستم با این توکن به صورت هوشمند روی شبیه‌سازهای حرفه‌ای تله‌های تستی کایزن فعالیت می‌کند. برای ارتباط ۱۰۰٪ اختصاصی واقعی، کلید معتبر خود را از Google AI Studio مجدداً کپی کنید.
+                          کلید وارد شده با کاراکترهای استاندارد <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AIza</code> یا <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AQ.</code> آغاز نمی‌شود. 
+                          لطفا از کلید معتبر صادر شده از Google AI Studio استفاده کنید.
                         </p>
                       </div>
                     )}
@@ -1438,6 +1523,9 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                  </div>
               </div>
             )}
+
+            {/* Storage Monitor */}
+            {activeTab === "storage" && <StorageMonitorView />}
 
             {/* API & Cloud Integrations */}
             {activeTab === "integrations" && (
