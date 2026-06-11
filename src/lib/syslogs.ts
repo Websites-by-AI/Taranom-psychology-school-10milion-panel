@@ -4,6 +4,13 @@ export const getSystemLogs = (): SystemLog[] => {
   const saved = localStorage.getItem("taranom_system_logs");
   if (!saved) return [
     { 
+      id: "LOG-1003", 
+      action: "رفع مشکل چت همزمان هوش مصنوعی", 
+      username: "پشتیبان سیستم کایزن", 
+      timestamp: "۱۴۰۶/۰۳/۱۱ - ۱۱:۰۵", 
+      detail: "اصلاح متد فرستادن پیام (sendMessage) در آداپتور سرور لوکال جهت هماهنگی با کیت جدید توسعه دهنده گوگل تارانوم و افزودن شبیه‌ساز آفلاین لایو در CounselorView." 
+    },
+    { 
       id: "LOG-1001", 
       action: "ورود به سامانه", 
       username: "admin_taranom", 

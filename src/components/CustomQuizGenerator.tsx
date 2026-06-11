@@ -23,8 +23,15 @@ interface QuizQuestion {
   correctIdx: number;
   explanation: string;
   trapType: string;
-  difficulty: "سخت" | "بسیار سخت" | "المپیاد علمی";
+  difficulty: "سخت" | "بسیار سخت" | "المپیاد علمی" | string;
   importance: "high" | "medium" | "low";
+  metadata?: {
+    model: string;
+    mode: string;
+    timestamp: string;
+    latencyMs: number;
+    apiStatus: string;
+  };
 }
 
 export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQuizGeneratorProps) {
@@ -153,6 +160,8 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
 
   // Component State
   const [traps, setTraps] = useState<TestTrap[]>([]);
+  const [customTopic, setCustomTopic] = useState<string>("");
+  const [showAiMetadata, setShowAiMetadata] = useState<boolean>(true);
   const [weakSubjects, setWeakSubjects] = useState<string[]>(["زیست‌شناسی", "شیمی", "فیزیک", "ریاضیات", "فلسفه و منطق", "اقتصاد"]);
   const [quizStarted, setQuizStarted] = useState<boolean>(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState<boolean>(false);
@@ -301,28 +310,113 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
     addSystemLog("ایجاد آزمون تستی سفارشی", student.name, `داوطلب یک آزمون شخصی با ${finalSet.length} سوال تله‌دار مفهومی در دروس آسیب‌شناختی شروع کرد.`);
   };
 
-  const handleGenerateAI = () => {
+  const handleGenerateAI = async () => {
     setIsGeneratingAI(true);
+    setAiProgress("در حال تحلیل شناسنامه علمی داوطلب و شناسایی تله‌های تکراری...");
+    
     const steps = [
-      "در حال تحلیل شناسنامه علمی داوطلب و شناسایی تله‌های تکراری...",
       "ارتباط با Google Gemini جهت استخراج مفاهیم کلیدی کتب درسی جدید...",
       "طراحی آزمون هوشمند منطبق بر آخرین سطح تراز شما در شبیه‌ساز...",
       "سنتز سوالات پکیج ویژه ترنم مهر و واکسینه سازی ذهن..."
     ];
 
     let currentStep = 0;
-    const progressInterval = setInterval(() => {
-      setAiProgress(steps[currentStep]);
-      currentStep++;
-      if (currentStep >= steps.length) {
-        clearInterval(progressInterval);
+    const stepInterval = setInterval(() => {
+      if (currentStep < steps.length) {
+        setAiProgress(steps[currentStep]);
+        currentStep++;
+      }
+    }, 1400);
+
+    const activeSubject = weakSubjects[0] || "زیست‌شناسی";
+
+    try {
+      // Gather keys/headers if saved in localStorage (e.g. key fallback keys, like in AdminView)
+      const savedKeysRaw = localStorage.getItem("arateb_ai_keys");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      
+      if (savedKeysRaw) {
+        try {
+          const keys = JSON.parse(savedKeysRaw);
+          // Pass first active keys to headers
+          const activeKeyObj = keys.find((k: any) => k.isActive && k.key);
+          if (activeKeyObj) {
+            headers["x-gemini-key"] = activeKeyObj.key;
+            headers["x-openrouter-key"] = activeKeyObj.key;
+          }
+          headers["x-ai-provider-keys"] = savedKeysRaw;
+        } catch(e){}
+      }
+
+      const response = await fetch("/api/generate-quiz-question", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          subject: activeSubject,
+          difficulty: difficultySetting,
+          customTopic: customTopic.trim()
+        })
+      });
+
+      clearInterval(stepInterval);
+
+      if (!response.ok) {
+        throw new Error("API server responded with error status");
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.question) {
+        // Build 3-question set: 1 real-time customized AI question and 2 relevant static pool questions
+        const aiQuestion: QuizQuestion = {
+          ...data.question,
+          metadata: data.metadata
+        };
+
+        let filteredStatic = QUESTION_POOL.filter(q => q.subject.includes(activeSubject));
+        if (filteredStatic.length === 0) {
+          filteredStatic = QUESTION_POOL;
+        }
+        const helpers = [...filteredStatic].sort(() => 0.5 - Math.random()).slice(0, 2);
+        const finalSet = [aiQuestion, ...helpers];
+
+        setAiProgress("سنتز کامل شد! بارگذاری دفترچه آزمون زنده...");
+        
         setTimeout(() => {
           setIsGeneratingAI(false);
-          handleStartQuiz();
-          addSystemLog("تولید آزمون با Gemini AI", student.name, "آزمون شخصی با تحلیل هوش مصنوعی بر روی نقاط ضعف تولید گشت.");
-        }, 1000);
+          setSelectedQuestions(finalSet);
+          setCurrentQuestionIndex(0);
+          setUserAnswers({});
+          setCheckedAnswers({});
+          setQuizFinished(false);
+          setElapsedTime(0);
+          
+          if (isTimedQuiz) {
+            setTimeLeft(finalSet.length * 90);
+          } else {
+            setTimeLeft(0);
+          }
+          setQuizStarted(true);
+          addSystemLog("تولید آزمون زنده با Gemini", student.name, `آزمون شخصی با ۱ سوال تولید شده زنده برای مبحث ${customTopic || activeSubject} ایجاد شد.`);
+        }, 1200);
+
+      } else {
+        throw new Error("Invalid structure returned from question endpoint");
       }
-    }, 1800);
+
+    } catch (err: any) {
+      console.error("AI Generation failed:", err);
+      clearInterval(stepInterval);
+      setAiProgress("سیستم به دلیل ترافیک یا عدم وجود کلید به موتور آفلاین کایزن دایورت شد...");
+      
+      setTimeout(() => {
+        setIsGeneratingAI(false);
+        // Offline Fallback Quiz using random 3-5 static questions
+        handleStartQuiz();
+      }, 2000);
+    }
   };
 
   const handleSelectOption = (optIdx: number) => {
@@ -664,6 +758,24 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
                     </button>
                   </div>
                 </div>
+
+                {/* Box 2.5: Custom Topic Input for AI */}
+                <div className="space-y-2.5 bg-indigo-50/45 p-4 rounded-2xl border border-indigo-100/80">
+                  <strong className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-indigo-650 animate-pulse" />
+                    <span>موضوع سفارشی برای هوش مصنوعی (اختیاری):</span>
+                  </strong>
+                  <p className="text-[9px] text-indigo-650 font-bold leading-normal">
+                    در صورت تمایل، مبحث درسی دلخواه خود را تایپ کنید تا کلید هوش مصنوعی اختصاصا این سوال را بسازد:
+                  </p>
+                  <input
+                    type="text"
+                    value={customTopic}
+                    onChange={(e) => setCustomTopic(e.target.value)}
+                    placeholder="مثال: غدد درون‌ریز، استوکیومتری اسیدها و..."
+                    className="w-full p-2.5 rounded-xl border border-indigo-150 bg-white text-xs font-black text-indigo-950 placeholder-indigo-300 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               {/* Box 3: Quiz Mode Explanation & Trigger */}
@@ -868,6 +980,94 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
                     );
                   })}
                 </div>
+
+                {/* Toggle show/hide AI telemetry details */}
+                <div className="flex justify-end pt-3 border-t border-slate-100 mt-4">
+                  <button 
+                    onClick={() => setShowAiMetadata(!showAiMetadata)}
+                    className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-indigo-600 transition-all cursor-pointer"
+                  >
+                    <Sparkles size={11} className={showAiMetadata ? "text-indigo-550 fill-indigo-100" : "text-slate-350"} />
+                    <span>{showAiMetadata ? "✓ جزئیات و تگ مخفی هوش مصنوعی فعال است (برای غیرفعال‌سازی کلیک کنید)" : "نمایش جزئیات فنی و تگ سورس هوش مصنوعی"}</span>
+                  </button>
+                </div>
+
+                {activeQuestion.metadata && showAiMetadata && (
+                  <div className="bg-indigo-950 text-indigo-200 p-4 rounded-2xl border border-indigo-900 space-y-3 shadow-inner text-right relative overflow-hidden text-[10px] font-sans mt-3">
+                    {/* Ambient background decoration */}
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+                    
+                    <div className="flex justify-between items-center border-b border-indigo-900/60 pb-2">
+                      <div className="flex items-center gap-1.5 font-black text-white">
+                        <Sparkles size={12} className="text-amber-300 fill-amber-300 animate-pulse" />
+                        <span>تگ تایید سورس هوش مصنوعی ترنم مهر</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black ${
+                        activeQuestion.metadata.mode === "live" ? "bg-emerald-500/20 text-emerald-355" : "bg-amber-500/20 text-amber-355"
+                      }`}>
+                        {activeQuestion.metadata.mode === "live" ? "اتصال زنده (API Active)" : "سرور آفلاین (Cached Fallback)"}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-indigo-300 font-extrabold">مدل سازنده:</span>
+                        <strong className="text-white font-black">{activeQuestion.metadata.model}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-indigo-300 font-extrabold">زمان استنتاج:</span>
+                        <span className="text-indigo-100 font-mono font-bold" style={{ direction: "ltr" }}>
+                          {new Date(activeQuestion.metadata.timestamp).toLocaleTimeString('fa-IR')} - {new Date(activeQuestion.metadata.timestamp).toLocaleDateString('fa-IR')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-indigo-300 font-extrabold">تاخیر فراخوانی:</span>
+                        <span className="text-indigo-100 font-mono font-bold">{toPersianNum(activeQuestion.metadata.latencyMs)} میلی‌ثانیه</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-indigo-300 font-extrabold">شناسه پردازش:</span>
+                        <span className="text-indigo-100 font-mono font-bold" style={{ direction: "ltr" }}>{activeQuestion.id}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-indigo-900/35 p-2 rounded-xl text-[9px] text-indigo-150 leading-relaxed font-bold">
+                      <span className="text-amber-400">سیگنال اتصال:</span> {activeQuestion.metadata.apiStatus}
+                    </div>
+                  </div>
+                )}
+
+                {!activeQuestion.metadata && showAiMetadata && (
+                  <div className="bg-slate-50 text-slate-500 p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-right text-[10px] font-sans mt-3 relative overflow-hidden">
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                        <Award size={12} className="text-indigo-600" />
+                        <span>منبع و دفترچه آفلاین (Manual Mode)</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-lg text-[8px] bg-slate-100 text-slate-500 font-black">بانک مادری پیش‌فرض</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      <div className="flex justify-between">
+                        <span>سورس پردازش سوال:</span>
+                        <strong className="text-slate-800 font-black">تحلیل رسوب‌شناسی تله‌های ترنم مهر</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>زمان فراخوانی مادری:</span>
+                        <span className="font-mono font-semibold" style={{ direction: "ltr" }}>
+                          {new Date().toLocaleTimeString('fa-IR')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>وضعیت هوش زنده:</span>
+                        <span className="text-slate-600 font-bold">بدون تراکنش (اعتبار مصرف نشده)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>آیدی مرجع تله:</span>
+                        <span className="font-mono text-slate-700 font-bold" style={{ direction: "ltr" }}>{activeQuestion.id}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1102,6 +1302,45 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
                           {q.explanation}
                         </p>
                       </div>
+
+                      {/* Scorecard telemetry metadata badge */}
+                      {showAiMetadata && q.metadata && (
+                        <div className="mt-2.5 bg-indigo-950 text-indigo-300 p-3 rounded-xl border border-indigo-900 text-[9px] font-sans">
+                          <div className="flex justify-between items-center pb-1.5 border-b border-indigo-900/50 mb-1.5 font-bold text-right">
+                            <span className="text-white flex items-center gap-1">
+                              <Sparkles size={11} className="text-amber-300 fill-amber-300 animate-pulse" />
+                              <span>تایید سورس هوش مصنوعی ترنم مهر</span>
+                            </span>
+                            <span className="text-[8px] bg-indigo-900 text-indigo-200 px-1.5 py-0.5 rounded">
+                              {q.metadata.mode === "live" ? "اتصال مستقیم" : "آفلاین"}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-semibold text-right">
+                            <div>مدل سازنده: <strong className="text-white font-black">{q.metadata.model}</strong></div>
+                            <div>زمان تولید: <span className="text-white font-mono">{new Date(q.metadata.timestamp).toLocaleTimeString('fa-IR')}</span></div>
+                            <div>تاخیر: <span className="text-white font-mono">{toPersianNum(q.metadata.latencyMs)}ms</span></div>
+                            <div>شناسه: <span className="text-indigo-200 font-mono" style={{ direction: "ltr" }}>{q.id}</span></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {showAiMetadata && !q.metadata && (
+                        <div className="mt-2.5 bg-slate-50 text-slate-500 p-3 rounded-xl border border-slate-200 text-[9px] font-sans">
+                          <div className="flex justify-between items-center pb-1.5 border-b border-slate-100 mb-1.5 font-bold text-right">
+                            <span className="text-slate-800 flex items-center gap-1">
+                              <Award size={11} className="text-indigo-600" />
+                              <span>منبع و دفترچه آفلاین</span>
+                            </span>
+                            <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">مادری</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-right">
+                            <div>منبع پردازش: <strong className="text-slate-700 font-black font-sans">تحلیل رسوب‌شناسی تله‌ها</strong></div>
+                            <div>زمان فراخوانی: <span className="text-slate-600 font-mono">{new Date().toLocaleTimeString('fa-IR')}</span></div>
+                            <div>اعتبار زنده: <span className="text-slate-600 font-sans">غیرفعال</span></div>
+                            <div>کد بازیابی: <span className="text-slate-500 font-mono text-xs" style={{ direction: "ltr" }}>{q.id}</span></div>
+                          </div>
+                        </div>
+                      )}
 
                     </div>
                   );

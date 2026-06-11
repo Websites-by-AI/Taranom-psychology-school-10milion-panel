@@ -12,6 +12,7 @@ import AIExamPredictor from "./AIExamPredictor";
 import RealTimeExamSimulator from "./RealTimeExamSimulator";
 import AdmissionForecastWidget from "./AdmissionForecastWidget";
 import IntelligentInterventionSystem from "./IntelligentInterventionSystem";
+import StudentAchievements from "./StudentAchievements";
 import { addSystemLog } from "../lib/syslogs";
 import { getTestTraps } from "../lib/traps";
 import TrapsTreeMap from "./TrapsTreeMap";
@@ -1695,6 +1696,9 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
         </div>
 
       </div>
+
+      {/* Gamified student medals & milestones achievements */}
+      <StudentAchievements />
 
       {/* Visual active traps tree diagram based on legal subjects (Civil, Commercial, Criminal) */}
       <TrapsTreeMap 

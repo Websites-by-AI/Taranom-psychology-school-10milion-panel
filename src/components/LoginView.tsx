@@ -1,14 +1,15 @@
 import React, { useState } from "react";
-import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, Activity, Wallet, CreditCard } from "lucide-react";
+import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, Activity, Wallet, CreditCard, Home } from "lucide-react";
 import { motion } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
 
 interface LoginViewProps {
   onLogin: (student: Student, role: "student" | "parent" | "admin" | "counselor" | "teacher") => void;
+  onBackToHome?: () => void;
 }
 
-export default function LoginView({ onLogin }: LoginViewProps) {
+export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const [activeTab, setActiveTab] = useState<"student" | "parent" | "admin" | "counselor" | "teacher">("student");
   const [mobileNumber, setMobileNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -206,6 +207,18 @@ export default function LoginView({ onLogin }: LoginViewProps) {
         id="login-card-container"
       >
         <div className="bg-gradient-to-tr from-blue-950 via-slate-900 to-indigo-950 p-8 text-center text-white relative">
+          {onBackToHome && (
+            <div className="absolute top-4 right-4 z-20">
+              <button 
+                type="button"
+                onClick={onBackToHome}
+                className="text-white bg-white/10 hover:bg-white/20 hover:scale-105 border border-white/10 px-3 py-1.5 rounded-xl text-[10px] font-black transition flex items-center gap-1.5 cursor-pointer backdrop-blur-md"
+              >
+                <Home size={11} />
+                <span>برگشت به خانه</span>
+              </button>
+            </div>
+          )}
           <div className="absolute top-2 right-2 opacity-10">
             <Layers size={150} />
           </div>

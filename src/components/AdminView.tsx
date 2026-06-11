@@ -5,7 +5,7 @@ import {
   ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText, Trash2, Edit3, Settings2
 } from "lucide-react";
 import { getSystemLogs, addSystemLog } from "../lib/syslogs";
-import { Student } from "../types";
+import { Student, AIProviderKey } from "../types";
 import { getInstitutionsList, updateCustomBrandData, BRAND_CONFIG } from "../constants";
 import { 
   getSchools, addOrUpdateSchool, deleteSchool, SchoolProfile,
@@ -13,11 +13,14 @@ import {
   getTeachers, addOrUpdateTeacher, deleteTeacher,
   getStudentsList, addOrUpdateStudent, deleteStudent
 } from "../lib/dataService";
+import { saveApiKeyWithValidation } from "../lib/apiKeyValidation";
 
 import InvestmentView from "./InvestmentView";
 import ContentAuditModule from "./ContentAuditModule";
 import StorageMonitorView from "./StorageMonitorView";
 import BackgroundApiMonitor from "./BackgroundApiMonitor";
+import AiHealthSandbox from "./AiHealthSandbox";
+import ApiHealthHistoryLog from "./ApiHealthHistoryLog";
 
 import SaaSContractView from "./SaaSContractView";
 
@@ -428,16 +431,6 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
   const [dbEndpoint, setDbEndpoint] = useState("https://firestore.googleapis.com/v1/projects/taranom-mehr-app/databases/(default)/documents");
   
   // --- NEW AI PROVIDER MANAGEMENT ---
-  type ProviderType = "Google Gemini" | "OpenAI" | "Anthropic" | "Custom";
-  interface AIProviderKey {
-    id: string;
-    provider: ProviderType;
-    key: string;
-    label: string;
-    status: "idle" | "testing" | "success" | "error";
-    errorMsg?: string;
-    responseTimeMs?: number;
-  }
   const [providerKeys, setProviderKeys] = useState<AIProviderKey[]>(() => {
     const saved = localStorage.getItem("arateb_ai_provider_keys");
     if (saved) {
@@ -449,14 +442,14 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
     }
     return [];
   });
-  const [newProvForm, setNewProvForm] = useState<{provider: ProviderType; key: string; label: string}>({
+  const [newProvForm, setNewProvForm] = useState<{provider: AIProviderKey["provider"]; key: string; label: string}>({
     provider: "Google Gemini", key: "", label: ""
   });
 
   useEffect(() => {
     localStorage.setItem("arateb_ai_provider_keys", JSON.stringify(providerKeys));
     // Backwards compatibility with the old geminiKey which is used globally in this component
-    const defaultGemini = providerKeys.find(p => p.provider === "Google Gemini");
+    const defaultGemini = providerKeys.find(p => p.provider === "Google Gemini" || p.provider === "OpenRouter");
     if (defaultGemini && defaultGemini.key !== geminiKey) {
       setGeminiKey(defaultGemini.key);
     } else if (!defaultGemini && geminiKey) {
@@ -482,13 +475,31 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       }
       
       if (data.valid) {
-        setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "success", responseTimeMs: data.responseTimeMs } : k));
+        setProviderKeys(keys => keys.map(k => {
+          if (k.id === id) {
+            const historyItem = { timestamp: Date.now(), status: "success" as const, responseTimeMs: data.responseTimeMs };
+            return { ...k, status: "success", responseTimeMs: data.responseTimeMs, testHistory: [historyItem, ...(k.testHistory || [])].slice(0, 10) };
+          }
+          return k;
+        }));
         addSystemLog(`اعتبارسنجی اتصال ${provider}`, "نظارت زیرساخت", `تایید اعتبار کلید API انجام شد. تاخیر: ${data.responseTimeMs}ms`);
       } else {
-        setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "error", errorMsg: data.error } : k));
+        setProviderKeys(keys => keys.map(k => {
+          if (k.id === id) {
+            const historyItem = { timestamp: Date.now(), status: "error" as const, errorMsg: data.error };
+            return { ...k, status: "error", errorMsg: data.error, testHistory: [historyItem, ...(k.testHistory || [])].slice(0, 10) };
+          }
+          return k;
+        }));
       }
     } catch (e: any) {
-      setProviderKeys(keys => keys.map(k => k.id === id ? { ...k, status: "error", errorMsg: e.message } : k));
+      setProviderKeys(keys => keys.map(k => {
+        if (k.id === id) {
+          const historyItem = { timestamp: Date.now(), status: "error" as const, errorMsg: e.message };
+          return { ...k, status: "error", errorMsg: e.message, testHistory: [historyItem, ...(k.testHistory || [])].slice(0, 10) };
+        }
+        return k;
+      }));
     }
   };
 
@@ -509,11 +520,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
   // Auto-persist keys on change
   useEffect(() => {
-    if (geminiKey) {
-      localStorage.setItem("arateb_gemini_api_key", geminiKey);
-    } else {
-      localStorage.removeItem("arateb_gemini_api_key");
-    }
+    saveApiKeyWithValidation(geminiKey, "arateb_gemini_api_key");
 
     if (!geminiKey || geminiKey.trim() === "") {
       setLiveValidationStatus("idle");
@@ -521,10 +528,10 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       return;
     }
     
-    // Quick heuristic for custom providers or missing AIzaSy / new AQ. keys
-    if (!geminiKey.trim().startsWith("AIza") && !geminiKey.trim().startsWith("AQ.")) {
+    // Quick heuristic for custom providers or missing AIzaSy / new AQ. keys / sk-or-
+    if (!geminiKey.trim().startsWith("AIza") && !geminiKey.trim().startsWith("AQ.") && !geminiKey.trim().startsWith("sk-or-")) {
       setLiveValidationStatus("invalid");
-      setLiveValidationMessage("فرمت کلید نامعتبر است (نیازمند AIza... یا AQ...)");
+      setLiveValidationMessage("فرمت کلید نامعتبر است (نیازمند AIza... یا AQ... یا sk-or-)");
       return;
     }
 
@@ -1250,13 +1257,13 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
   return (
     <div className="flex flex-col lg:flex-row gap-6 text-right font-sans" id="admin-view-container" dir="rtl">
       {/* Sidebar Navigation - Right Side */}
-      <aside className="lg:w-72 shrink-0 space-y-4 no-print">
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 sticky top-24">
-                  <div className="px-4 py-2 mb-4 border-b border-slate-50 flex items-center justify-between">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">منوی مدیریت سیستم</span>
-                    <BackgroundApiMonitor />
-                  </div>
-          <nav className="space-y-1">
+      <aside className="lg:w-72 shrink-0 space-y-4 no-print overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 sticky top-24 max-h-[300px] lg:max-h-[calc(100vh-80px)] overflow-hidden flex flex-col">
+          <div className="px-4 py-2 mb-4 border-b border-slate-50 flex items-center justify-between shrink-0">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">منوی مدیریت سیستم</span>
+            <BackgroundApiMonitor />
+          </div>
+          <nav className="flex lg:flex-col overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 gap-2 lg:gap-1 scrollbar-hide pr-2">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -1264,18 +1271,18 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id as any)}
-                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${
+                  className={`flex-shrink-0 lg:w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${
                     isActive 
-                      ? "bg-blue-50 text-blue-900 border-r-4 border-blue-900 font-sans" 
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-sans"
+                      ? "bg-blue-50 text-blue-900 border-b-4 lg:border-b-0 lg:border-r-4 border-blue-900 font-sans" 
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-sans border-b-4 lg:border-b-0 border-transparent"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Icon size={16} className={`${item.color} ${isActive ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`} />
+                  <div className="flex items-center gap-3 whitespace-nowrap">
+                    <Icon size={16} className={`${item.color} ${isActive ? "opacity-100" : "opacity-60 group-hover:opacity-100"} shrink-0`} />
                     <span className={`text-[11px] font-black ${isActive ? "text-blue-950" : "text-slate-600"}`}>{item.label}</span>
                   </div>
                   {item.status && (
-                    <span className="text-[7px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                    <span className="text-[7px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-black animate-pulse shrink-0 ml-1">
                       {item.status}
                     </span>
                   )}
@@ -1336,7 +1343,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
             
             {/* System Logs (Console Style) */}
             {activeTab === "syslogs" && (
-                <div className="p-8 space-y-4 animate-fade-in" style={{ direction: "rtl" }}>
+                <div className="p-4 md:p-8 space-y-4 animate-fade-in" style={{ direction: "rtl" }}>
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
                     <List size={20} className="text-amber-600" />
                     <h3 className="text-base font-black text-slate-900 font-sans">لاگ تغییرات و وقایع سیستمی (System Audit Logs)</h3>
@@ -1356,7 +1363,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
             {/* Diagnostics & Health Check */}
             {activeTab === "diagnostics" && (
-              <div className="p-8 space-y-8 animate-fade-in" id="admin-tab-diagnostics" style={{ direction: "rtl" }}>
+              <div className="p-4 md:p-8 space-y-8 animate-fade-in" id="admin-tab-diagnostics" style={{ direction: "rtl" }}>
                 <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1 text-right">
                     <h3 className="text-sm font-black flex items-center gap-2">
@@ -1428,12 +1435,12 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-500">کلید اختصاصی Google Gemini API</label>
+                      <label className="text-[10px] font-black text-slate-500">کلید تنظیمات هوش مصنوعی (Google Gemini / OpenRouter)</label>
                       <input 
                         type="password" 
                         value={geminiKey} 
                         onChange={(e) => setGeminiKey(e.target.value)} 
-                        placeholder="AIzaSy..."
+                        placeholder="AIzaSy... یا sk-or-..."
                         className="w-full bg-slate-50 border border-slate-150 rounded-xl px-3 py-2.5 text-xs font-mono transition-all focus:border-indigo-500 focus:bg-white" 
                         style={{ direction: 'ltr' }} 
                       />
@@ -1463,15 +1470,15 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                     </div>
 
                     {/* Highly visible key check notification specifically targeting keys like standard, or invalid formats */}
-                    {geminiKey && !geminiKey.trim().startsWith("AIza") && !geminiKey.trim().startsWith("AQ.") && (
+                    {geminiKey && !geminiKey.trim().startsWith("AIza") && !geminiKey.trim().startsWith("AQ.") && !geminiKey.trim().startsWith("sk-or-") && (
                       <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 text-[10px] leading-relaxed font-bold space-y-2">
                         <div className="flex items-center gap-2 text-amber-800">
                           <AlertCircle size={14} className="shrink-0" />
-                          <span>هشدار: فرمت نامعتبر کلید جیمینای</span>
+                          <span>هشدار: فرمت نامعتبر کلید هوش مصنوعی</span>
                         </div>
                         <p className="font-sans">
-                          کلید وارد شده با کاراکترهای استاندارد <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AIza</code> یا <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AQ.</code> آغاز نمی‌شود. 
-                          لطفا از کلید معتبر صادر شده از Google AI Studio استفاده کنید.
+                          کلید وارد شده با کاراکترهای استاندارد <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AIza</code> یا <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">AQ.</code> یا <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">sk-or-</code> آغاز نمی‌شود. 
+                          لطفا از کلید معتبر صادر شده از سرویس مربوطه استفاده کنید.
                         </p>
                       </div>
                     )}
@@ -1504,7 +1511,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
             {/* Zarinpal Gateway Config */}
             {activeTab === "zarinpal" && (
-              <div className="p-8 space-y-6 animate-fade-in" style={{ direction: "rtl" }}>
+              <div className="p-4 md:p-8 space-y-6 animate-fade-in" style={{ direction: "rtl" }}>
                  <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
                     <Wallet size={20} className="text-blue-600" />
                     <h3 className="text-base font-black text-slate-900">درگاه پرداخت زرین‌پال (ZarinPal Gateway)</h3>
@@ -1529,7 +1536,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
             {/* API & Cloud Integrations */}
             {activeTab === "integrations" && (
-              <div className="space-y-8 p-8 animate-fade-in" style={{ direction: "rtl" }}>
+              <div className="space-y-8 p-4 md:p-8 animate-fade-in" style={{ direction: "rtl" }}>
                 <div className="bg-slate-50 p-5 rounded-3xl border border-slate-150 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1 text-right">
                     <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
@@ -1583,17 +1590,33 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                               </button>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => testProviderKey(pk.id, pk.provider, pk.key)} 
-                                disabled={pk.status === "testing"}
-                                className={`text-[10px] font-black px-3 py-1.5 rounded-lg transition-colors ${pk.status === "testing" ? "bg-slate-200 text-slate-500" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"}`}
-                              >
-                                {pk.status === "testing" ? "در حال تست..." : "تست اعتبار کلید"}
-                              </button>
-                              
-                              {pk.status === "success" && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">✅ معتبر ({pk.responseTimeMs}ms)</span>}
-                              {pk.status === "error" && <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded">❌ نامعتبر: {pk.errorMsg}</span>}
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => testProviderKey(pk.id, pk.provider, pk.key)} 
+                                  disabled={pk.status === "testing"}
+                                  className={`text-[10px] font-black px-3 py-1.5 rounded-lg transition-colors ${pk.status === "testing" ? "bg-slate-200 text-slate-500" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"}`}
+                                >
+                                  {pk.status === "testing" ? "در حال تست..." : "تست اعتبار کلید"}
+                                </button>
+                                
+                                {pk.status === "success" && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">✅ معتبر ({pk.responseTimeMs}ms)</span>}
+                                {pk.status === "error" && <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded">❌ نامعتبر: {pk.errorMsg}</span>}
+                              </div>
+
+                              {pk.testHistory && pk.testHistory.length > 0 && (
+                                <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                                  <span className="text-[9px] text-slate-400 font-bold">تاریخچه تست‌ها:</span>
+                                  {pk.testHistory.map((th, i) => (
+                                    <div key={i} className="text-[9px] flex gap-2 items-center">
+                                      <span className="text-slate-400">{new Date(th.timestamp).toLocaleTimeString('fa-IR')}</span>
+                                      {th.status === "success" 
+                                        ? <span className="text-emerald-500 font-bold">✅ موفق ({th.responseTimeMs}ms)</span> 
+                                        : <span className="text-rose-500 text-[8px] truncate max-w-[200px]" title={th.errorMsg}>❌ خطا: {th.errorMsg}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1613,10 +1636,11 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                           <label className="text-[10px] font-black text-slate-600">پروایدر هوش مصنوعی</label>
                           <select 
                             value={newProvForm.provider} 
-                            onChange={(e) => setNewProvForm({...newProvForm, provider: e.target.value as ProviderType})}
+                            onChange={(e) => setNewProvForm({...newProvForm, provider: e.target.value as AIProviderKey["provider"]})}
                             className="w-full bg-slate-50 border border-slate-150 rounded-lg px-3 py-2 text-xs font-bold"
                           >
                             <option value="Google Gemini">Google Gemini</option>
+                            <option value="OpenRouter">OpenRouter</option>
                             <option value="OpenAI">OpenAI (ChatGPT)</option>
                             <option value="Anthropic">Anthropic (Claude)</option>
                             <option value="Custom">Custom Provider</option>
@@ -1841,6 +1865,12 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                   </div>
                 </div>
 
+                {/* AI Health Sandbox Suite */}
+                <AiHealthSandbox providerKeys={providerKeys} />
+
+                {/* API Health Chronicle Log Suite */}
+                <ApiHealthHistoryLog />
+
                 {/* Dynamic SaaS Branding customizer */}
                 <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6 text-right mt-8" id="saas-branding-customizer">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -1940,7 +1970,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
              {/* Technical Docs (Locked) */}
             {activeTab === "sysdocs" && (
-               <div className="p-8 space-y-6 animate-fade-in" id="admin-tab-sysdocs" style={{ direction: "rtl" }}>
+               <div className="p-4 md:p-8 space-y-6 animate-fade-in" id="admin-tab-sysdocs" style={{ direction: "rtl" }}>
                   <div className="max-w-md mx-auto bg-slate-900 text-white p-8 rounded-3xl text-center space-y-6">
                     <Lock size={28} className="mx-auto text-rose-500" />
                     <h3 className="font-black text-base">مستندات فنی (Protected)</h3>
@@ -3164,7 +3194,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
           {/* Tab: Central Database Management (Schools, Counselors, Teachers, Students) */}
           {activeTab === "central_database" && (
-            <div className="p-8 space-y-6 animate-fade-in text-right" id="admin-tab-central-database" style={{ direction: "rtl" }}>
+            <div className="p-4 md:p-8 space-y-6 animate-fade-in text-right" id="admin-tab-central-database" style={{ direction: "rtl" }}>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
                 <div className="space-y-1">
                   <span className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-150 font-black inline-block">

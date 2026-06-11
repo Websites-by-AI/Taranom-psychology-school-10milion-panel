@@ -26,15 +26,47 @@ import HistoricalDatabaseView from "./components/HistoricalDatabaseView";
 import ProfileSettingsView from "./components/ProfileSettingsView";
 import CounselorDashboardView from "./components/CounselorDashboardView";
 import TeacherDashboardView from "./components/TeacherDashboardView";
-import { Brain, Settings, Database } from "lucide-react";
+import WelcomeTourPortal from "./components/WelcomeTourPortal";
+import { Brain, Settings, Database, Home } from "lucide-react";
 import SmartNotifications, { getRoleBannerAlert } from "./components/SmartNotifications";
 import FocusChallengeOverlay from "./components/FocusChallengeOverlay";
+import AiCircuitBreaker from "./components/AiCircuitBreaker";
+import { ApiHealthMonitor } from "./components/ApiHealthMonitor";
+import TourGuide from "./components/TourGuide";
 import { getProfileMetadata, getHydratedStudent } from "./lib/userProfiles";
 
 export default function App() {
-  const [student, setStudent] = useState<Student | null>(null);
-  const [role, setRole] = useState<"student" | "parent" | "admin" | "counselor" | "teacher" | null>(null);
-  const [view, setView] = useState<string>("dashboard");
+  const mockStudents: Student[] = [
+    { id: "1", name: "مریم حسینی (رشته علوم تجربی - هدف پزشکی تهران)", code: "9812405", field: "tajrobi", grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰" }
+  ];
+
+  const checkAdminUrlMatch = () => {
+    if (typeof window !== "undefined") {
+      return window.location.pathname === '/admin' || window.location.search.includes('admin') || window.location.hash.includes('admin');
+    }
+    return false;
+  };
+
+  const [student, setStudent] = useState<Student | null>(() => {
+    if (checkAdminUrlMatch()) return getHydratedStudent(mockStudents[0]);
+    const savedName = localStorage.getItem("arateb_student_profile_name");
+    const savedGrade = localStorage.getItem("arateb_student_profile_grade");
+    return getHydratedStudent({
+      id: "guest",
+      name: savedName || "کاربر مهمان (تست کایزن)",
+      code: "guest",
+      field: "tajrobi",
+      grade: savedGrade || "دوازدهم تجربی - تراز فرضی ۷۲۰۰"
+    });
+  });
+  const [role, setRole] = useState<"student" | "parent" | "admin" | "counselor" | "teacher" | null>(() => {
+    if (checkAdminUrlMatch()) return "admin";
+    return "student";
+  });
+  const [view, setView] = useState<string>(() => {
+    if (checkAdminUrlMatch()) return "admin";
+    return "welcome";
+  });
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem("taranom_app_theme") || BRAND_CONFIG.theme || "classic";
   });
@@ -57,8 +89,9 @@ export default function App() {
 
   const navigationItems = {
     student: [
+      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
       { id: "dashboard", label: "مرکز فرماندهی موفقیت", icon: LayoutDashboard },
-      { id: "manova", label: "داشبورد مانوا", icon: Sparkles, highlight: true },
+      { id: "manova", label: "داشبورد مانوا", icon: Sparkles },
       { id: "report", label: "کارنامه ترازها", icon: FileSpreadsheet },
       { id: "schedule", label: "برنامه‌ریزی و تقویم", icon: Calendar },
       { id: "counselor", label: "اتاق گفتگو و پشتیبانی هوشمند", icon: MessageSquare },
@@ -66,14 +99,15 @@ export default function App() {
       { id: "traps", label: "بانک تله‌های تستی", icon: Target },
       { id: "quiz", label: "آزمون سفارشی", icon: Brain },
       { id: "psychology", label: "پایش آمادگی ذهنی", icon: Brain },
-      { id: "metacognition", label: "آزمایشگاه فراشناخت", icon: Sparkles, highlight: true },
+      { id: "metacognition", label: "آزمایشگاه فراشناخت", icon: Sparkles },
       { id: "counseling", label: "انتخاب رشته هوشمند", icon: GraduationCap },
       { id: "historical-db", label: "بانک تراز و قبولی", icon: Database },
       { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
     ],
     parent: [
+      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
       { id: "parents", label: "نظارت آنلاین والدین", icon: Users },
-      { id: "manova", label: "داشبورد هوشمند والدین", icon: Sparkles, highlight: true },
+      { id: "manova", label: "داشبورد هوشمند والدین", icon: Sparkles },
       { id: "report", label: "کارنامه‌ها و گزارش‌ها", icon: FileSpreadsheet },
       { id: "psychology", label: "پایش عملکرد ذهنی داوطلب", icon: Brain },
       { id: "counseling", label: "تخمین قبولی فرزند", icon: GraduationCap },
@@ -81,7 +115,8 @@ export default function App() {
       { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
     ],
     counselor: [
-      { id: "counselor-dashboard", label: "میزکار مانیتورینگ مشاور", icon: Users, highlight: true },
+      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
+      { id: "counselor-dashboard", label: "میزکار مانیتورینگ مشاور", icon: Users },
       { id: "manova", label: "پورتال آکادمیک کایزن مانوا", icon: Sparkles },
       { id: "report", label: "کارنامه و درصدهای ممیزی", icon: FileSpreadsheet },
       { id: "psychology", label: "رادار اضطراب و بهداشت روان", icon: Brain },
@@ -90,14 +125,16 @@ export default function App() {
       { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
     ],
     teacher: [
-      { id: "teacher-dashboard", label: "میزکار مانیتورینگ دبیر", icon: Users, highlight: true },
+      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
+      { id: "teacher-dashboard", label: "میزکار مانیتورینگ دبیر", icon: Users },
       { id: "report", label: "کارنامه‌های دانش‌آموزان", icon: FileSpreadsheet },
       { id: "traps", label: "تله‌های کالیبره زیست", icon: Target },
       { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
     ],
     admin: [
+      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
       { id: "admin", label: "نقشه راه SaaS", icon: Users },
-      { id: "manova", label: "داشبورد مدیریتی مانوا", icon: Sparkles, highlight: true },
+      { id: "manova", label: "داشبورد مدیریتی مانوا", icon: Sparkles },
     ]
   };
 
@@ -190,21 +227,62 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setStudent(null);
-    setRole(null);
-    setView("dashboard");
+    setStudent(getHydratedStudent({
+      id: "guest",
+      name: "کاربر مهمان (تست کایزن)",
+      code: "guest",
+      field: "tajrobi",
+      grade: "دوازدهم تجربی - تراز فرضی ۷۲۰۰"
+    }));
+    setRole("student");
+    setView("welcome");
   };
 
-  if (!role || !student) {
+  if (view === "welcome") {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900" id="public-homepage-root">
+        <style dangerouslySetInnerHTML={{ __html: getThemeCSS(theme) }} />
+        <WelcomeTourPortal 
+          currentRole={role || "student"} 
+          onNavigate={(target) => {
+            if (target === "login") {
+              setStudent(null);
+              setRole(null);
+            }
+            setView(target);
+          }} 
+          onSwitchRole={(newRole) => setRole(newRole)} 
+        />
+      </div>
+    );
+  }
+
+  if (view === "login" || !role || !student) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-between" id="app-auth-wrapper">
         {/* Parallel Font Loading Layer - Optimized via index.html Preconnect/Preload */}
         <style dangerouslySetInnerHTML={{ __html: getThemeCSS(theme) }} />
         <main className="flex-grow flex items-center justify-center py-10">
-          <LoginView onLogin={handleLogin} />
+          <LoginView onLogin={handleLogin} onBackToHome={() => setView("welcome")} />
         </main>
         <footer className="py-6 border-t border-slate-100 bg-white text-center text-xs text-slate-400">
           <div>© {BRAND_CONFIG.fullName} | {BRAND_CONFIG.slogan} با هوش مصنوعی مرکزی</div>
+          <div className="mt-2 flex items-center justify-center gap-3">
+            <button
+              onClick={() => setView("welcome")}
+              className="text-indigo-600 hover:text-indigo-800 transition-colors font-bold text-xs"
+            >
+              بازگشت به صفحه اصلی سایت
+            </button>
+            <span className="text-slate-200">|</span>
+            <button
+              onClick={() => handleLogin(getHydratedStudent({ id: "1", name: "مدیر سیستم", code: "admin", field: "tajrobi", grade: "-" }), "admin")}
+              className="text-slate-300 hover:text-slate-500 transition-colors inline-flex items-center gap-1"
+            >
+              <Shield size={12} />
+              <span>ورود به پنل مدیریت</span>
+            </button>
+          </div>
         </footer>
       </div>
     );
@@ -224,7 +302,7 @@ export default function App() {
           <span className="hidden sm:inline bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/10">پروتکل امنیتی ادمین متصل است</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-slate-400">LOGS: 0 ERRORS</span>
+          <ApiHealthMonitor />
           <span className="font-mono text-amber-300">CLOUD_INGRESS_STABLE_3000</span>
         </div>
       </div>
@@ -528,6 +606,9 @@ export default function App() {
 
       {/* Main View Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full" id="main-content-layout">
+        
+        <TourGuide role={role} onComplete={() => {}} />
+
         {/* Dynamic, Role-Relevant Alert Banner Board */}
         {role && !dismissedAlerts[role] && (() => {
           const alertInfo = getRoleBannerAlert(role, BRAND_CONFIG.name);
@@ -591,6 +672,7 @@ export default function App() {
 
         {role === "student" && (
           <>
+            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
             {view === "dashboard" && <DashboardView student={student} onNavigate={(target) => setView(target)} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
             {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
@@ -609,6 +691,7 @@ export default function App() {
 
         {role === "parent" && (
           <>
+            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
             {view === "parents" && <ParentsView student={student} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
             {view === "report" && <ReportCardView student={student} />}
@@ -621,6 +704,7 @@ export default function App() {
 
         {role === "admin" && (
           <>
+            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
             {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
           </>
@@ -628,6 +712,7 @@ export default function App() {
 
         {role === "counselor" && (
           <>
+            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
             {view === "counselor-dashboard" && <CounselorDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
             {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
             {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
@@ -640,6 +725,7 @@ export default function App() {
 
         {role === "teacher" && (
           <>
+            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
             {view === "teacher-dashboard" && <TeacherDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
             {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
             {view === "traps" && <TestTrapsView student={student} />}
@@ -663,6 +749,7 @@ export default function App() {
              console.log("Challenge completed with score:", score);
           }}
         />
+        <AiCircuitBreaker />
       </main>
 
       {/* Persistent Footer */}

@@ -14,50 +14,269 @@ const PORT = 3000;
 app.use(express.json());
 
 // Initialize Gemini SDK Client
-let aiClient: GoogleGenAI | null = null;
-function getAI(requestKey?: string) {
+class AIAdapter {
+  apiKey: string;
+  isOpenRouter: boolean;
+  googleAI: GoogleGenAI | null = null;
+  
+  constructor(apiKey: string) {
+    this.apiKey = apiKey.trim();
+    this.isOpenRouter = this.apiKey.startsWith("sk-or-");
+    if (!this.isOpenRouter) {
+      this.googleAI = new GoogleGenAI({ 
+        apiKey: this.apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+    }
+  }
+
+  get models() {
+    return {
+      generateContent: async (params: any) => {
+        if (this.isOpenRouter) {
+          return this.generateContentOpenRouter(params);
+        } else {
+          return this.googleAI!.models.generateContent(params);
+        }
+      }
+    };
+  }
+
+  get chats() {
+    return {
+      create: (params: any) => {
+        if (this.isOpenRouter) {
+          // OpenRouter stateless chat wrapper
+          let history: any[] = params.history || [];
+          return {
+            sendMessage: async (msgParams: any) => {
+              const userMessage = typeof msgParams === "string" ? msgParams : msgParams.message;
+              history.push({ role: "user", parts: [{ text: userMessage }] });
+              
+              // converting format for openrouter
+              const messages = [];
+              if (params.config?.systemInstruction) {
+                messages.push({ role: "system", content: params.config.systemInstruction });
+              }
+              for (const h of history) {
+                let text = "";
+                if (h.parts) {
+                  for (const p of h.parts) {
+                    if (p.text) text += p.text + "\n";
+                  }
+                }
+                messages.push({ role: h.role === "model" ? "assistant" : "user", content: text.trim() });
+              }
+              
+              const openrouterModel = (params.model && typeof params.model === "string" && params.model.includes("/")) 
+                  ? params.model 
+                  : (params.model === "gemini-2.5-flash" ? "google/gemini-2.5-flash" : "openrouter/auto");
+
+              const reqBody: any = {
+                model: openrouterModel,
+                messages: messages,
+                max_tokens: params.config?.maxOutputTokens || 2048,
+              };
+
+              const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${this.apiKey}`,
+                  'HTTP-Referer': 'https://ai.hamdeltar.ir',
+                  'X-OpenRouter-Title': 'TaranomAcademy',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(reqBody),
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`OpenRouter error: ${errorText}`);
+              }
+              const data = await response.json();
+              const contentText = data.choices[0]?.message?.content || "";
+              history.push({ role: "model", parts: [{ text: contentText }] });
+              return { text: contentText };
+            }
+          };
+        } else {
+          const rawChat = this.googleAI!.chats.create(params);
+          return {
+            sendMessage: async (msgParams: any) => {
+              const textMessage = typeof msgParams === "string" ? msgParams : (msgParams.message || msgParams.contents || "");
+              try {
+                const response = await rawChat.sendMessage(textMessage);
+                return response;
+              } catch (err) {
+                return await rawChat.sendMessage(msgParams);
+              }
+            }
+          };
+        }
+      }
+    };
+  }
+
+  async generateContentOpenRouter(params: any): Promise<{text: string; textOutput?: string}> {
+     const messages: any[] = [];
+     
+     if (typeof params.contents === "string") {
+       messages.push({ role: "user", content: params.contents });
+     } else if (Array.isArray(params.contents)) {
+       for (const content of params.contents) {
+          let text = "";
+          if (content.parts) {
+            for (const part of content.parts) {
+              if (part.text) {
+                text += part.text + "\n";
+              }
+            }
+          }
+          const role = content.role === "model" ? "assistant" : "user";
+          messages.push({ role, content: text.trim() });
+       }
+     }
+
+     const openrouterModel = (params.model && typeof params.model === "string" && params.model.includes("/")) 
+        ? params.model 
+        : (params.model === "gemini-2.5-flash" ? "google/gemini-2.5-flash" : "openrouter/auto");
+
+     const reqBody: any = {
+       model: openrouterModel,
+       messages: messages,
+       max_tokens: params.config?.maxOutputTokens || 2048,
+     };
+     
+     if (params.config?.responseMimeType === "application/json") {
+       reqBody.response_format = { type: "json_object" };
+     }
+
+     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'HTTP-Referer': 'https://ai.hamdeltar.ir',
+          'X-OpenRouter-Title': 'TaranomAcademy',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reqBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter error: ${errorText}`);
+      }
+      const data = await response.json();
+      const contentText = data.choices[0]?.message?.content || "";
+      return { text: contentText };
+  }
+}
+
+function getRequestKeys(req: express.Request): string[] {
+  let fallbackKeys: string[] = [];
   try {
-    const key = requestKey || process.env.GEMINI_API_KEY;
-    
-    // Validate key presence and basic format
-    if (!key || key.trim() === "" || key === "undefined" || key === "null") {
-      return null;
+    const rawAll = req.headers["x-ai-provider-keys"] as string;
+    if (rawAll) {
+      const parsed = JSON.parse(rawAll);
+      if (Array.isArray(parsed)) {
+        fallbackKeys = parsed.map(k => k.key);
+      } else if (typeof parsed === "string") {
+        try {
+           const inner = JSON.parse(parsed);
+           if (Array.isArray(inner)) fallbackKeys = inner.map(k => k.key);
+        } catch(e){}
+      }
     }
+  } catch(e) {}
+  
+  const k1 = req.headers["x-gemini-key"] as string;
+  const k2 = req.headers["x-openrouter-key"] as string;
+  const k3 = req.body?.geminiKey as string;
+  const k4 = req.body?.openRouterKey as string;
+  const k5 = req.query?.geminiKey as string;
+  const k6 = req.query?.openRouterKey as string;
+  
+  const allKeys = [...fallbackKeys, k1, k2, k3, k4, k5, k6, process.env.OPENROUTER_API_KEY, process.env.GEMINI_API_KEY]
+    .filter(k => k && k.trim() !== "" && k !== "undefined" && k !== "null" && !k.includes("YOUR_API_KEY"));
     
-    // Prevent usage of placeholder strings that might be in .env by accident
-    if (key.includes("YOUR_API_KEY") || key.includes("INSERT_KEY_HERE")) {
-      console.warn("GEMINI_API_KEY appears to be a placeholder.");
-      return null;
-    }
-    
-    // If a custom key is supplied on request level, create a transient client or cache it securely
-    if (requestKey) {
-      return new GoogleGenAI({ 
-        apiKey: requestKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
+  return [...new Set(allKeys)];
+}
+
+class AIFallbackWrapper {
+  private keys: string[];
+  private res?: express.Response;
+
+  constructor(keys: string[], res?: express.Response) {
+    this.keys = keys;
+    this.res = res;
+  }
+
+  get models() {
+    return {
+      generateContent: async (params: any) => {
+        let lastError = null;
+        for (let i = 0; i < this.keys.length; i++) {
+          try {
+            const ai = new AIAdapter(this.keys[i]);
+            const result = await ai.models.generateContent(params);
+            if (i > 0 && this.res && !this.res.headersSent) {
+               this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
+            }
+            return result;
+          } catch(e: any) {
+            lastError = e;
+            console.warn(`[AI Fallback Wrapper] Key ${i} failed. Error:`, e.message);
           }
         }
-      });
-    }
-    
-    if (!aiClient) {
-      aiClient = new GoogleGenAI({ 
-        apiKey: key,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
+        throw lastError;
+      }
+    };
+  }
+
+  get chats() {
+    return {
+      create: (params: any) => {
+        // Evaluate the messages at sendMessage time so all fallbacks get the identical history state
+        return {
+          sendMessage: async (msgParams: any) => {
+            let lastError = null;
+            for (let i = 0; i < this.keys.length; i++) {
+              try {
+                // clone params history to avoid double pushes from lower adapters
+                const paramsClone = { ...params, history: params.history ? [...params.history] : [] };
+                const ai = new AIAdapter(this.keys[i]);
+                const chat = ai.chats.create(paramsClone);
+                const result = await chat.sendMessage(msgParams);
+                if (i > 0 && this.res && !this.res.headersSent) {
+                   this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
+                }
+                return result;
+              } catch(e: any) {
+                lastError = e;
+                console.warn(`[AI Fallback Wrapper Chat] Key ${i} failed. Error:`, e.message);
+              }
+            }
+            throw lastError;
           }
-        }
-      });
+        };
+      }
+    };
+  }
+}
+
+function getAI(req: express.Request, res?: express.Response) {
+  try {
+    const keys = getRequestKeys(req);
+    if (keys.length === 0) {
+      return null;
     }
-    return aiClient;
+    return new AIFallbackWrapper(keys, res);
   } catch (err) {
-    console.error("Failed to initialize GoogleGenAI:", err);
+    console.error("Failed to initialize AI client:", err);
     return null;
   }
 }
+
 
 // REST Api endpoints
 app.get("/api/health", (req, res) => {
@@ -91,6 +310,8 @@ function getOfflineChatReply(message: string): string {
     return "سلام همکار گرامی و تلاشگر. برنامه‌ریزی هوشمند مطالاتی ترنم مهر با ادغام پومودوروهای درسی، شیفت صبح (مرور خلاصه مباحث مفهومی و کتاب) و شیفت عصر (تست‌زنی جامع موازی آزمون آزمایشی) فرموله شده است. این چرخه مداوم تضمین‌کننده رفع تدریجی تله‌های تستی بدون فرسودگی ذهنی است. آیا برنامه امروز را شروع کرده‌اید؟";
   } else if (lowerMessage.includes("تنبلی") || lowerMessage.includes("خستگی") || lowerMessage.includes("انگیزه")) {
     return "سلام و درود. خستگی ذهنی در فرآیند آمادگی برای ماراتن دشوار کنکور سراسری امری بسیار طبیعی است. ترنم مهر پیشنهاد می‌کند از تکنیک پومودورو درسی (۵۰ دقیقه مطالعه متمرکز و ۱۰ دقیقه استراحت دور از گوشی) استفاده کنید. تلاش مستمر شما سنگ‌بنای پزشک، مهندس یا رتبه برتر شدنتان خواهد بود.";
+  } else if (lowerMessage.includes("تراز") || lowerMessage.includes("مانیتورینگ") || lowerMessage.includes("شبیه‌ساز") || lowerMessage.includes("آزمون") || lowerMessage.includes("تراز مانیتورینگ")) {
+    return "سلام قهرمان پرتلاش! افزایش تراز مانیتورینگ و آزمون‌های شبیه‌ساز یکی از دغدغه‌های اصلی رتبه‌های برتر است. برای دستیابی به ترازهای درخشان در آزمون‌های بعدی آکادمی، من ۳ تکنیک طلایی کایزن درمانی را برایت تجویز می‌کنم:\n\n۱. **تحلیل موشکافانه تله‌های تستی**: بلافاصله پس از هر آزمون، سوالات غلط و نزده را کالبدشکافی کن. اشتباهاتت از جنس بی‌دقتی محاسباتی، عدم تمرکز یا کمبود وقت بوده؟ نوشتن یک دفترچه اختصاصی تحلیل تراز، از تکرار مجدد این اشتباهات بیهوده در شبیه‌سازهای بعدی جلوگیری می‌کند.\n\n۲. **مهندسی مدیریت زمان (تکنیک ضربدر منها)**: زمانِ پاسخ‌گویی به درس‌ها را با توجه به ضریب کنکوری آن‌ها موازنه کن. هرگز روی یک تست پیچیده و وقت‌گیر قفل نشو. تست‌های ساده‌تر را در اولویت اول مهار کن تا روحیه تهاجمی‌ات برای بقیه آزمون حفظ شود.\n\n۳. **پایداری پارت‌های پومودورو موازی**: روزهای پایانی منتهی به شبیه‌ساز بعدی را به شبیه‌سازی تست‌های جامع نیمه زمان‌دار اختصاص بده. ذهن انسان مانند عضله است؛ هر چقدر بیشتر در محیط شبیه‌ساز با استرس تمرین کند، در آزمون اصلی بهره‌وری تراز مانیتورینگ او بالاتر خواهد رفت.\n\nتلاش مستمر تو قطعاً ترازت را در آزمون پیش‌رو متحول خواهد کرد! 🎯🚀";
   } else {
     return "داوطلب فرزانه ترنم مهر، با تشکر از ارتباط شما با مشاور هوشمند هوش مصنوعی. برای تحلیل بهتر روند پیشرفت، تراز آخرین آزمون آزمایشی خود، رشته تحصیلی‌تان (تجربی، ریاضی یا انسانی) و درصد دروس آسیب‌دیده را ذکر کنید تا رهنمودهای مربی‌گری تخصصی خدمت شما صادر گردد.";
   }
@@ -309,8 +530,7 @@ app.get("/api/motivational", async (req, res) => {
   ];
 
   try {
-    const userKey = req.headers["x-gemini-key"] as string || req.query.geminiKey as string;
-    const ai = getAI(userKey);
+    const ai = getAI(req, res);
     if (!ai) {
       const randomIndex = Math.floor(Math.random() * quotes.length);
       return res.json({ quote: quotes[randomIndex] });
@@ -323,13 +543,13 @@ app.get("/api/motivational", async (req, res) => {
     return res.json({ quote: response.text?.trim() || quotes[Math.floor(Math.random() * quotes.length)] });
   } catch (error: any) {
     if (error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("quota")) {
-      console.warn("Gemini quota exhausted. Using offline fallback.");
-    } else if (error?.message?.includes("PERMISSION_DENIED")) {
-      console.warn("Gemini API key is invalid or lacks permissions. Using offline fallback.");
+      console.log("Gemini quota exhausted. Using offline fallback.");
+    } else if (error?.message?.includes("PERMISSION_DENIED") || error?.message?.includes("Permission denied") || error?.message?.includes("suspended") || error?.message?.includes("UNAUTHENTICATED") || error?.message?.includes("invalid authentication")) {
+      console.log("Gemini API key is invalid or lacks permissions. Using offline fallback.");
     } else if (error?.message?.includes("leaked") || error?.message?.includes("not found")) {
-      console.warn("Gemini API key error detected (potentially leaked). Using offline fallback.");
+      console.log("Gemini API key error detected. Using offline fallback.");
     } else {
-      console.warn("Error generating Konkur study quote with Gemini (Using offline fallback):", error);
+      console.log("API Error caught (Using offline fallback).");
     }
     const randomIndex = Math.floor(Math.random() * quotes.length);
     res.json({ quote: quotes[randomIndex] });
@@ -345,13 +565,11 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "MESSAGE_REQUIRED", reply: "پیامی دریافت نشد." });
   }
   try {
-    const userKey = req.headers["x-gemini-key"] as string || req.body?.geminiKey as string;
-    const ai = getAI(userKey);
+    const ai = getAI(req, res);
     if (!ai) {
-      console.warn("AI Client not available for /api/chat");
-      return res.status(503).json({ 
-        error: "AI_SERVICE_UNAVAILABLE",
-        reply: "متأسفانه در حال حاضر اتصال به سرور هوش مصنوعی برقرار نیست. لطفاً دقایقی دیگر تلاش کنید یا از بخش مصوبات دستی استفاده نمایید." 
+      console.warn("AI Client not available for /api/chat. Falling back to offline simulator.");
+      return res.json({ 
+        reply: getOfflineChatReply(message)
       });
     }
 
@@ -374,21 +592,26 @@ app.post("/api/chat", async (req, res) => {
 
     const chat = ai.chats.create({ 
       model: "gemini-2.5-flash",
+      history: formattedHistory,
       config: {
         systemInstruction: systemInstruction
       }
     });
 
-    const result = await chat.sendMessage({ message });
+    const result = await chat.sendMessage({ message: message });
     const reply = result.text?.trim();
     
     if (!reply) throw new Error("Empty reply from Gemini");
 
     return res.json({ reply });
   } catch (error: any) {
-    console.error("Error in Konkur chat with Gemini:", error);
     const errStr = (error?.message || error?.toString() || "").toLowerCase();
-    if (errStr.includes("leaked") || errStr.includes("403") || errStr.includes("permission_denied") || errStr.includes("compromised")) {
+    console.log("API Error in Konkur chat with Gemini (caught).", errStr.substring(0, 150));
+    if (errStr.includes("resource_exhausted") || errStr.includes("quota") || errStr.includes("429")) {
+      return res.status(200).json({
+        reply: "⚠️ همکار/کاربر ارجمند، سقف مجاز استفاده از کلید هوش مصنوعی (Quota Exceeded) در این لحظه به پایان رسیده است.\n\nاز آنجایی که کلید وارد شده احتمالاً از نوع رایگان (Free Tier) است، با محدودیت‌های تعدادی درخواست از سمت گوگل مواجه شده است. شبکه برای جلوگیری از اختلال در کارنامه شما، به صورت خودکار به موتور آفلاین کایزن منتقل شده است.\n\nبرای ارتباط زنده، لطفاً دقایقی بعد تلاش کنید یا یک کلید رایگان جدید در بخش ادمین ثبت نمایید. ❤️"
+      });
+    } else if (errStr.includes("leaked") || errStr.includes("403") || errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended") || errStr.includes("compromised")) {
       return res.status(200).json({
         reply: "⚠️ همکار ارجمند، کلید دسترسی (API Key) پیش‌فرض سرور به دلیل انتشار عمومی توسط گوگل غیرفعال و جزء کلیدهای لو رفته (Leaked Key) طبقه‌بندی شده است.\n\nمن دکتر رادان هستم. نگران نباشید! برای فعال‌سازی مجدد و برقراری ارتباط پرسرعت زنده با مدل‌های پرقدرت هوش مصنوعی Google Gemini، کافیست:\n۱. یک کلید دسترسی خام و رایگان از پنل Google AI Studio (ai.google.dev) دریافت کنید.\n۲. وارد پنل ادمین آکادمی شوید و در بخش «🔎 خطایابی و پایش ماژول‌ها»، کلید جدید خود را در کادر تنظیمات هوش مصنوعی وارد و ثبت کنید.\n\nسیستم به قدری پیشرفته و باکیفیت طراحی شده که تا زمان تنظیم کلید اختصاصی توسط شما، پکیج هوشمند ما با شبیه‌سازهای حرفه‌ای و عینی (کایزن و روانشناسی تحصیلی) با ۱۰۰٪ پایداری فعال مانده تا خللی در کارنامه و فرآیندها رخ ندهد. ❤️"
       });
@@ -415,8 +638,7 @@ app.post("/api/goal-insight", async (req, res) => {
     const fieldName = student?.field === "tajrobi" ? "علوم تجربی" : student?.field === "riazi" ? "ریاضی فیزیک" : "علوم انسانی";
     const targetPercentage = (currentPercentage || 59) + (targetGrowth || 10);
 
-    const userKey = req.headers["x-gemini-key"] as string || req.body?.geminiKey as string;
-    const ai = getAI(userKey);
+    const ai = getAI(req, res);
     if (!ai) {
       return res.json(getOfflineGoalInsight(student, currentTraz, currentPercentage, targetTraz, targetGrowth, latestQuizScore));
     }
@@ -466,13 +688,13 @@ app.post("/api/goal-insight", async (req, res) => {
 
   } catch (error: any) {
     if (error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("quota")) {
-      console.warn("Goal insight quota exhausted. Using offline fallback.");
-    } else if (error?.message?.includes("PERMISSION_DENIED")) {
-      console.warn("Goal insight API key lacks permissions. Using offline fallback.");
+      console.log("Goal insight quota exhausted. Using offline fallback.");
+    } else if (error?.message?.includes("PERMISSION_DENIED") || error?.message?.includes("Permission denied") || error?.message?.includes("suspended") || error?.message?.includes("UNAUTHENTICATED") || error?.message?.includes("invalid authentication")) {
+      console.log("Goal insight API key lacks permissions. Using offline fallback.");
     } else if (error?.message?.includes("leaked")) {
-      console.warn("Goal insight API key issue detected. Using offline fallback.");
+      console.log("Goal insight API key issue detected. Using offline fallback.");
     } else {
-      console.warn("Error generating Taranom Mehr goal insights with Gemini (Using offline fallback):", error);
+      console.log("API Error caught (Using offline fallback) in Goal insight.");
     }
     return res.json(getOfflineGoalInsight(student, currentTraz, currentPercentage, targetTraz, targetGrowth, latestQuizScore));
   }
@@ -484,8 +706,7 @@ app.post("/api/analyze-exam", async (req, res) => {
   const { lessons, field, student } = req.body;
   
   try {
-    const userKey = req.headers["x-gemini-key"] as string || req.body?.geminiKey as string;
-    const ai = getAI(userKey);
+    const ai = getAI(req, res);
     if (!ai) {
       return res.json(getOfflineExamAnalysis(lessons, field));
     }
@@ -548,13 +769,13 @@ ${JSON.stringify(lessons, null, 2)}${priorityInfo}
     return res.json(resultJson);
   } catch (error: any) {
     if (error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("quota")) {
-      console.warn("Exam analysis quota exhausted. Using offline fallback.");
-    } else if (error?.message?.includes("PERMISSION_DENIED")) {
-      console.warn("Exam analysis API key lacks permissions. Using offline fallback.");
+      console.log("Exam analysis quota exhausted. Using offline fallback.");
+    } else if (error?.message?.includes("PERMISSION_DENIED") || error?.message?.includes("Permission denied") || error?.message?.includes("suspended") || error?.message?.includes("UNAUTHENTICATED") || error?.message?.includes("invalid authentication")) {
+      console.log("Exam analysis API key lacks permissions. Using offline fallback.");
     } else if (error?.message?.includes("leaked")) {
-      console.warn("Exam analysis API key issue detected. Using offline fallback.");
+      console.log("Exam analysis API key issue detected. Using offline fallback.");
     } else {
-      console.warn("Error analyzing exam with Gemini (Using offline fallback):", error);
+      console.log("API Error caught (Using offline fallback) in Exam analysis.");
     }
     return res.json(getOfflineExamAnalysis(lessons, field));
   }
@@ -566,8 +787,7 @@ app.post("/api/psychology-analysis", async (req, res) => {
   const { student, qAnxiety, qFocus, qPerfectionism, qSleep, qStamina } = req.body;
 
   try {
-    const userKey = req.headers["x-gemini-key"] as string || req.body?.geminiKey as string;
-    const ai = getAI(userKey);
+    const ai = getAI(req, res);
     if (!ai) {
       return res.json(getOfflinePsychologyAnalysis(qAnxiety, qFocus, qPerfectionism, qSleep, qStamina, student));
     }
@@ -622,13 +842,13 @@ JSON schema:
 
   } catch (error: any) {
     if (error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("quota")) {
-      console.warn("Psychology analysis quota exhausted. Using offline fallback.");
-    } else if (error?.message?.includes("PERMISSION_DENIED")) {
-      console.warn("Psychology analysis API key lacks permissions. Using offline fallback.");
+      console.log("Psychology analysis quota exhausted. Using offline fallback.");
+    } else if (error?.message?.includes("PERMISSION_DENIED") || error?.message?.includes("Permission denied") || error?.message?.includes("suspended") || error?.message?.includes("UNAUTHENTICATED") || error?.message?.includes("invalid authentication")) {
+      console.log("Psychology analysis API key lacks permissions. Using offline fallback.");
     } else if (error?.message?.includes("leaked")) {
-      console.warn("Psychology analysis API key issue detected. Using offline fallback.");
+      console.log("Psychology analysis API key issue detected. Using offline fallback.");
     } else {
-      console.warn("Error running Gemini Psychology Analysis (Using offline fallback):", error);
+      console.log("API Error caught (Using offline fallback) in Psychology analysis.");
     }
     return res.json(getOfflinePsychologyAnalysis(qAnxiety, qFocus, qPerfectionism, qSleep, qStamina, student));
   }
@@ -713,13 +933,16 @@ app.get("/api/payment/verify", async (req, res) => {
 // Endpoint to test AI Connection for different sections as requested by the user
 app.post("/api/test-ai-connection", async (req, res) => {
   console.log("POST /api/test-ai-connection called for section:", req.body?.section);
-  const userKey = req.headers["x-gemini-key"] as string || req.body?.geminiKey as string;
+  const userKey = req.headers["x-gemini-key"] as string || req.headers["x-openrouter-key"] as string || req.body?.geminiKey as string || req.body?.openRouterKey as string;
   const testSection = req.body?.section || "chat"; // chat, goal, exam, psychology, motivational
+  
+  const activeKey = userKey || process.env.GEMINI_API_KEY || "";
+  const isOpenRouter = activeKey.trim().startsWith("sk-or-");
   
   const responseData: any = {
     section: testSection,
     apiKeySource: userKey ? "Custom Client Key (LocalStorage)" : "Environment Secret (Cloud Run)",
-    configuredModel: "gemini-2.5-flash",
+    configuredModel: isOpenRouter ? "OpenRouter (GPT or other)" : "gemini-2.5-flash",
     activeKeyMasked: userKey 
       ? `${userKey.substring(0, 7)}...${userKey.substring(userKey.length - 4)}` 
       : (process.env.GEMINI_API_KEY 
@@ -728,7 +951,7 @@ app.post("/api/test-ai-connection", async (req, res) => {
   };
 
   try {
-    const ai = getAI(userKey);
+    const ai = getAI(req, res);
     if (!ai) {
       responseData.connected = false;
       responseData.errorMessage = "کلید دسترسی معتبری از گوگل برای راه‌اندازی یافت نشد. سیستم در وضعیت آفلاین (نظیره‌یابی کایزن) قرار دارد.";
@@ -757,14 +980,72 @@ app.post("/api/test-ai-connection", async (req, res) => {
     responseData.connected = true;
     responseData.responseTimeMs = parseInt(elapsed);
     responseData.sampleReply = response.text?.trim() || "اتصال موفق ولی فاقد خروجی متنی";
-    responseData.actualModelUsed = "Google Gemini 2.5 Flash";
+    responseData.actualModelUsed = userKey?.startsWith("sk-or-") ? "OpenRouter Models" : "Google Gemini 2.5 Flash";
     
     return res.json(responseData);
   } catch (error: any) {
     responseData.connected = false;
-    responseData.errorMessage = error?.message || "خطای ناگهانی ارتباطی با سرورهای ممیزی گوگل رخ داد.";
+    let errorMsg = error?.message || "خطای ناگهانی ارتباطی با سرورهای ممیزی گوگل رخ داد.";
+    const errStr = errorMsg.toLowerCase();
+    
+    if (errStr.includes("resource_exhausted") || errStr.includes("quota") || errStr.includes("429")) {
+      errorMsg = "سقف مجاز استفاده از این کلید به پایان رسیده است (Quota Exceeded). لطفا یک کلید جدید ایجاد کنید یا مدتی صبر کنید.";
+    } else if (errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended")) {
+      errorMsg = "این کلید مسدود شده است (Suspended). لطفاً یک کلید جدید ایجاد کنید.";
+    } else if (errStr.includes("api key not valid") || errStr.includes("api_key_invalid")) {
+      errorMsg = "کلید وارد شده نامعتبر است. لطفا کلید را به درستی وارد کنید.";
+    }
+    
+    responseData.errorMessage = errorMsg;
     responseData.fallbackUsed = "موتور آفلاین شبیه‌ساز خلاق کایزن";
     return res.json(responseData);
+  }
+});
+
+// API Sandbox endpoint for testing AI models from Admin panel
+app.post("/api/sandbox", async (req, res) => {
+  let { provider, apiKey, prompt } = req.body;
+  const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+
+  if (!prompt || typeof prompt !== "string") {
+    return res.status(400).json({ success: false, error: "Prompt is required." });
+  }
+
+  if (!keyToUse) {
+    // If no key provided, we can simulate a response, or return error. Admin needs real testing.
+    return res.status(400).json({ success: false, error: "لطفا ابتدا یک کلید دسترسی معتبر (API Key) ثبت کنید." });
+  }
+
+  const start = performance.now();
+  try {
+    // Basic detection if openrouter
+    let adapterType = provider;
+    if (keyToUse.trim().startsWith("sk-or-")) {
+      adapterType = "OpenRouter";
+    }
+
+    if (adapterType === "Google Gemini" || adapterType === "OpenRouter" || !adapterType) {
+      const tempAi = new AIAdapter(keyToUse);
+      const result = await tempAi.models.generateContent({
+        model: "gemini-2.5-flash", 
+        contents: prompt
+      });
+      const reply = result.text || "پاسخ خالی است.";
+      return res.json({ 
+        success: true, 
+        reply,
+        responseTimeMs: Math.round(performance.now() - start),
+        model: adapterType === "OpenRouter" ? "OpenRouter Endpoint" : "Gemini 2.5 Flash"
+      });
+    } else {
+      return res.status(400).json({ success: false, error: `پروایدر ${adapterType} هنوز پشتیبانی نمی‌شود.` });
+    }
+  } catch (err: any) {
+    let errorMsg = err.message || "خطای ناشناخته";
+    if (err.cause?.status === 401 || err.cause?.status === 403 || errorMsg.includes("API_KEY_INVALID")) {
+      errorMsg = "کلید API نامعتبر است یا منقضی شده است. لطفا کلید را بررسی کنید.";
+    }
+    return res.status(500).json({ success: false, error: errorMsg, responseTimeMs: Math.round(performance.now() - start) });
   }
 });
 
@@ -777,10 +1058,10 @@ app.post("/api/test-provider", async (req, res) => {
 
   const start = performance.now();
   try {
-    if (provider === "Google Gemini") {
-      const tempAi = new GoogleGenAI({ apiKey });
+    if (provider === "Google Gemini" || provider === "OpenRouter") {
+      const tempAi = new AIAdapter(apiKey);
       await tempAi.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.5-flash", // OpenRouter in our AIAdapter maps to openrouter chat completions
         contents: "test"
       });
       return res.json({ valid: true, responseTimeMs: parseInt((performance.now() - start).toFixed(0)) });
@@ -812,7 +1093,239 @@ app.post("/api/test-provider", async (req, res) => {
       return res.json({ valid: true, responseTimeMs: parseInt((performance.now() - start).toFixed(0)) });
     }
   } catch (error: any) {
-    return res.status(400).json({ valid: false, error: error.message || "Invalid API key" });
+    let errorMsg = "";
+    if (typeof error?.message === "string") {
+      errorMsg = error.message;
+    } else if (typeof error === "string") {
+      errorMsg = error;
+    } else {
+      try {
+        errorMsg = JSON.stringify(error);
+      } catch (e) {
+        errorMsg = "Unknown error";
+      }
+    }
+
+    if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("quota") || errorMsg.includes("429")) {
+      errorMsg = "سقف مجاز استفاده از این کلید به پایان رسیده است (Quota Exceeded). لطفا یک کلید جدید ایجاد کنید یا از حساب پولی استفاده کنید.";
+    } else if (errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("Permission denied") || errorMsg.includes("suspended")) {
+      errorMsg = "این کلید مسدود شده است (Suspended). لطفاً یک کلید جدید ایجاد کنید.";
+    } else if (errorMsg.includes("API key not valid") || errorMsg.includes("API_KEY_INVALID") || errorMsg.includes("UNAUTHENTICATED") || errorMsg.includes("invalid authentication")) {
+      errorMsg = "کلید وارد شده نامعتبر است. لطفا کلید را به درستی کپی کنید.";
+    } else if (errorMsg.includes("402") || errorMsg.includes("credits")) {
+      errorMsg = "موجودی این حساب کافی نیست. لطفا حساب خود را در OpenRouter شارژ کنید.";
+    }
+    return res.status(400).json({ valid: false, error: errorMsg });
+  }
+});
+
+// Dynamic AI Question Generator with detailed developer telemetry tags
+app.post("/api/generate-quiz-question", async (req, res) => {
+  const { subject, difficulty, customTopic } = req.body;
+  const start = performance.now();
+  
+  // Define fallback / default questions in case AI is completely offline or fails
+  const offlineFallbacks: Record<string, any[]> = {
+    "زیست‌شناسی": [
+      {
+        id: "Q-OFFLINE-BIO-1",
+        subject: "زیست‌شناسی",
+        title: "غشای سلولی و انتقال فعال",
+        text: "کدام گزینه درباره پمپ سدیم-پتاسیم در غشای یک نورون حرکتی مغز درست است؟",
+        options: [
+          "به ازای خروج هر ۳ یون سدیم، ۲ یون پتاسیم را با مصرف یک مولکول ATP وارد می‌کند.",
+          "فعالیت آن همواره غلظت سدیم درون سلول را بالاتر از بیرون نگه می‌دارد.",
+          "تنها در هنگام تولید پتانسیل عمل شروع به کار کرده و به سرعت غیرفعال می‌شود.",
+          "با خروج یون سدیم، غلظت آب درون نورون را به شدت افزایش می‌دهد."
+        ],
+        correctIdx: 0,
+        explanation: "گزینه ۱ پاسخ صحیح است. پمپ سدیم پتاسیم یک پروتئین غشایی ناقل فعال است که با مصرف ATP سه یون Na+ را خارج و دو Na+ را وارد می‌کند. سایر گزینه‌ها نادرست هستند چون غلظت سدیم بیرون همیشه بیشتر است و پمپ همواره فعال است تا پتانسیل استراحت را حفظ کند.",
+        trapType: "تله جابجایی تعداد یون‌ها یا غلظت درون سلولی که معمولاً دانش‌آموزان در استرس آزمون اشتباه می‌کنند.",
+        difficulty: difficulty || "سخت",
+        importance: "high"
+      }
+    ],
+    "شیمی": [
+      {
+        id: "Q-OFFLINE-CHEM-1",
+        subject: "شیمی",
+        title: "محلول‌ها و غلظت‌ها",
+        text: "در دمای معین غلظت یون هیدرونیوم در محلول اسیدی با pH برابر ۳ چند برابر غلظت آن در محلول دگر با pH برابر ۵ است؟",
+        options: [
+          "۱۰۰ برابر",
+          "۱۰ برابر",
+          "۲ برابر",
+          "۰.۰۱ برابر"
+        ],
+        correctIdx: 0,
+        explanation: "اسید قوی‌تر دارای pH کمتر است. تفاوت pH برابر ۲ به معنی تفاوت غلظت ۱۰ به توان ۲ برابر یعنی ۱۰۰ برابر می‌باشد.",
+        trapType: "تله‌ی عکس پنداشتن نسبت غلظت با تغییرات یون هیدرونیوم در مقیاس لگاریتمی.",
+        difficulty: difficulty || "سخت",
+        importance: "high"
+      }
+    ],
+    "ریاضی": [
+      {
+        id: "Q-OFFLINE-MATH-1",
+        subject: "ریاضی",
+        title: "مشتق و پیوستگی",
+        text: "کدام یک از جملات زیر درباره مشتق‌پذیری توابع در بازه مفروض همواره برقرار است؟",
+        options: [
+          "هر تابع پیوسته‌ای در بازه مفروض قطعا مشتق‌پذیر نیز هست.",
+          "هر تابع مشتق‌پذیری در بازه مفروض قطعا پیوسته است.",
+          "نقاط عطف تابع همواره دارای مشتق اول برابر صفر می‌باشند.",
+          "تابع پیوسته لزوما فاقد نقطه گوشه‌ای یا عطف می‌باشد."
+        ],
+        correctIdx: 1,
+        explanation: "طبق قضیه اساسی حساب دیفرانسیل، شرط لازم برای مشتق‌پذیری یک تابع در یک نقطه، پیوسته بودن آن در آن نقطه است. اما عکس آن برقرار نیست (مثلا تابع قدر مطلق در صفر پیوسته است ولی مشتق‌پذیر نیست).",
+        trapType: "استفاده غلط از عکس قضیه منطقی پیوستگی و مشتق‌پذیری.",
+        difficulty: difficulty || "متوسط",
+        importance: "high"
+      }
+    ],
+    "فیزیک": [
+      {
+        id: "Q-OFFLINE-PHYS-1",
+        subject: "فیزیک",
+        title: "الکتریسیته و مدارها",
+        text: "با افزایش مقاومت متغیر در یک مدار ساده تک‌حلقه که دارای باتری با مقاومت درونی غیرصفر است، اختلاف پتانسیل دو سر باتری چگونه تغییر می‌کند؟",
+        options: [
+          "کاهش می‌یابد.",
+          "افزایش می‌یابد.",
+          "تغییری نمی‌کند.",
+          "ابتدا کاهش و سپس افزایش پیدا می‌کند."
+        ],
+        correctIdx: 1,
+        explanation: "فرمول پتانسیل ترمینال باتری V = E - ir است. با افزایش مقاومت خارجی مدار، جریان کل (i) کاهش می‌یابد. کاهش i باعث کاهش بخش افت پتانسیل درونی (ir) شده و در نتیجه پتانسیل ترمینال V افزایش می‌یابد و به نیروی محرکه E نزدیک‌تر می‌شود.",
+        trapType: "تله‌ی پنداشتن اینکه پتانسیل دو سر همواره با مقاومت خارجی رابطه عکس دارد.",
+        difficulty: difficulty || "سخت",
+        importance: "high"
+      }
+    ]
+  };
+
+  const defaultQuestions = offlineFallbacks[subject] || [
+    {
+      id: "Q-OFFLINE-GEN-1",
+      subject: subject || "عمومی",
+      title: "مفهوم پایه و عارضه‌یابی",
+      text: `یک سوال تستی ارزشمند درباره مبحث (${customTopic || subject || "تحلیل تحصیلی"}) طراحی آزمون های شبیه‌ساز ترنم مهر.`,
+      options: [
+        "پالت کایزن و بهبود مستمر عادات ذهنی تستی",
+        "تمرکز صِرف روی تست زنی بدون تحلیل بهداشت روان",
+        "حذف دوره‌های مرور دوره‌ای مباحث پرضریب کنکور",
+        "کمال‌گرایی منفی در حل سوالات وقت‌گیر و تله‌دار"
+      ],
+      correctIdx: 0,
+      explanation: "سیستم کایزن ترنم مهر بر بهبود مداوم و تحلیل بهداشت روان تاکید دارد.",
+      trapType: "وسواس کمال‌گرایی در مدیریت تست‌ها",
+      difficulty: "سخت",
+      importance: "medium"
+    }
+  ];
+
+  try {
+    const ai = getAI(req, res);
+    if (!ai) {
+      const selected = defaultQuestions[Math.floor(Math.random() * defaultQuestions.length)];
+      if (customTopic && selected.id === "Q-OFFLINE-GEN-1") {
+        selected.text = `یک سوال تستی ارزشمند درباره مبحث تخصصی (${customTopic}) منطبق بر آزمون های شبیه‌سازی کایزن درگاه ترنم مهر.`;
+      }
+      return res.json({
+        success: true,
+        question: selected,
+        metadata: {
+          model: "Kaizen Local Logic Suite",
+          mode: "offline",
+          timestamp: new Date().toISOString(),
+          latencyMs: Math.round(performance.now() - start),
+          apiStatus: "هیچ کلید فعالی در پنل ادمین یافت نشد. برای تست زنده کلید اختصاصی خود را وارد کنید."
+        }
+      });
+    }
+
+    const aiPrompt = `You are an elite, highly experienced question designer for the Iranian National College Entrance Exam (Konkur) for the subject "${subject || "زیست‌شناسی"}".
+Generate EXACTLY ONE high-quality, conceptual, and difficult multiple-choice test question in Persian.
+The question MUST cover the following precise topic: "${customTopic || "مفاهیم خلاقانه و پر بازده کتاب درسی"}".
+Focus on designing a difficult but logically flawless question with difficulty level: "${difficulty || "سخت"}".
+Include a strong psychological or conceptual test trap ("تله تستی") that matches high-yield school curriculum standards.
+
+You must respond with EXACTLY a valid JSON object matching this structure (do not wrap in markdown or any other characters, and use Persian language for user-facing values):
+{
+  "id": "Q-AI-${Math.floor(Math.random() * 9000 + 1000)}",
+  "subject": "${subject || "زیست‌شناسی"}",
+  "title": "A brief Persian title of the subtopic inside ${subject}",
+  "text": "The full Persian question, written in a clear, educational, standard Konkur style, with high precision and realistic choices.",
+  "options": [
+    "Persian Option 1",
+    "Persian Option 2",
+    "Persian Option 3",
+    "Persian Option 4"
+  ],
+  "correctIdx": 0, // 0 to 3 integer
+  "explanation": "Extremely detailed Persian explanation showing why this is correct, how to avoid the trap, and why other options are incorrect.",
+  "trapType": "Explain the psychological or conceptual trap of the correct or wrong options in Persian in 1 elegant sentence.",
+  "difficulty": "${difficulty || "سخت"}",
+  "importance": "high"
+}
+
+Verify that correctIdx is a valid number from 0 to 3 and references the actual correct option inside the options array. Ensure all JSON fields are surrounded by double quotes.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: aiPrompt }] }],
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const replyText = response.text?.trim() || "";
+    let questionObj;
+    try {
+      questionObj = JSON.parse(replyText);
+    } catch (e) {
+      const jsonMatch = replyText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        questionObj = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("Failed to parse Gemini output as JSON: " + replyText.substring(0, 50));
+      }
+    }
+
+    // Basic structural validation
+    if (!questionObj.title || !questionObj.text || !Array.isArray(questionObj.options) || questionObj.options.length < 4) {
+      throw new Error("Generated question structure was invalid.");
+    }
+
+    return res.json({
+      success: true,
+      question: questionObj,
+      metadata: {
+        model: "Google Gemini 2.5-flash",
+        mode: "live",
+        timestamp: new Date().toISOString(),
+        latencyMs: Math.round(performance.now() - start),
+        apiStatus: "ارتباط موفق زنده (Real-Time API)"
+      }
+    });
+
+  } catch (error: any) {
+    console.error("AI Question Generation Error:", error);
+    const selectedFallback = defaultQuestions[Math.floor(Math.random() * defaultQuestions.length)];
+    if (customTopic && selectedFallback.id === "Q-OFFLINE-GEN-1") {
+      selectedFallback.text = `یک سوال تستی ارزشمند درباره مبحث تخصصی (${customTopic}) منطبق بر آزمون های شبیه‌سازی کایزن درگاه ترنم مهر.`;
+    }
+    return res.json({
+      success: true,
+      question: selectedFallback,
+      metadata: {
+        model: "Kaizen Local Simulator Mode",
+        mode: "fallback",
+        timestamp: new Date().toISOString(),
+        latencyMs: Math.round(performance.now() - start),
+        apiStatus: "انتقال خودکار به شبیه‌ساز پایدار: " + (error?.message || "خطای ارتباطی با API گوگل")
+      }
+    });
   }
 });
 

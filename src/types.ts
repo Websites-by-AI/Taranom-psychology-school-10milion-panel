@@ -1,3 +1,21 @@
+export interface AITestHistoryEntry {
+  timestamp: number;
+  status: "success" | "error";
+  errorMsg?: string;
+  responseTimeMs?: number;
+}
+
+export interface AIProviderKey {
+  id: string;
+  provider: "Google Gemini" | "OpenAI" | "Anthropic" | "Custom" | "OpenRouter";
+  key: string;
+  label: string;
+  status: "idle" | "testing" | "success" | "error";
+  errorMsg?: string;
+  responseTimeMs?: number;
+  testHistory?: AITestHistoryEntry[];
+}
+
 export interface Student {
   id: string;
   name: string; // نام داوطلب آزمون سراسری کنکور ترنم مهر
