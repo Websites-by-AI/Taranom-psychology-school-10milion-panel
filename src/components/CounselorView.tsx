@@ -28,6 +28,32 @@ interface CounselorViewProps {
 export default function CounselorView({ student, onNavigate }: CounselorViewProps) {
   const [activeTab, setActiveTab] = useState<"chat" | "sessions">("chat");
 
+  // --- ACTIVE API PROVIDER IDENTIFIER ---
+  const [activeProvider, setActiveProvider] = useState<string>("Google Gemini");
+
+  useEffect(() => {
+    const checkProvider = () => {
+      try {
+        const saved = localStorage.getItem("arateb_ai_provider_keys");
+        if (saved) {
+          const keys = JSON.parse(saved);
+          if (Array.isArray(keys) && keys.length > 0) {
+            setActiveProvider(keys[0].provider || "Google Gemini");
+            return;
+          }
+        }
+        const legacyKey = localStorage.getItem("arateb_gemini_api_key");
+        if (legacyKey) {
+          setActiveProvider("Google Gemini");
+        }
+      } catch(e) {}
+    };
+
+    checkProvider();
+    window.addEventListener("storage", checkProvider);
+    return () => window.removeEventListener("storage", checkProvider);
+  }, []);
+
   // --- LIVE CHAT STATE ---
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -40,6 +66,7 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
   const [inputMessage, setInputMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
+  const [lastDetailedError, setLastDetailedError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const quickQuestions = [
@@ -157,6 +184,7 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
     setInputMessage("");
     setSending(true);
     setConnectionError(false);
+    setLastDetailedError(null);
 
     try {
       const chatHistory = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
@@ -168,13 +196,20 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-gemini-key": geminiKey,
-          "x-ai-provider-keys": providerKeys
+          "x-gemini-key": geminiKey ? encodeURIComponent(geminiKey) : "",
+          "x-ai-provider-keys": providerKeys ? encodeURIComponent(providerKeys) : ""
         },
         body: JSON.stringify({ message: textToSend, history: chatHistory })
       });
 
       if (res.ok) {
+        const resolvedHeader = res.headers.get("x-ai-resolved-provider");
+        if (resolvedHeader) {
+          try {
+            const providerName = decodeURIComponent(resolvedHeader);
+            setActiveProvider(providerName);
+          } catch(e) {}
+        }
         const data = await res.json();
         const modelMsg: ChatMessage = {
           id: (Date.now() + 1).toString(),
@@ -183,11 +218,22 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
           timestamp: new Date().toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" })
         };
         setMessages((prev) => [...prev, modelMsg]);
+        
+        // Even if status is 200, it might be an offline simulation fallback
+        if (data.isOfflineFallback) {
+          setConnectionError(true);
+          setLastDetailedError(data.error || "استفاده از شبیه‌ساز آفلاین به دلیل خطا در کلید یا اتمام سقف سهمیه مجاز (Quota)");
+          addSystemLog("پاسخ شبیه‌ساز آفلاین هوش مصنوعی", student.name || "کاربر", `خطا: ${data.error || "اتمام کوتا یا نقص لایسنس"}`);
+        } else {
+          setConnectionError(false);
+          setLastDetailedError(null);
+        }
       } else {
-        // Log connection issue but respond with the client offline generator anyway for a flawless UX!
+        const errText = await res.text();
         console.warn("API returned non-OK status. Falling back to local adviser engine.");
         addSystemLog("خطای پاسخ هوش مصنوعی", student.name || "کاربر", `پاسخ ناموفق سرور با خطای کد ${res.status}. انتقال خودکار به شبیه‌ساز آفلاین با موفقیت انجام شد.`);
         setConnectionError(true);
+        setLastDetailedError(`HTTP Status ${res.status}: ${errText ? errText.substring(0, 150) : "No response body"}`);
         
         // Give client fallback reply so counseling never appears broken
         setTimeout(() => {
@@ -202,8 +248,10 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
     } catch (err: any) {
       console.error("Network/Chat Error:", err);
       // Log connection error to diagnostic logs
-      addSystemLog("خطای شبکه هوش مصنوعی", student.name || "کاربر", `خطای فیزیکی اتصال به سرور: ${err.message || err.toString()}. کاربر بدون وقفه به هسته مشاوره لوکال کایزن متصل ماند.`);
+      const errMsgDetail = err.message || err.toString();
+      addSystemLog("خطای شبکه هوش مصنوعی", student.name || "کاربر", `خطای فیزیکی اتصال به سرور: ${errMsgDetail}. کاربر بدون وقفه به هسته مشاوره لوکال کایزن متصل ماند.`);
       setConnectionError(true);
+      setLastDetailedError(`خطای شبکه/سخت‌افزاری: ${errMsgDetail}`);
       
       // Keep UX absolutely perfect: let local counselor respond immediately
       setTimeout(() => {
@@ -426,7 +474,12 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
                   </div>
                   <div>
                     <span className="font-bold text-slate-800 text-sm block">دکتر رادان (مشاور علمی ارشد ترنم مهر)</span>
-                    <span className="text-[10px] text-emerald-600 font-bold block">برخط ● آماده پاسخ‌گویی به ابهامات علمی</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                      <span className="text-[10px] text-emerald-600 font-bold block">برخط ● آماده پاسخ‌گویی به ابهامات علمی</span>
+                      <span className="text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5">
+                        سرویس فعال: {activeProvider}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-blue-950 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">داوطلب علمی: {student.name}</span>
@@ -489,11 +542,31 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
                 )}
                 
                 {connectionError && (
-                  <div className="mx-auto max-w-sm p-3 bg-amber-50 border border-amber-100 rounded-xl text-center shadow-sm animate-in zoom-in duration-300">
-                    <p className="text-[10px] text-amber-800 font-black leading-relaxed">
-                      ⚠️ بروز اختلال موقت در اتصال به سرور هوش مصنوعی کنکور. 
-                      <br/>در حال تلاش برای برقراری مجدد ارتباط...
+                  <div className="mx-auto max-w-md p-4 bg-rose-50 border border-rose-150 rounded-2xl text-right shadow-sm animate-in zoom-in duration-300 space-y-2.5">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-[10px] font-black text-rose-850 flex items-center gap-1.5 font-sans">
+                        ⚠️ وضعیت: اتصال به هسته آفلاین (شبیه‌ساز کایزن)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const errorText = lastDetailedError || "Network/Chat error combined with API Quota Exhausted.";
+                          navigator.clipboard.writeText(errorText);
+                          alert("جزئیات خطای هوش مصنوعی در حافظه کپی شد! می‌توانید آن را اینجا پیست کنید. 📋");
+                        }}
+                        className="bg-white hover:bg-rose-100 border border-rose-200 text-rose-700 px-3 py-1.5 rounded-xl text-[9px] font-black transition-all active:scale-95 shrink-0 shadow-sm"
+                      >
+                        📋 کپی خطای خام هوش مصنوعی
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-rose-700 leading-relaxed font-semibold font-sans">
+                      سیستم هوش مصنوعی ترنم مهر به دلیل محدودیت‌های لایسنس یا کلید عمومی سرور، به صورت خودکار به پکیج آفلاین کایزن منتقل گشت تا فعالیت مشاوره‌ای داوطلب دچار وقفه نشود. برای راه‌اندازی مجدد هوش مصنوعی زنده، می‌توانید این خطای کپی شده را به تیم پشتیبان ارائه دهید یا کلید خام اختصاصی خود را در بخش ادمین ثبت کنید.
                     </p>
+                    {lastDetailedError && (
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-[9px] font-mono text-rose-450 overflow-x-auto max-h-24 text-left scrollbar-thin" style={{ direction: "ltr" }}>
+                        {lastDetailedError}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div ref={messagesEndRef} />

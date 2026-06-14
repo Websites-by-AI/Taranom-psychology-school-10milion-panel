@@ -343,10 +343,10 @@ export default function CustomQuizGenerator({ student, onRefreshStats }: CustomQ
           // Pass first active keys to headers
           const activeKeyObj = keys.find((k: any) => k.isActive && k.key);
           if (activeKeyObj) {
-            headers["x-gemini-key"] = activeKeyObj.key;
-            headers["x-openrouter-key"] = activeKeyObj.key;
+            headers["x-gemini-key"] = encodeURIComponent(activeKeyObj.key);
+            headers["x-openrouter-key"] = encodeURIComponent(activeKeyObj.key);
           }
-          headers["x-ai-provider-keys"] = savedKeysRaw;
+          headers["x-ai-provider-keys"] = encodeURIComponent(savedKeysRaw);
         } catch(e){}
       }
 

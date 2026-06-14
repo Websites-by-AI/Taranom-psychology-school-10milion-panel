@@ -172,10 +172,23 @@ class AIAdapter {
   }
 }
 
+function getSafeHeader(req: express.Request, name: string): string {
+  const val = req.headers[name];
+  if (!val) return "";
+  const strVal = Array.isArray(val) ? val[0] : (val as string);
+  if (!strVal) return "";
+  try {
+    if (strVal.includes("%")) {
+      return decodeURIComponent(strVal);
+    }
+  } catch (e) {}
+  return strVal;
+}
+
 function getRequestKeys(req: express.Request): string[] {
   let fallbackKeys: string[] = [];
   try {
-    const rawAll = req.headers["x-ai-provider-keys"] as string;
+    const rawAll = getSafeHeader(req, "x-ai-provider-keys");
     if (rawAll) {
       const parsed = JSON.parse(rawAll);
       if (Array.isArray(parsed)) {
@@ -189,8 +202,8 @@ function getRequestKeys(req: express.Request): string[] {
     }
   } catch(e) {}
   
-  const k1 = req.headers["x-gemini-key"] as string;
-  const k2 = req.headers["x-openrouter-key"] as string;
+  const k1 = getSafeHeader(req, "x-gemini-key");
+  const k2 = getSafeHeader(req, "x-openrouter-key");
   const k3 = req.body?.geminiKey as string;
   const k4 = req.body?.openRouterKey as string;
   const k5 = req.query?.geminiKey as string;
@@ -202,12 +215,31 @@ function getRequestKeys(req: express.Request): string[] {
   return [...new Set(allKeys)];
 }
 
+function getProviderNameForKey(key: string, req: express.Request): string {
+  try {
+    const rawAll = getSafeHeader(req, "x-ai-provider-keys");
+    if (rawAll) {
+      const parsed = JSON.parse(rawAll);
+      if (Array.isArray(parsed)) {
+        const found = parsed.find(k => k.key === key);
+        if (found) return found.provider;
+      }
+    }
+  } catch(e) {}
+  if (key.startsWith("sk-or-")) return "OpenRouter";
+  if (key.startsWith("sk-")) return "OpenAI/Anthropic";
+  if (key === process.env.OPENROUTER_API_KEY) return "OpenRouter (Environment)";
+  return "Google Gemini";
+}
+
 class AIFallbackWrapper {
   private keys: string[];
+  private req: express.Request;
   private res?: express.Response;
 
-  constructor(keys: string[], res?: express.Response) {
+  constructor(keys: string[], req: express.Request, res?: express.Response) {
     this.keys = keys;
+    this.req = req;
     this.res = res;
   }
 
@@ -219,8 +251,12 @@ class AIFallbackWrapper {
           try {
             const ai = new AIAdapter(this.keys[i]);
             const result = await ai.models.generateContent(params);
-            if (i > 0 && this.res && !this.res.headersSent) {
-               this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
+            if (this.res && !this.res.headersSent) {
+               const providerName = getProviderNameForKey(this.keys[i], this.req);
+               this.res.setHeader("x-ai-resolved-provider", encodeURIComponent(providerName));
+               if (i > 0) {
+                  this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
+               }
             }
             return result;
           } catch(e: any) {
@@ -247,8 +283,12 @@ class AIFallbackWrapper {
                 const ai = new AIAdapter(this.keys[i]);
                 const chat = ai.chats.create(paramsClone);
                 const result = await chat.sendMessage(msgParams);
-                if (i > 0 && this.res && !this.res.headersSent) {
-                   this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
+                if (this.res && !this.res.headersSent) {
+                   const providerName = getProviderNameForKey(this.keys[i], this.req);
+                   this.res.setHeader("x-ai-resolved-provider", encodeURIComponent(providerName));
+                   if (i > 0) {
+                      this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
+                   }
                 }
                 return result;
               } catch(e: any) {
@@ -270,7 +310,7 @@ function getAI(req: express.Request, res?: express.Response) {
     if (keys.length === 0) {
       return null;
     }
-    return new AIFallbackWrapper(keys, res);
+    return new AIFallbackWrapper(keys, req, res);
   } catch (err) {
     console.error("Failed to initialize AI client:", err);
     return null;
@@ -606,18 +646,22 @@ app.post("/api/chat", async (req, res) => {
     return res.json({ reply });
   } catch (error: any) {
     const errStr = (error?.message || error?.toString() || "").toLowerCase();
+    const rawErrorMsg = error?.message || error?.toString() || "Unknown server-side Gemini API or network error";
     console.log("API Error in Konkur chat with Gemini (caught).", errStr.substring(0, 150));
+    
+    let fallbackReply = "";
     if (errStr.includes("resource_exhausted") || errStr.includes("quota") || errStr.includes("429")) {
-      return res.status(200).json({
-        reply: "⚠️ همکار/کاربر ارجمند، سقف مجاز استفاده از کلید هوش مصنوعی (Quota Exceeded) در این لحظه به پایان رسیده است.\n\nاز آنجایی که کلید وارد شده احتمالاً از نوع رایگان (Free Tier) است، با محدودیت‌های تعدادی درخواست از سمت گوگل مواجه شده است. شبکه برای جلوگیری از اختلال در کارنامه شما، به صورت خودکار به موتور آفلاین کایزن منتقل شده است.\n\nبرای ارتباط زنده، لطفاً دقایقی بعد تلاش کنید یا یک کلید رایگان جدید در بخش ادمین ثبت نمایید. ❤️"
-      });
+      fallbackReply = "⚠️ همکار/کاربر ارجمند، سقف مجاز استفاده از کلید هوش مصنوعی (Quota Exceeded) در این لحظه به پایان رسیده است.\n\nاز آنجایی که کلید وارد شده احتمالاً از نوع رایگان (Free Tier) است، با محدودیت‌های تعدادی درخواست از سمت گوگل مواجه شده است. شبکه برای جلوگیری از اختلال در کارنامه شما، به صورت خودکار به موتور آفلاین کایزن منتقل شده است.\n\nبرای ارتباط زنده، لطفاً دقایقی بعد تلاش کنید یا یک کلید رایگان جدید در بخش ادمین ثبت نمایید. ❤️";
     } else if (errStr.includes("leaked") || errStr.includes("403") || errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended") || errStr.includes("compromised")) {
-      return res.status(200).json({
-        reply: "⚠️ همکار ارجمند، کلید دسترسی (API Key) پیش‌فرض سرور به دلیل انتشار عمومی توسط گوگل غیرفعال و جزء کلیدهای لو رفته (Leaked Key) طبقه‌بندی شده است.\n\nمن دکتر رادان هستم. نگران نباشید! برای فعال‌سازی مجدد و برقراری ارتباط پرسرعت زنده با مدل‌های پرقدرت هوش مصنوعی Google Gemini، کافیست:\n۱. یک کلید دسترسی خام و رایگان از پنل Google AI Studio (ai.google.dev) دریافت کنید.\n۲. وارد پنل ادمین آکادمی شوید و در بخش «🔎 خطایابی و پایش ماژول‌ها»، کلید جدید خود را در کادر تنظیمات هوش مصنوعی وارد و ثبت کنید.\n\nسیستم به قدری پیشرفته و باکیفیت طراحی شده که تا زمان تنظیم کلید اختصاصی توسط شما، پکیج هوشمند ما با شبیه‌سازهای حرفه‌ای و عینی (کایزن و روانشناسی تحصیلی) با ۱۰۰٪ پایداری فعال مانده تا خللی در کارنامه و فرآیندها رخ ندهد. ❤️"
-      });
+      fallbackReply = "⚠️ همکار ارجمند، کلید دسترسی (API Key) پیش‌فرض سرور به دلیل انتشار عمومی توسط گوگل غیرفعال و جزء کلیدهای لو رفته (Leaked Key) طبقه‌بندی شده است.\n\nمن دکتر رادان هستم. نگران نباشید! برای فعال‌سازی مجدد و برقراری ارتباط پرسرعت زنده با مدل‌های پرقدرت هوش مصنوعی Google Gemini، کافیست:\n۱. یک کلید دسترسی خام و رایگان از پنل Google AI Studio (ai.google.dev) دریافت کنید.\n۲. وارد پنل ادمین آکادمی شوید و در بخش «🔎 خطایابی و پایش ماژول‌ها»، کلید جدید خود را در کادر تنظیمات هوش مصنوعی وارد و ثبت کنید.\n\nسیستم به قدری پیشرفته و باکیفیت طراحی شده که تا زمان تنظیم کلید اختصاصی توسط شما، پکیج هوشمند ما با شبیه‌سازهای حرفه‌ای و عینی (کایزن و روانشناسی تحصیلی) با ۱۰۰٪ پایداری فعال مانده تا خللی در کارنامه و فرآیندها رخ ندهد. ❤️";
+    } else {
+      fallbackReply = getOfflineChatReply(message);
     }
+    
     return res.status(200).json({ 
-      reply: getOfflineChatReply(message)
+      reply: fallbackReply,
+      isOfflineFallback: true,
+      error: rawErrorMsg
     });
   }
 });
@@ -933,7 +977,7 @@ app.get("/api/payment/verify", async (req, res) => {
 // Endpoint to test AI Connection for different sections as requested by the user
 app.post("/api/test-ai-connection", async (req, res) => {
   console.log("POST /api/test-ai-connection called for section:", req.body?.section);
-  const userKey = req.headers["x-gemini-key"] as string || req.headers["x-openrouter-key"] as string || req.body?.geminiKey as string || req.body?.openRouterKey as string;
+  const userKey = getSafeHeader(req, "x-gemini-key") || getSafeHeader(req, "x-openrouter-key") || req.body?.geminiKey as string || req.body?.openRouterKey as string;
   const testSection = req.body?.section || "chat"; // chat, goal, exam, psychology, motivational
   
   const activeKey = userKey || process.env.GEMINI_API_KEY || "";

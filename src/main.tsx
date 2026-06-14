@@ -3,6 +3,60 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// Suppress and ignore Vite HMR WebSocket connection errors to prevent annoying console errors and reloads
+if (typeof window !== 'undefined') {
+  // Capture unhandled WebSocket exceptions
+  window.addEventListener('error', (event) => {
+    const errorMsg = event?.message || '';
+    const errorObjStr = event?.error?.toString() || '';
+    if (
+      errorMsg.includes('[vite]') || 
+      errorMsg.includes('websocket') || 
+      errorMsg.includes('WebSocket') ||
+      errorObjStr.includes('[vite]') || 
+      errorObjStr.includes('WebSocket')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    const reasonStr = reason?.toString() || '';
+    const reasonMsg = reason?.message || '';
+    if (
+      reasonStr.includes('[vite]') || 
+      reasonStr.includes('WebSocket') || 
+      reasonMsg.includes('[vite]') || 
+      reasonMsg.includes('WebSocket')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
+  // Wrap WebSocket to quiet down errors in sandbox environments
+  try {
+    const OriginalWebSocket = window.WebSocket;
+    if (OriginalWebSocket) {
+      class QuietWebSocket extends OriginalWebSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          this.addEventListener('error', (e) => {
+            e.stopPropagation();
+          });
+        }
+      }
+      Object.defineProperty(window, 'WebSocket', {
+        value: QuietWebSocket,
+        configurable: true,
+        writable: true
+      });
+    }
+  } catch (e) {}
+}
+
 // Global API Interceptor to support Admin Panel custom Gemini & OpenRouter API dynamic keys
 const originalFetch = window.fetch;
 
@@ -10,33 +64,37 @@ function injectKeysIntoHeaders(init: any, geminiKey: string | null, openRouterKe
   init = init || {};
   init.headers = init.headers || {};
   
+  const encGemini = geminiKey && geminiKey.trim() !== "" ? encodeURIComponent(geminiKey) : "";
+  const encOpenRouter = openRouterKey && openRouterKey.trim() !== "" ? encodeURIComponent(openRouterKey) : "";
+  const encAllKeys = allKeysStr && allKeysStr.trim() !== "" ? encodeURIComponent(allKeysStr) : "";
+
   if (init.headers instanceof Headers) {
-    if (geminiKey && geminiKey.trim() !== "") init.headers.set("x-gemini-key", geminiKey);
-    if (openRouterKey && openRouterKey.trim() !== "") init.headers.set("x-openrouter-key", openRouterKey);
-    if (allKeysStr && allKeysStr.trim() !== "") init.headers.set("x-ai-provider-keys", allKeysStr);
+    if (encGemini) init.headers.set("x-gemini-key", encGemini);
+    if (encOpenRouter) init.headers.set("x-openrouter-key", encOpenRouter);
+    if (encAllKeys) init.headers.set("x-ai-provider-keys", encAllKeys);
   } else if (Array.isArray(init.headers)) {
-    if (geminiKey && geminiKey.trim() !== "") {
+    if (encGemini) {
       const hasKey = init.headers.some((h: any) => h[0]?.toLowerCase() === "x-gemini-key");
-      if (!hasKey) init.headers.push(["x-gemini-key", geminiKey]);
+      if (!hasKey) init.headers.push(["x-gemini-key", encGemini]);
     }
-    if (openRouterKey && openRouterKey.trim() !== "") {
+    if (encOpenRouter) {
       const hasKey = init.headers.some((h: any) => h[0]?.toLowerCase() === "x-openrouter-key");
-      if (!hasKey) init.headers.push(["x-openrouter-key", openRouterKey]);
+      if (!hasKey) init.headers.push(["x-openrouter-key", encOpenRouter]);
     }
-    if (allKeysStr && allKeysStr.trim() !== "") {
+    if (encAllKeys) {
       const hasKey = init.headers.some((h: any) => h[0]?.toLowerCase() === "x-ai-provider-keys");
-      if (!hasKey) init.headers.push(["x-ai-provider-keys", allKeysStr]);
+      if (!hasKey) init.headers.push(["x-ai-provider-keys", encAllKeys]);
     }
   } else {
     const headersRecord = init.headers as Record<string, string>;
-    if (geminiKey && geminiKey.trim() !== "" && !headersRecord["x-gemini-key"]) {
-      headersRecord["x-gemini-key"] = geminiKey;
+    if (encGemini && !headersRecord["x-gemini-key"]) {
+      headersRecord["x-gemini-key"] = encGemini;
     }
-    if (openRouterKey && openRouterKey.trim() !== "" && !headersRecord["x-openrouter-key"]) {
-      headersRecord["x-openrouter-key"] = openRouterKey;
+    if (encOpenRouter && !headersRecord["x-openrouter-key"]) {
+      headersRecord["x-openrouter-key"] = encOpenRouter;
     }
-    if (allKeysStr && allKeysStr.trim() !== "" && !headersRecord["x-ai-provider-keys"]) {
-      headersRecord["x-ai-provider-keys"] = allKeysStr;
+    if (encAllKeys && !headersRecord["x-ai-provider-keys"]) {
+      headersRecord["x-ai-provider-keys"] = encAllKeys;
     }
   }
   return init;

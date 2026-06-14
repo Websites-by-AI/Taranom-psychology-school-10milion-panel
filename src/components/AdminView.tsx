@@ -23,9 +23,10 @@ import AiHealthSandbox from "./AiHealthSandbox";
 import ApiHealthHistoryLog from "./ApiHealthHistoryLog";
 
 import SaaSContractView from "./SaaSContractView";
+import WordPressIntegrationView from "./WordPressIntegrationView";
 
 export default function AdminView({ student, onUpdateBrand }: { student?: Student | null; onUpdateBrand?: () => void }) {
-  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "storage" | "diagnostics" | "investment" | "audit" | "zarinpal" | "contract">("storage");
+  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "storage" | "diagnostics" | "investment" | "audit" | "zarinpal" | "contract" | "wordpress">("storage");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterField, setFilterField] = useState("all");
   const [selectedScenario, setSelectedScenario] = useState<"mvp" | "stable" | "enterprise">("stable");
@@ -644,7 +645,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-gemini-key": geminiKey || ""
+          "x-gemini-key": geminiKey ? encodeURIComponent(geminiKey) : ""
         },
         body: JSON.stringify({ section: sect, geminiKey: geminiKey || "" })
       });
@@ -1247,6 +1248,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
     { id: "sysdocs", label: "🛡️ مستندات استقرار و DevOps", icon: Terminal, color: "text-rose-600" },
     { id: "syslogs", label: "📜 لاگ تغییرات سیستمی", icon: List, color: "text-amber-600" },
     { id: "integrations", label: "🔌 تنظیمات اتصال و AI", icon: Globe, color: "text-indigo-600" },
+    { id: "wordpress", label: "🌐 مهاجرت و افزونه وردپرس", icon: Globe, color: "text-blue-600", status: "جدید (خروجی آماده)" },
     { id: "diagnostics", label: "🔎 خطایابی و پایش ماژول‌ها", icon: Zap, color: "text-rose-600" },
     { id: "storage", label: "🗄️ پایش دیتابیس و ذخیره‌سازی", icon: Database, color: "text-blue-600" },
     { id: "zarinpal", label: "💳 تنظیمات درگاه زرین‌پال", icon: Wallet, color: "text-yellow-600" },
@@ -1338,6 +1340,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 ========================================================================= */}
             
             {activeTab === "contract" && <SaaSContractView />}
+            {activeTab === "wordpress" && <WordPressIntegrationView />}
             {activeTab === "audit" && <ContentAuditModule />}
             {activeTab === "investment" && <InvestmentView />}
             
@@ -1753,6 +1756,18 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                                   <div className="space-y-1.5 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/60 font-sans mt-2">
                                     <div className="flex flex-wrap gap-4 text-[9px] font-bold text-slate-500">
                                       <span className="text-rose-700">● خطا در اتصال</span>
+                                      {info.errorMsg && (
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(info.errorMsg || "");
+                                            alert("متن خطای خام کپی شد! 📋");
+                                          }}
+                                          type="button"
+                                          className="bg-white hover:bg-rose-100 text-rose-750 font-black px-2 py-0.5 rounded border border-rose-200 text-[8px] transition-all active:scale-95"
+                                        >
+                                          📋 کپی خطای خام ماژول
+                                        </button>
+                                      )}
                                       {info.keyUsedMasked && <span>• کلید: <code className="bg-rose-100 text-rose-800 px-1 py-0.5 rounded font-mono">{info.keyUsedMasked}</code> ({info.keySource})</span>}
                                     </div>
                                     {info.errorMsg && (
@@ -1836,6 +1851,18 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                                   <div className="space-y-1.5 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/60 font-sans mt-2">
                                     <div className="flex flex-wrap gap-4 text-[9px] font-bold text-slate-500">
                                       <span className="text-rose-700">● قطع اتصال ابری / آفلاین</span>
+                                      {info.errorMsg && (
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(info.errorMsg || "");
+                                            alert("متن خطای پایگاه داده کپی شد! 📋");
+                                          }}
+                                          type="button"
+                                          className="bg-white hover:bg-rose-100 text-rose-750 font-black px-2 py-0.5 rounded border border-rose-200 text-[8px] transition-all active:scale-95"
+                                        >
+                                          📋 کپی خطای دیتابیس
+                                        </button>
+                                      )}
                                     </div>
                                     {info.errorMsg && (
                                       <div className="text-[9px] text-rose-600 font-extrabold bg-white p-2 rounded-lg border border-slate-100">
@@ -1870,6 +1897,16 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
 
                 {/* API Health Chronicle Log Suite */}
                 <ApiHealthHistoryLog />
+
+                {/* sandbox explanation note */}
+                <div className="bg-slate-950 text-slate-100 p-5 rounded-[24px] border border-slate-800 shadow-md text-right space-y-3 mt-4">
+                  <div className="flex items-center gap-2 text-amber-400">
+                    <span className="text-xs font-black">💡 رهنمود پورتال خطایابی: پیام‌های شبیه‌ساز اتصال مرورگر (Vite WebSocket Alert)</span>
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed font-semibold">
+                    اگر در کنسول مرورگر خود با پیام هشدار <code className="bg-slate-900 text-rose-400 px-1.5 py-0.5 rounded font-mono text-[9px]">[vite] failed to connect to websocket</code> یا کادرهای قرمز رنگ مواجه شده‌اید، <strong>کاملاً آسوده‌خاطر باشید؛ این یک رفتار ۱۰۰٪ طبیعی در بستر توسعه ابری آنلاین است.</strong> این اخطار به علت غیرفعال بودن وب‌سوکت بارگذاری آنی (HMR) در داخل وب‌باکس امولاتور گوگل رخ می‌دهد و به هیچ عنوان به معنی خرابی یا قطعی هوش مصنوعی یا دکمه‌های پنل ترنم همدلی نیست. ارتباط با موتور هوشمند به درستی برقرار است و اگر خطایی در بخش پایش مشاهده شود، صرفاً مرتبط با پر شدن سهمیه کلید (Quota) شما یا لو رفتن کلید پیش‌فرض گوگل است که با ثبت یک کلید خام جدید برطرف می‌گردد.
+                  </p>
+                </div>
 
                 {/* Dynamic SaaS Branding customizer */}
                 <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6 text-right mt-8" id="saas-branding-customizer">

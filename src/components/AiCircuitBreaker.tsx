@@ -3,7 +3,7 @@ import { ShieldAlert } from 'lucide-react';
 import { AIProviderKey } from '../types';
 
 export default function AiCircuitBreaker() {
-  const [lastFail, setLastFail] = useState<{ timestamp: number, providerName: string } | null>(null);
+  const [lastFail, setLastFail] = useState<{ timestamp: number, providerName: string, activeProviderName?: string } | null>(null);
 
   useEffect(() => {
     let errorCount = 0;
@@ -68,7 +68,11 @@ export default function AiCircuitBreaker() {
             localStorage.setItem("arateb_gemini_api_key", defaultGemini.key);
           }
           
-          setLastFail({ timestamp: Date.now(), providerName: failingProvider.provider });
+          setLastFail({ 
+            timestamp: Date.now(), 
+            providerName: failingProvider.provider, 
+            activeProviderName: newKeys[0].provider 
+          });
           
           // Add Admin System Log
           const logRaw = localStorage.getItem('arateb_sys_logs') || '[]';
@@ -101,8 +105,9 @@ export default function AiCircuitBreaker() {
     >
       <ShieldAlert size={14} className="text-rose-600 animate-pulse" />
       <div className="flex flex-col">
-          <span className="text-[10px] font-black">فعال‌سازی Circuit Breaker</span>
-          <span className="text-[9px] font-bold text-rose-500">سوییچ از {lastFail.providerName} انجام شد.</span>
+          <span className="text-[10px] font-black text-rose-900">سوییچ خودکار سرویس دهنده هوش مصنوعی</span>
+          <span className="text-[9px] font-bold text-rose-600">پروایدر فعال جدید: {lastFail.activeProviderName || "نامشخص"}</span>
+          <span className="text-[8.5px] text-rose-500">منتقل شده از {lastFail.providerName} (به دلیل تاخیر یا اتمام سهمیه)</span>
       </div>
     </div>
   );
