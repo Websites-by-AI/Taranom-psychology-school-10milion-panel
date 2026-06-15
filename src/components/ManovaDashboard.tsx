@@ -128,11 +128,11 @@ export default function ManovaDashboard({ student, onNavigate }: { student: Stud
     setTimeout(() => {
       setGeneratedContent({
         platform,
-        title: platform === "telegram" ? "📢 خبر فوری: بودجه‌بندی جدید آزمون‌های جامع" : "✨ مدیریت زمان به سبک کایزن",
+        title: platform === "telegram" ? "📢 یادآوری: بودجه‌بندی جدید برای برنامه‌ریزی بهتر" : "✨ همراهی در مسیر یادگیری آگاهانه",
         body: platform === "telegram" 
-          ? "داوطلبان عزیز، بر اساس آخرین تحلیل‌های ترند آموزشی، بودجه‌بندی جدید آزمون‌های شبیه‌ساز در پنل شما بارگذاری شد. همین حالا برای آنالیز دقیق اقدام کنید..." 
-          : "آیا می‌دونستید تمرکز ۵۰ دقیقه‌ای بازدهی شما رو ۳ برابر می‌کنه؟ در سیستم مربیگری هوشمند ما، این مسیر براتون شخصی‌سازی شده. #کنکور #موفقیت",
-        hashtags: platform === "telegram" ? "#خبر #بودجه_بندی #آزمون" : "#کایزن #موفقیت #کنکور_۱۴۰۵",
+          ? "داوطلبان عزیز، بر اساس روندهای اخیر، بودجه‌بندی‌های جدید در پنل شما قرار گرفت تا با آرامش بیشتری مطالعه کنید..." 
+          : "آیا می‌دانستید فواصل کوتاه استراحت به تثبیت یادگیری کمک می‌کند؟ ما در این مسیر کنار شما هستیم.",
+        hashtags: platform === "telegram" ? "#یادگیری #برنامه_ریزی #همدلی" : "#رشد #آرامش #کنکور_۱۴۰۵",
         imagePrompt: platform === "instagram" 
           ? "A futuristic classroom with holographic UI, warm ambient lighting, realistic educational technology, 8k resolution." 
           : "Professional organizer workspace, minimal blue theme, focus-driven atmosphere."

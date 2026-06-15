@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   Sparkles, Calendar, TrendingUp, AlertTriangle, CheckSquare, Target, 
   Quote, ChevronLeft, Zap, Smile, HeartPulse, Brain, Compass, BookOpen, Clock, Check, Layers, Users, ShieldAlert,
-  RefreshCw, X, Timer, MousePointer2
+  RefreshCw, X, Timer, MousePointer2, LayoutGrid
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student, Weakness, DailyPlan, TestTrap } from "../types";
@@ -33,7 +33,7 @@ interface DashboardViewProps {
 }
 
 export default function DashboardView({ student, onNavigate }: DashboardViewProps) {
-  const [quote, setQuote] = useState("موفقیت در کنکور اتفاقی نیست؛ تعهد ما در ارائه نوین‌ترین شبیه‌سازها و مربیگری علمی، ضامن رتبه‌های برتر در رشته‌های تجربی، ریاضی و انسانی است.");
+  const [quote, setQuote] = useState("یادگیری یک مسیر است، نه یک مسابقه. ما اینجا هستیم تا در هر گام، با آرامش و دقت بیشتری در کنار شما باشیم.");
   const [loadingQuote, setLoadingQuote] = useState(true);
   
   const [isTroubleshootingOpen, setIsTroubleshootingOpen] = useState<boolean>(false);
@@ -424,27 +424,29 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
   const completedTasksCount = todayTasks.filter(t => t.completed).length;
   const taskProgressPercent = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
+  const [isSectionsCollapsed, setIsSectionsCollapsed] = useState<boolean>(false);
+
   return (
     <div className="space-y-6" id="dashboard-view-container">
       
       {/* Prime Header Dashboard Welcomer */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/40 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-50/40 rounded-full blur-2xl pointer-events-none" />
         
         <div className="relative z-10 space-y-1 text-right">
-          <h1 className="text-xl md:text-2xl font-black text-slate-800 leading-tight">
-            خوش آمدید، {student.name} گرامی 👋
+          <h1 className="text-lg md:text-2xl font-black text-slate-800 leading-tight">
+            در مسیر یادگیری همراه شما هستیم، {student.name} عزیز 👋
           </h1>
           <p className="text-[10px] md:text-xs text-slate-400 font-medium">
-            مدیریت تراز تحصیلی، مانیتورینگ زنده پرونده و حل علمی تله‌های تستی کنکور سراسری
+            پشتیبانی در مسیر مطالعه، پایش گام‌به‌گام و شناخت چالش‌های درسی برای رشدی پایدار
           </p>
         </div>
         
         <div className="flex items-center gap-4 relative z-10">
-          <div className="font-mono text-left bg-slate-50 border border-slate-100 p-3 rounded-2xl flex items-center gap-3">
+          <div className="font-mono text-left bg-slate-50 border border-slate-100 p-2 md:p-3 rounded-2xl flex items-center gap-3">
             <div className="text-right">
-              <span className="text-[10px] text-slate-400 block font-sans font-bold leading-none mb-1">شماره داوطلبی</span>
+              <span className="text-[9px] text-slate-400 block font-sans font-bold leading-none mb-1">شماره داوطلبی</span>
               <span className="text-xs font-black text-indigo-950">{toPersianNum(student.code)}</span>
             </div>
           </div>
@@ -452,46 +454,31 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
       </div>
 
       {/* Intelligent Intervention System (DIS) - سیستم مداخله گر هوشمند */}
-      <IntelligentInterventionSystem student={student} />
+      <div className={isSectionsCollapsed ? "scale-95 origin-top transition-transform h-24 overflow-hidden" : ""}>
+        <IntelligentInterventionSystem student={student} />
+      </div>
 
-      {/* Cloud & System Operational Status Card */}
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-slate-900 text-white p-5 rounded-2xl md:rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden" id="cloud-system-status-card"
-      >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="w-12 h-12 md:w-14 md:h-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-              <Layers size={24} className="text-indigo-400 animate-pulse" />
+      {/* Coaching Focus Summary - Human Centric */}
+      {!isSectionsCollapsed ? (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-indigo-900 text-white p-4 rounded-2xl md:rounded-3xl border border-indigo-800 shadow-xl relative overflow-hidden" id="coaching-focus-alert"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <Compass size={20} className="text-white" />
             </div>
             <div className="space-y-1 text-right">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-xs md:text-sm font-black text-white">زیرساخت ابری هوشمند مشاوره کنکور</h3>
-                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[8px] font-black rounded-full border border-emerald-500/20 flex items-center gap-1 uppercase">
-                   <div className="w-1 h-1 rounded-full bg-emerald-400" />
-                   <span>عملیاتی</span>
-                </span>
-              </div>
-              <p className="text-[10px] md:text-[11px] text-slate-400 leading-relaxed font-medium">
-                توزیع میکروسرویسی بار بر روی خوشه‌های کلاود اختصاصی؛ تمام داده‌های تراز و فرآیندهای مربیگری تحت پروتکل امنیتی Admin-v2 فعال و همگام است.
+              <h3 className="text-[11px] md:text-xs font-black">یادداشتی از مربی همدل</h3>
+              <p className="text-[9px] md:text-[10px] text-indigo-100/80 leading-relaxed font-bold">
+                امروز تمرکز خود را بر روی تله‌های تستی درس زیست‌شناسی بگذارید. گام‌های کوچک امروز، نتایج بزرگ فردا را می‌سازند.
               </p>
             </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-3 w-full sm:w-auto min-w-[180px] md:min-w-[200px]">
-            <div className="bg-white/5 border border-white/10 p-2 rounded-xl text-center">
-              <span className="text-[8px] text-slate-500 block font-bold">Latency</span>
-              <span className="text-[11px] font-mono font-black text-amber-400">42ms</span>
-            </div>
-            <div className="bg-white/5 border border-white/10 p-2 rounded-xl text-center">
-              <span className="text-[8px] text-slate-500 block font-bold">Uptime S1</span>
-              <span className="text-[11px] font-black text-indigo-300">99.9%</span>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      ) : null}
 
       {/* Visual pulsing warning indicator for qeiValue < 5200 */}
       <AnimatePresence>

@@ -16,8 +16,8 @@ export const getInstitutionsList = () => [
     id: "taranom",
     name: getStoredValue("taranom_custom_name_taranom", "ترنم همدلی"),
     fullName: getStoredValue("taranom_custom_fullname_taranom", "آکادمی هوشمند ترنم همدلی"),
-    slogan: getStoredValue("taranom_custom_slogan_taranom", "دستیار تخصصی موفقیت در کنکور سراسری"),
-    examProvider: getStoredValue("taranom_custom_examp_taranom", "آزمون‌های شبیه‌ساز ترنم همدلی"),
+    slogan: getStoredValue("taranom_custom_slogan_taranom", "همراه گام‌به‌گام شما در مسیر یادگیری"),
+    examProvider: getStoredValue("taranom_custom_examp_taranom", "ارزیابی‌های تحلیلی ترنم همدلی"),
     theme: "indigo"
   },
   {

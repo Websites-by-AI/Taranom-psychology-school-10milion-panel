@@ -193,7 +193,7 @@ function kaizen_render_full_portal_iframe($atts) {
     wp_enqueue_style('kaizen-iframe-style', plugin_dir_url(__FILE__) . 'assets/css/style.css');
     
     return "<div class='kaizen-portal-container'>
-        <div class='kaizen-iframe-header-badge'>اتصال زنده به مربی مقتدر ${BRAND_CONFIG.name}</div>
+        <div class='kaizen-iframe-header-badge'>اتصال زنده به مربی همدل ${BRAND_CONFIG.name}</div>
         <iframe src='" . esc_url($iframe_url) . "' style='width: " . esc_attr($atts['width']) . "; height: " . esc_attr($atts['height']) . "; border: " . esc_attr($atts['border']) . "; border-radius:18px;' allow='camera; microphone; geolocation'></iframe>
     </div>";
 }`

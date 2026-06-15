@@ -209,8 +209,8 @@ function getRequestKeys(req: express.Request): string[] {
   const k5 = req.query?.geminiKey as string;
   const k6 = req.query?.openRouterKey as string;
   
-  const allKeys = [...fallbackKeys, k1, k2, k3, k4, k5, k6, process.env.OPENROUTER_API_KEY, process.env.GEMINI_API_KEY]
-    .filter(k => k && k.trim() !== "" && k !== "undefined" && k !== "null" && !k.includes("YOUR_API_KEY"));
+    const allKeys = [...fallbackKeys, k1, k2, k3, k4, k5, k6, process.env.OPENROUTER_API_KEY, process.env.GEMINI_API_KEY]
+    .filter(k => k && typeof k === "string" && k.trim() !== "" && k !== "undefined" && k !== "null" && !k.includes("YOUR_API_KEY") && k.length > 10);
     
   return [...new Set(allKeys)];
 }
@@ -247,12 +247,22 @@ class AIFallbackWrapper {
     return {
       generateContent: async (params: any) => {
         let lastError = null;
+        let successResult = null;
+        
         for (let i = 0; i < this.keys.length; i++) {
+          const key = this.keys[i];
           try {
-            const ai = new AIAdapter(this.keys[i]);
-            const result = await ai.models.generateContent(params);
+            // Force use of modern model if not specified or using legacy names
+            const effectiveParams = { ...params };
+            if (!effectiveParams.model || effectiveParams.model.includes("gemini-2.5") || effectiveParams.model.includes("gemini-3.5")) {
+               effectiveParams.model = "gemini-1.5-flash";
+            }
+
+            const ai = new AIAdapter(key);
+            const result = await ai.models.generateContent(effectiveParams);
+            
             if (this.res && !this.res.headersSent) {
-               const providerName = getProviderNameForKey(this.keys[i], this.req);
+               const providerName = getProviderNameForKey(key, this.req);
                this.res.setHeader("x-ai-resolved-provider", encodeURIComponent(providerName));
                if (i > 0) {
                   this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
@@ -261,7 +271,9 @@ class AIFallbackWrapper {
             return result;
           } catch(e: any) {
             lastError = e;
-            console.warn(`[AI Fallback Wrapper] Key ${i} failed. Error:`, e.message);
+            const errStatus = e.status || (e.response ? e.response.status : undefined);
+            console.warn(`[AI Fallback Wrapper] Key ${i} (${key.substring(0, 8)}...) failed. Status: ${errStatus}. Error:`, e.message);
+            // If it's a model not found error, don't just retry all keys with the same model if it might be a model name issue
           }
         }
         throw lastError;
@@ -272,19 +284,24 @@ class AIFallbackWrapper {
   get chats() {
     return {
       create: (params: any) => {
-        // Evaluate the messages at sendMessage time so all fallbacks get the identical history state
         return {
           sendMessage: async (msgParams: any) => {
             let lastError = null;
             for (let i = 0; i < this.keys.length; i++) {
+              const key = this.keys[i];
               try {
-                // clone params history to avoid double pushes from lower adapters
+                // Ensure modern model name
                 const paramsClone = { ...params, history: params.history ? [...params.history] : [] };
-                const ai = new AIAdapter(this.keys[i]);
+                if (!paramsClone.model || paramsClone.model.includes("gemini-2.5") || paramsClone.model.includes("gemini-3.5")) {
+                  paramsClone.model = "gemini-1.5-flash";
+                }
+
+                const ai = new AIAdapter(key);
                 const chat = ai.chats.create(paramsClone);
                 const result = await chat.sendMessage(msgParams);
+                
                 if (this.res && !this.res.headersSent) {
-                   const providerName = getProviderNameForKey(this.keys[i], this.req);
+                   const providerName = getProviderNameForKey(key, this.req);
                    this.res.setHeader("x-ai-resolved-provider", encodeURIComponent(providerName));
                    if (i > 0) {
                       this.res.setHeader("x-ai-fallback", `Provider_Index_${i}`);
@@ -293,7 +310,8 @@ class AIFallbackWrapper {
                 return result;
               } catch(e: any) {
                 lastError = e;
-                console.warn(`[AI Fallback Wrapper Chat] Key ${i} failed. Error:`, e.message);
+                const errStatus = e.status || (e.response ? e.response.status : undefined);
+                console.warn(`[AI Fallback Wrapper Chat] Key ${i} (${key.substring(0, 8)}...) failed. Status: ${errStatus}. Error:`, e.message);
               }
             }
             throw lastError;
@@ -324,7 +342,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.get("/api/ai-status", (req, res) => {
-  res.json({ status: "online", models: ["gemini-2.5-flash", "gemini-1.5-pro"] });
+  res.json({ status: "online", models: ["gemini-3.5-flash", "gemini-3.1-pro-preview"] });
 });
 
 // Offline & Simulation Fallback Utility Functions
@@ -337,7 +355,7 @@ function getOfflineChatReply(message: string): string {
   const lowerMessage = (message || "").toString().toLowerCase().trim();
   
   if (lowerMessage === "سلام" || lowerMessage === "hi" || lowerMessage === "hello" || lowerMessage === "سلام علیکم" || lowerMessage === "درود" || lowerMessage === "how are you") {
-    return "سلام مریم عزیز! 🌸 من دکتر رادان، مشاور علمی و برنامه‌ریز ارشد شما در آکادمی ترنم مهر هستم.\n\nمن مشتاقانه آماده‌ام تا به شما در کنترل استرس، روش عارضه‌یابی سوالات زیست، بالا بردن تراز شیمی، یا رفع تله‌های تستی کمک کنم. چطور می‌توانم در موفقیت کنکورتان سهمی داشته باشم؟\n\n📌 *یادداشت مدیر پورتال: به دلیل بلاک شدن کلید اشتراکی سرور توسط فیلترینگ گوگل (خطای نشت عمومی کلید پیش‌فرض)، سیستم به صورت پایدار و ۱۰۰٪ هوشمند روی «شبیه‌ساز تحصیلی کایزن» فعالیت می‌کند. برای اتصال مجدد چت به هوش مصنوعی زنده و دریافت پاسخ‌های عمیق‌تر، کافیست کلید رایگان اختصاصی خود را در پنل مدیریت (بخش خطایابی) ذخیره کنید.*";
+    return "سلام مریم عزیز! 🌸 من دکتر رادان، همراه و مشاور تحصیلی شما در آکادمی ترنم همدلی هستم.\n\nمن مشتاقانه آماده‌ام تا در مسیر یادگیری، کنترل استرس و تحلیل دقیق چالش‌های درسی در کنار شما باشم. چطور می‌توانم امروز به آرامش و پیشرفت تحصیلی شما کمک کنم؟\n\n📌 *یادداشت مدیر پورتال: به دلیل تغییرات فنی در سرویس‌های هوش مصنوعی، سیستم به صورت پایدار و همدلانه روی «شبیه‌ساز تحصیلی» فعالیت می‌کند. برای ارتباط زنده و دریافت پاسخ‌های عمیق‌تر، می‌توانید کلید اختصاصی خود را در بخش تنظیمات فنی ثبت کنید.*";
   }
   
   if (lowerMessage.includes("تجربی") || lowerMessage.includes("زیست") || lowerMessage.includes("پزشکی")) {
@@ -577,8 +595,8 @@ app.get("/api/motivational", async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: "یک جمله انگیزشی مقتدر، خلاقانه، عاطفی، علمی و روان‌شناختی مناسب داوطلبان کنکور سراسری ایران (تجربی، ریاضی، انسانی) برای نصب در بالای پرتال آموزشی 'ترنم مهر' بنویس. شیوه کایزن، تعهد بالا و رتبه‌های برتر شریف و تهران را تداعی کند. لحن صمیمی و عمیق فارسی داشته باشد، بدون پیشوند و پسوند." }] }],
+      model: "gemini-1.5-flash",
+      contents: [{ role: "user", parts: [{ text: "یک جمله انگیزشی صمیمی، همدلانه، خلاقانه، عاطفی، علمی و روان‌شناختی مناسب داوطلبان کنکور سراسری ایران (تجربی، ریاضی، انسانی) برای نصب در بالای پرتال آموزشی 'ترنم مهر' بنویس. شیوه کایزن، تعهد به پیشرفت تدریجی و با هم بودن تا هدف نهایی را تداعی کند. لحن صمیمی و عمیق فارسی داشته باشد، بدون پیشوند و پسوند." }] }],
     });
     return res.json({ quote: response.text?.trim() || quotes[Math.floor(Math.random() * quotes.length)] });
   } catch (error: any) {
@@ -619,19 +637,19 @@ app.post("/api/chat", async (req, res) => {
       parts: [{ text: msg.content }]
     }));
 
-    const systemInstruction = `شما 'دکتر رادان'، مشاور هوشمند و ارشد برنامه‌ریزی تحصیلی در موسسه 'ترنم مهر' هستید. 
-تخصص شما: کنکور سراسری ایران، تحلیل تراز، عارضه‌یابی اشتباهات تستی، و روانشناسی موفقیت.
-ویژگی‌های شخصیتی: مقتدر، عاقل، بسیار خوش‌صحبت به زبان فارسی، حامی واقعی، و در عین حال فنی و دقیق (استفاده از متد کایزن).
-هدف: داوطلب را برای رسیدن به رتبه برتر و دانشگاه‌های تهران/شریف هدایت کنید.
+    const systemInstruction = `شما 'دکتر رادان'، همراه همدل و مشاور برنامه‌ریزی تحصیلی در موسسه 'ترنم همدلی' هستید. 
+تخصص شما: کنکور سراسری ایران، تحلیل روند یادگیری، عارضه‌یابی اشتباهات تسی، و روانشناسی یادگیری.
+ویژگی‌های شخصیتی: همدل، صبور، بسیار خوش‌صحبت به زبان فارسی، حامی واقعی، و در عین حال دقیق و راهنما.
+هدف: داوطلب را برای رشدی پایدار و رسیدن به اهداف تحصیلی‌اش با آرامش هدایت کنید.
 قوانین پاسخ‌دهی:
 ۱. پاسخ‌ها باید عمیق، دلسوزانه و به شدت کاربردی باشند.
-۲. بصورت کاملاً هوشمند و واکنشی به پیام کاربر پاسخ دهید. اگر کاربر شوخی کرد یا پیام نامفهومی فرستاد، صمیمانه و مثل یک مشاور واقعی واکنش نشان دهید (مثلاً بپرسید منظورش چیست یا با لحنی دوستانه او را به چالش بکشید) و از دادن پاسخ‌های کلیشه‌ای و تکراری در این مواقع اجتناب کنید.
-۳. از اصطلاحات فنی کنکور (تراز، درصد، پومودورو، تله تستی، موازنه وقت) در جای مناسب استفاده کنید.
+۲. بصورت کاملاً هوشمند و واکنشی به پیام کاربر پاسخ دهید. اگر کاربر شوخی کرد یا پیام نامفهومی فرستاد، صمیمانه و مثل یک همراه واقعی واکنش نشان دهید.
+۳. از اصطلاحات فنی کنکور در جای مناسب و با لحنی آرام‌بخش استفاده کنید.
 ۴. حداکثر در ۳ پاراگراف پاسخ دهید.
-۵. از ایموجی‌های مناسب (📚, 🎯, 🚀, 💡) استفاده کنید.`;
+۵. از ایموجی‌های مناسب (📚, 🌱, ✨, 💡) استفاده کنید.`;
 
     const chat = ai.chats.create({ 
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       history: formattedHistory,
       config: {
         systemInstruction: systemInstruction
@@ -652,8 +670,8 @@ app.post("/api/chat", async (req, res) => {
     let fallbackReply = "";
     if (errStr.includes("resource_exhausted") || errStr.includes("quota") || errStr.includes("429")) {
       fallbackReply = "⚠️ همکار/کاربر ارجمند، سقف مجاز استفاده از کلید هوش مصنوعی (Quota Exceeded) در این لحظه به پایان رسیده است.\n\nاز آنجایی که کلید وارد شده احتمالاً از نوع رایگان (Free Tier) است، با محدودیت‌های تعدادی درخواست از سمت گوگل مواجه شده است. شبکه برای جلوگیری از اختلال در کارنامه شما، به صورت خودکار به موتور آفلاین کایزن منتقل شده است.\n\nبرای ارتباط زنده، لطفاً دقایقی بعد تلاش کنید یا یک کلید رایگان جدید در بخش ادمین ثبت نمایید. ❤️";
-    } else if (errStr.includes("leaked") || errStr.includes("403") || errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended") || errStr.includes("compromised")) {
-      fallbackReply = "⚠️ همکار ارجمند، کلید دسترسی (API Key) پیش‌فرض سرور به دلیل انتشار عمومی توسط گوگل غیرفعال و جزء کلیدهای لو رفته (Leaked Key) طبقه‌بندی شده است.\n\nمن دکتر رادان هستم. نگران نباشید! برای فعال‌سازی مجدد و برقراری ارتباط پرسرعت زنده با مدل‌های پرقدرت هوش مصنوعی Google Gemini، کافیست:\n۱. یک کلید دسترسی خام و رایگان از پنل Google AI Studio (ai.google.dev) دریافت کنید.\n۲. وارد پنل ادمین آکادمی شوید و در بخش «🔎 خطایابی و پایش ماژول‌ها»، کلید جدید خود را در کادر تنظیمات هوش مصنوعی وارد و ثبت کنید.\n\nسیستم به قدری پیشرفته و باکیفیت طراحی شده که تا زمان تنظیم کلید اختصاصی توسط شما، پکیج هوشمند ما با شبیه‌سازهای حرفه‌ای و عینی (کایزن و روانشناسی تحصیلی) با ۱۰۰٪ پایداری فعال مانده تا خللی در کارنامه و فرآیندها رخ ندهد. ❤️";
+    } else if (errStr.includes("leaked") || errStr.includes("403") || errStr.includes("401") || errStr.includes("unauthenticated") || errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended") || errStr.includes("compromised") || errStr.includes("invalid authentication")) {
+      fallbackReply = "⚠️ همراه گرامی، کلید دسترسی (API Key) پیش‌فرض سرور یا مرورگر شما با محدودیت مواجه شده است.\n\nمن دکتر رادان هستم. نگران نباشید! برای فعال‌سازی کامل و برقراری ارتباط زنده با مدل‌های هوشمند Gemini، می‌توانید یک کلید رایگان از Google AI Studio دریافت کرده و در بخش تنظیمات فنی ثبت کنید.\n\nسیستم در حال حاضر با استفاده از شبیه‌سازهای حرفه‌ای و همدلانه فعال است تا هیچ وقفه‌ای در مسیر یادگیری شما ایجاد نشود. ❤️";
     } else {
       fallbackReply = getOfflineChatReply(message);
     }
@@ -986,7 +1004,7 @@ app.post("/api/test-ai-connection", async (req, res) => {
   const responseData: any = {
     section: testSection,
     apiKeySource: userKey ? "Custom Client Key (LocalStorage)" : "Environment Secret (Cloud Run)",
-    configuredModel: isOpenRouter ? "OpenRouter (GPT or other)" : "gemini-2.5-flash",
+    configuredModel: isOpenRouter ? "OpenRouter (GPT or other)" : "gemini-3.5-flash",
     activeKeyMasked: userKey 
       ? `${userKey.substring(0, 7)}...${userKey.substring(userKey.length - 4)}` 
       : (process.env.GEMINI_API_KEY 

@@ -8,26 +8,10 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "./types";
 import LoginView from "./components/LoginView";
-import DashboardView from "./components/DashboardView";
-import ManovaDashboard from "./components/ManovaDashboard";
-import ReportCardView from "./components/ReportCardView";
-import StudyPlanView from "./components/StudyPlanView";
-import CounselorView from "./components/CounselorView";
-import ProgressView from "./components/ProgressView";
-import ParentsView from "./components/ParentsView";
-import AdminView from "./components/AdminView";
-import TestTrapsView from "./components/TestTrapsView";
-import CustomQuizGenerator from "./components/CustomQuizGenerator";
-import AiPsychologyView from "./components/AiPsychologyView";
-import AssessmentView from "./components/AssessmentView";
-import MetacognitionLabView from "./components/MetacognitionLabView";
-import CounselingAdvisorView from "./components/CounselingAdvisorView";
-import HistoricalDatabaseView from "./components/HistoricalDatabaseView";
-import ProfileSettingsView from "./components/ProfileSettingsView";
-import CounselorDashboardView from "./components/CounselorDashboardView";
-import TeacherDashboardView from "./components/TeacherDashboardView";
 import WelcomeTourPortal from "./components/WelcomeTourPortal";
-import { Brain, Settings, Database, Home } from "lucide-react";
+import ProfileSettingsView from "./components/ProfileSettingsView";
+import ViewFactory, { RoleType, ALLOWED_VIEWS_BY_ROLE } from "./components/ViewFactory";
+import { Brain, Settings, Database, Home, Lock } from "lucide-react";
 import SmartNotifications, { getRoleBannerAlert } from "./components/SmartNotifications";
 import FocusChallengeOverlay from "./components/FocusChallengeOverlay";
 import AiCircuitBreaker from "./components/AiCircuitBreaker";
@@ -86,17 +70,18 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isFocusChallengeOpen, setIsFocusChallengeOpen] = useState(false);
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
+  const [hideRestrictedModules, setHideRestrictedModules] = useState(false);
 
   const navigationItems = {
     student: [
-      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
-      { id: "dashboard", label: "مرکز فرماندهی موفقیت", icon: LayoutDashboard },
-      { id: "manova", label: "داشبورد مانوا", icon: Sparkles },
-      { id: "report", label: "کارنامه ترازها", icon: FileSpreadsheet },
+      { id: "welcome", label: "صفحه اصلی و آشنایی", icon: Home, highlight: true },
+      { id: "dashboard", label: "میز مطالعه و همراهی", icon: LayoutDashboard },
+      { id: "manova", label: "داشبورد تحلیلی مانوا", icon: Sparkles },
+      { id: "report", label: "روند یادگیری من", icon: FileSpreadsheet },
       { id: "schedule", label: "برنامه‌ریزی و تقویم", icon: Calendar },
-      { id: "counselor", label: "اتاق گفتگو و پشتیبانی هوشمند", icon: MessageSquare },
-      { id: "progress", label: "نمای پایش عملکرد و سلامت آموزشی", icon: LineChart },
-      { id: "traps", label: "بانک تله‌های تستی", icon: Target },
+      { id: "counselor", label: "گفتگو و پشتیبانی", icon: MessageSquare },
+      { id: "progress", label: "پایش عملکرد و سلامت", icon: LineChart },
+      { id: "traps", label: "شناخت چالش‌های تستی", icon: Target },
       { id: "quiz", label: "آزمون سفارشی", icon: Brain },
       { id: "psychology", label: "پایش آمادگی ذهنی", icon: Brain },
       { id: "metacognition", label: "آزمایشگاه فراشناخت", icon: Sparkles },
@@ -137,6 +122,45 @@ export default function App() {
       { id: "manova", label: "داشبورد مدیریتی مانوا", icon: Sparkles },
     ]
   };
+
+  const navigationGroups: Record<RoleType, { title: string; items: string[] }[]> = {
+    student: [
+      { title: "پیشخوان اصلی", items: ["welcome", "dashboard", "manova"] },
+      { title: "ارزیابی و تحلیل", items: ["report", "progress", "traps", "psychology", "metacognition"] },
+      { title: "برنامه‌ریزی و آزمون", items: ["schedule", "quiz", "counseling", "historical-db"] },
+      { title: "مدیریت", items: ["admin"] }
+    ],
+    parent: [
+      { title: "نظارت", items: ["welcome", "parents", "manova"] },
+      { title: "گزارشات فرزند", items: ["report", "psychology", "counseling", "historical-db"] },
+      { title: "تنظیمات", items: ["admin"] }
+    ],
+    counselor: [
+      { title: "مدیریت داوطلبان", items: ["welcome", "counselor-dashboard", "manova"] },
+      { title: "تحلیل حرفه‌ای", items: ["report", "psychology", "traps", "counselor-chat"] },
+      { title: "تنظیمات", items: ["admin"] }
+    ],
+    teacher: [
+      { title: "آموزش و آزمون", items: ["welcome", "teacher-dashboard", "report", "traps"] },
+      { title: "تنظیمات", items: ["admin"] }
+    ],
+    admin: [
+      { title: "مدیریت کل", items: ["welcome", "admin", "manova"] }
+    ]
+  };
+
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+
+  const getNavigationItemById = (id: string) => {
+    // Search in all roles to find the unique item configuration
+    for (const roleId in navigationItems) {
+      const items = navigationItems[roleId as keyof typeof navigationItems];
+      const found = items.find(item => item.id === id);
+      if (found) return found;
+    }
+    return null;
+  };
+
 
   const handleUpdateStudent = (updatedStudent: Student) => {
     setStudent(updatedStudent);
@@ -332,27 +356,97 @@ export default function App() {
               </div>
             </div>
 
-            {/* Middle: Active Navigation tabs */}
-            <nav className="hidden lg:flex gap-1" id="desktop-navbar">
-              {role && navigationItems[role].map((item) => {
-                const Icon = item.icon;
-                const dynamicLabel = item.id === "traps" 
-                  ? (student?.field === "riazi" ? "تله‌های کالیبره ریاضی/فیزیک" : student?.field === "ensani" ? "تله‌های کالیبره ادبیات/عربی" : "تله‌های کالیبره زیست/شیمی")
-                  : item.label;
+            {/* Middle: Active Navigation with Grouped Module Hub */}
+            <nav className="hidden lg:flex items-center gap-1.5" id="desktop-navbar">
+              {role && navigationGroups[role as RoleType].map((group, idx) => {
+                // Determine if any item in this group is active
+                const isGroupActive = group.items.includes(view);
+                
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => setView(item.id)}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-                      view === item.id ? "bg-slate-100 text-blue-900" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"
-                    }`}
+                  <div 
+                    key={idx} 
+                    className="relative group/nav"
+                    onMouseEnter={() => setExpandedGroup(group.title)}
+                    onMouseLeave={() => setExpandedGroup(null)}
                   >
-                    <Icon size={14} className={item.highlight ? "text-amber-500" : ""} />
-                    <span>{dynamicLabel}</span>
-                  </button>
+                    <button
+                      className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-black rounded-2xl transition-all duration-300 ${
+                        isGroupActive 
+                          ? "bg-slate-900 text-white shadow-md" 
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      <div className="flex -space-x-1.5 rtl:space-x-reverse opacity-70">
+                        {group.items.slice(0, 2).map(id => {
+                          const item = getNavigationItemById(id);
+                          const Icon = item?.icon || Sparkles;
+                          return <Icon key={id} size={10} className="bg-white rounded-full p-0.5" />;
+                        })}
+                      </div>
+                      <span>{group.title}</span>
+                      <ChevronLeft size={10} className={`transition-transform duration-300 rotate-[-90deg] ${expandedGroup === group.title ? "rotate-[-270deg]" : ""}`} />
+                    </button>
+
+                    {/* Compact Dropdown Menu */}
+                    <AnimatePresence>
+                      {expandedGroup === group.title && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute top-full right-0 mt-2 bg-white rounded-3xl border border-slate-150 shadow-2xl z-[100] min-w-[240px] overflow-hidden p-2"
+                        >
+                          <div className="bg-slate-50 rounded-2xl p-2.5 mb-2 border border-slate-100">
+                             <span className="text-[10px] font-black text-slate-400 block mb-1">دسترسی سریع به {group.title}</span>
+                             <div className="h-1 w-8 bg-indigo-500 rounded-full" />
+                          </div>
+                          <div className="grid grid-cols-1 gap-1">
+                            {group.items.map(id => {
+                              const item = getNavigationItemById(id);
+                              if (!item) return null;
+                              
+                              const isAllowed = ALLOWED_VIEWS_BY_ROLE[role as RoleType]?.includes(id);
+                              if (!isAllowed && hideRestrictedModules) return null;
+                              
+                              const Icon = item.icon;
+                              const isActive = view === id;
+                              const dynamicLabel = id === "traps" 
+                                ? (student?.field === "riazi" ? "تله‌های کالیبره ریاضی/فیزیک" : student?.field === "ensani" ? "تله‌های کالیبره ادبیات/عربی" : "تله‌های کالیبره زیست/شیمی")
+                                : item.label;
+
+                              return (
+                                <button
+                                  key={id}
+                                  disabled={!isAllowed}
+                                  onClick={() => isAllowed && setView(id)}
+                                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+                                    !isAllowed 
+                                      ? "opacity-40 grayscale pointer-events-none" 
+                                      : isActive 
+                                        ? "bg-slate-50 text-indigo-700 shadow-sm" 
+                                        : "hover:bg-slate-50 text-slate-600 hover:text-slate-900"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-1.5 rounded-lg ${isActive ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-500 group-hover/nav:bg-white"}`}>
+                                      <Icon size={16} />
+                                    </div>
+                                    <span className={`text-[10.5px] font-black ${isActive ? "text-indigo-900" : ""}`}>{dynamicLabel}</span>
+                                  </div>
+                                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />}
+                                  {!isAllowed && <Lock size={10} className="text-rose-400" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 );
               })}
             </nav>
+
 
             {/* Right side: User Profile & Theme switcher & Logout */}
             <div className="flex items-center gap-4 relative">
@@ -377,6 +471,21 @@ export default function App() {
                   {role === "admin" && "مدیر کل و معمار ارشد آکادمی"}
                 </span>
               </div>
+
+              {/* Secure Module Integration / Access Control Toggle */}
+              <button
+                onClick={() => setHideRestrictedModules(!hideRestrictedModules)}
+                className={`p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-900 transition rounded-xl border border-slate-100 cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95 ${
+                  hideRestrictedModules ? "ring-2 ring-indigo-500/50 bg-indigo-50/20" : ""
+                }`}
+                title={hideRestrictedModules ? "تغییر وضعیت به حالت قفل مانیتورینگ" : "تغییر وضعیت به پنهان‌سازی کامل بخش‌های غیرمجوز"}
+                id="btn-access-control-toggle"
+              >
+                <Lock size={16} className={hideRestrictedModules ? "text-slate-400" : "text-emerald-500 animate-pulse"} />
+                <span className="hidden sm:inline text-xs font-bold text-slate-600">
+                  {hideRestrictedModules ? "محدودشده‌ها پنهانند" : "نمایش همه با قفل"}
+                </span>
+              </button>
 
               {/* Theme Customizer Selector */}
               <div className="relative" id="customizer-theme-switcher flex">
@@ -531,30 +640,66 @@ export default function App() {
                        </div>
                     </div>
 
-                    {role && navigationItems[role].map((item) => {
+                     {role && navigationItems[role].map((item) => {
+                      const isAllowed = ALLOWED_VIEWS_BY_ROLE[role as RoleType]?.includes(item.id);
+                      
+                      // If restricted and hideRestrictedModules is true, completely hide it
+                      if (!isAllowed && hideRestrictedModules) {
+                        return null;
+                      }
+
                       const Icon = item.icon;
                       const isActive = view === item.id;
                       const dynamicLabel = item.id === "traps" 
                         ? (student?.field === "riazi" ? "تله‌های کالیبره ریاضی/فیزیک" : student?.field === "ensani" ? "تله‌های کالیبره ادبیات/عربی" : "تله‌های کالیبره زیست/شیمی")
                         : item.label;
+                        
                       return (
                         <button
                           key={item.id}
+                          disabled={!isAllowed}
                           onClick={() => {
-                            setView(item.id);
-                            setIsMenuOpen(false);
+                            if (isAllowed) {
+                              setView(item.id);
+                              setIsMenuOpen(false);
+                            }
                           }}
                           className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group relative overflow-hidden ${
-                            isActive 
-                              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" 
-                              : "text-slate-400 hover:text-white hover:bg-white/5"
+                            !isAllowed
+                              ? "opacity-40 bg-white/5 cursor-not-allowed select-none text-slate-500"
+                              : isActive 
+                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 cursor-pointer" 
+                                : "text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer"
                           }`}
                         >
-                          <div className="flex items-center gap-3 relative z-10">
-                            <div className={`p-2 rounded-xl transition-all duration-300 ${isActive ? "bg-white/20 text-white" : "bg-white/5 text-slate-500 group-hover:bg-indigo-500/20 group-hover:text-indigo-400"}`}>
-                              <Icon size={18} className={item.highlight ? "text-amber-400 animate-pulse" : ""} />
+                          <div className="flex items-center gap-3 relative z-10 text-right">
+                            <div className={`p-2 rounded-xl transition-all duration-300 ${
+                              !isAllowed
+                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                : isActive 
+                                  ? "bg-white/20 text-white" 
+                                  : "bg-white/5 text-slate-500 group-hover:bg-indigo-500/20 group-hover:text-indigo-400"
+                            }`}>
+                              {!isAllowed ? (
+                                <Lock size={18} className="text-rose-400" />
+                              ) : (
+                                <Icon size={18} className={item.highlight ? "text-amber-400 animate-pulse" : ""} />
+                              )}
                             </div>
-                            <span className={`text-xs font-black transition-colors ${isActive ? "text-white" : "text-slate-300"}`}>{dynamicLabel}</span>
+                            <div className="flex flex-col items-start text-right">
+                              <span className={`text-xs font-black transition-colors ${
+                                !isAllowed
+                                  ? "text-slate-500 line-through"
+                                  : isActive 
+                                    ? "text-white" 
+                                    : "text-slate-300"
+                              }`}>
+                                {dynamicLabel}
+                              </span>
+                              {!isAllowed && (
+                                <span className="text-[8px] font-black text-rose-400 block mt-0.5">غیرمجاز و محدود به رول مدیریت</span>
+                              )}
+                            </div>
                           </div>
                           
                           {isActive && (
@@ -564,10 +709,14 @@ export default function App() {
                             />
                           )}
                           
-                          {isActive ? (
-                            <ChevronLeft size={16} className="text-white relative z-10" />
+                          {isAllowed ? (
+                            isActive ? (
+                              <ChevronLeft size={16} className="text-white relative z-10" />
+                            ) : (
+                              <div className="w-1 h-1 rounded-full bg-slate-700 group-hover:bg-indigo-400 transition-colors relative z-10" />
+                            )
                           ) : (
-                            <div className="w-1 h-1 rounded-full bg-slate-700 group-hover:bg-indigo-400 transition-colors relative z-10" />
+                            <Lock size={12} className="text-rose-400/50" />
                           )}
                         </button>
                       );
@@ -670,68 +819,15 @@ export default function App() {
           );
         })()}
 
-        {role === "student" && (
-          <>
-            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
-            {view === "dashboard" && <DashboardView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
-            {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "schedule" && <StudyPlanView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "counselor" && <CounselorView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "progress" && <ProgressView />}
-            {view === "traps" && <TestTrapsView student={student} />}
-            {view === "quiz" && <CustomQuizGenerator student={student} />}
-            {view === "psychology" && <AssessmentView role={role} student={student} onNavigateChange={(target) => setView(target)} />}
-            {view === "metacognition" && <MetacognitionLabView student={student} />}
-            {view === "counseling" && <CounselingAdvisorView student={student} />}
-            {view === "historical-db" && <HistoricalDatabaseView student={student} />}
-            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
-          </>
-        )}
-
-        {role === "parent" && (
-          <>
-            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
-            {view === "parents" && <ParentsView student={student} />}
-            {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
-            {view === "report" && <ReportCardView student={student} />}
-            {view === "psychology" && <AssessmentView role={role} student={student} onNavigateChange={(target) => setView(target)} />}
-            {view === "counseling" && <CounselingAdvisorView student={student} />}
-            {view === "historical-db" && <HistoricalDatabaseView student={student} />}
-            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
-          </>
-        )}
-
-        {role === "admin" && (
-          <>
-            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
-            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
-            {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
-          </>
-        )}
-
-        {role === "counselor" && (
-          <>
-            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
-            {view === "counselor-dashboard" && <CounselorDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
-            {view === "manova" && <ManovaDashboard student={student} onNavigate={(target) => setView(target)} />}
-            {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "psychology" && <AssessmentView role={role} student={student} onNavigateChange={(target) => setView(target)} />}
-            {view === "counselor-chat" && <CounselorView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "traps" && <TestTrapsView student={student} />}
-            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
-          </>
-        )}
-
-        {role === "teacher" && (
-          <>
-            {view === "welcome" && <WelcomeTourPortal currentRole={role} onNavigate={(target) => setView(target)} onSwitchRole={(newRole) => setRole(newRole)} />}
-            {view === "teacher-dashboard" && <TeacherDashboardView student={student} onNavigate={(target) => setView(target)} onUpdateStudent={handleUpdateStudent} />}
-            {view === "report" && <ReportCardView student={student} onNavigate={(target) => setView(target)} />}
-            {view === "traps" && <TestTrapsView student={student} />}
-            {view === "admin" && <AdminView student={student} onUpdateBrand={() => switchBrand(activeBrandId)} />}
-          </>
-        )}
+        <ViewFactory 
+          view={view}
+          role={role as RoleType}
+          student={student}
+          onNavigate={(target) => setView(target)}
+          onSwitchRole={(newRole) => setRole(newRole)}
+          onUpdateStudent={handleUpdateStudent}
+          onUpdateBrand={() => switchBrand(activeBrandId)}
+        />
 
         {student && (
           <ProfileSettingsView 

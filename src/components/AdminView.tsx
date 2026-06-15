@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Users, BarChart, UploadCloud, Film, Activity, Search, Filter, ShieldCheck, HeartPulse, Check, Shield,
   Terminal, Lock, Key, Copy, Layers, Server, Globe, Cpu, AlertCircle, FileCode, CheckSquare, Database, TrendingUp, Sparkles,
-  ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText, Trash2, Edit3, Settings2
+  ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText, Trash2, Edit3, Settings2, Table
 } from "lucide-react";
 import { getSystemLogs, addSystemLog } from "../lib/syslogs";
 import { Student, AIProviderKey } from "../types";
@@ -24,22 +24,21 @@ import ApiHealthHistoryLog from "./ApiHealthHistoryLog";
 
 import SaaSContractView from "./SaaSContractView";
 import WordPressIntegrationView from "./WordPressIntegrationView";
+import ModuleObservatoryView from "./ModuleObservatoryView";
+import ModuleRegistry from "./ModuleRegistry";
 
 export default function AdminView({ student, onUpdateBrand }: { student?: Student | null; onUpdateBrand?: () => void }) {
-  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "storage" | "diagnostics" | "investment" | "audit" | "zarinpal" | "contract" | "wordpress">("storage");
+  const [activeTab, setActiveTab] = useState<"students" | "central_database" | "analytics" | "uploads" | "content"| "sysdocs" | "roadmap" | "architecture" | "mockexam" | "syslogs" | "integrations" | "storage" | "diagnostics" | "investment" | "audit" | "zarinpal" | "contract" | "wordpress" | "observatory" | "registry">("registry");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterField, setFilterField] = useState("all");
   const [selectedScenario, setSelectedScenario] = useState<"mvp" | "stable" | "enterprise">("stable");
-  const [concurrentStudents, setConcurrentStudents] = useState<number>(12000); // Slider scale (1,000 to 100,000)
+  const [concurrentStudents, setConcurrentStudents] = useState<number>(4500); 
   const [activeSchemaTab, setActiveSchemaTab] = useState(0);
   
-  // Derived architecture calculations
-  const calcDbConns = Math.ceil(concurrentStudents * 0.08); 
-  const calcRedisRam = Math.ceil(concurrentStudents * 0.005);
-  const calcRabbitQueue = Math.ceil(concurrentStudents * 0.15);
-  const calcKubernetesPods = Math.ceil(concurrentStudents / 800);
-  const calcAIWorkers = Math.ceil(concurrentStudents / 400);
-  const calcNetworkUplink = (concurrentStudents * 0.25).toFixed(1);
+  // Simplified monitoring metrics
+  const activeSessions = Math.ceil(concurrentStudents * 0.12);
+  const dataThroughput = (concurrentStudents * 0.05).toFixed(1);
+  const systemStability = "پایدار";
 
   const [isUploading, setIsUploading] = useState(false);
   
@@ -141,7 +140,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       addLog(`❌ خطای زمان پاسخ‌دهی دیتابیس: ${e.message}`);
     }
 
-    addLog("🏆 پایش با موفقیت به پایان رسید. پایداری دیتابیس مرکزی آکادمی: ۱۰۰٪");
+    addLog("🏆 پایش با موفقیت به پایان رسید. وضعیت سیستم: مطلوب");
     setDiagRunning(false);
   };
 
@@ -424,7 +423,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       setBExamP(active.examProvider);
     }
   }, [editingBrandId]);
-  const [geminiEndpoint, setGeminiEndpoint] = useState("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
+  const [geminiEndpoint, setGeminiEndpoint] = useState("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent");
   const [dbApiKey, setDbApiKey] = useState(() => {
     const saved = localStorage.getItem("arateb_db_api_key");
     return saved && saved !== "undefined" ? saved : "";
@@ -1236,6 +1235,8 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
   ];
 
   const sidebarItems = [
+    { id: "registry", label: "📋 شناسنامه و برنامه‌ساز ماژول‌ها", icon: Table, color: "text-indigo-600", status: "جدید (کامل)" },
+    { id: "observatory", label: "🔭 رصدخانه ماژول‌ها و هوش توسعه", icon: Cpu, color: "text-indigo-600", status: "مهندسی کایزن زنده" },
     { id: "roadmap", label: "🏁 نقشه راه توسعه (Roadmap)", icon: TrendingUp, color: "text-blue-700", status: "تست بتای AI فعال" },
     { id: "architecture", label: "📐 سند معماری SaaS ادمین", icon: Layers, color: "text-indigo-600" },
     { id: "mockexam", label: "📝 طراح هوشمند سوال و شبیه‌ساز", icon: Sparkles, color: "text-emerald-600" },
@@ -1318,14 +1319,13 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
               <span>سامانه ابری و میکروسرویسی {BRAND_CONFIG.name} فعال است</span>
             </span>
             <h2 className="text-xl font-black text-slate-900">پنل مدیریت هوشمند {BRAND_CONFIG.name}</h2>
-            <span className="text-xs text-rose-600 font-extrabold block mt-0.5 font-sans">Senior DevOps Console (v3.2)</span>
           </div>
-          <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl border border-slate-800 flex items-center gap-4 font-bold shrink-0 shadow-xl no-print">
-            <div className="text-right">
-              <div className="text-[9px] text-slate-400 font-black font-sans">وضعیت منابع سیستم</div>
-              <div className="text-[10px] text-emerald-400 font-black flex items-center gap-1 font-sans">
+          <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl border border-slate-800 flex items-center gap-4 font-bold shrink-0 shadow-xl no-print text-right">
+            <div>
+              <div className="text-[9px] text-slate-400 font-black">وضعیت کلی پورتال</div>
+              <div className="text-[10px] text-emerald-400 font-black flex items-center gap-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                پایداری عملیاتی ۹۹.۹٪
+                در حال خدمت‌رسانی
               </div>
             </div>
             <div className="w-[1px] h-8 bg-white/10" />
@@ -1340,6 +1340,8 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                 ========================================================================= */}
             
             {activeTab === "contract" && <SaaSContractView />}
+            {activeTab === "registry" && <ModuleRegistry />}
+            {activeTab === "observatory" && <ModuleObservatoryView />}
             {activeTab === "wordpress" && <WordPressIntegrationView />}
             {activeTab === "audit" && <ContentAuditModule />}
             {activeTab === "investment" && <InvestmentView />}
@@ -2111,41 +2113,26 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                   </div>
                 </div>
 
-                <p className="text-[10px] text-slate-500 bg-amber-50 rounded-xl border border-amber-200/50 p-3 leading-relaxed font-bold">
-                  💡 با بالا و پایین بردن اسلایدر، سیستم به طور خودکار مصرف دیتابیس، کش، حجم صف پیام و کلاود سازمان ترنم مهر را کالیبره کرده و منابع مورد نیاز کانتینرهای داکر/کوبرنتیز را پیشنهاد میدهد.
+                <p className="text-[10px] text-slate-500 bg-blue-50 rounded-xl border border-blue-100 p-3 leading-relaxed font-bold">
+                  💡 تخمین منابع مورد نیاز بر اساس تعداد دانش‌آموزان همزمان جهت ارائه خدمات بهینه کایزن و تحلیل هوشمند.
                 </p>
 
-                {/* Simulated scale properties */}
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 text-right">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 text-right">
                   <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
-                    <span className="text-[9px] text-slate-400 block font-black">حداکثر اتصالات همزمان DB</span>
-                    <span className="text-base font-black text-slate-850 block font-mono">{(calcDbConns).toLocaleString("fa-IR")}</span>
-                    <p className="text-[8px] text-slate-400 font-mono">Postgres Peak Conns</p>
+                    <span className="text-[9px] text-slate-400 block font-black">جلسات فعال تحصیلی</span>
+                    <span className="text-base font-black text-slate-800 block font-mono">{(activeSessions).toLocaleString("fa-IR")}</span>
                   </div>
                   <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
-                    <span className="text-[9px] text-slate-400 block font-black">ظرفیت مطلوب رم کانتینر Redis</span>
-                    <span className="text-base font-black text-indigo-900 block font-mono">{(calcRedisRam).toLocaleString("fa-IR")} MB</span>
-                    <p className="text-[8px] text-slate-400 font-mono">Cache Allocation Size</p>
+                    <span className="text-[9px] text-slate-400 block font-black">حجم تبادل داده (تخمینی)</span>
+                    <span className="text-base font-black text-indigo-900 block font-mono">{dataThroughput} MB/s</span>
                   </div>
                   <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
-                    <span className="text-[9px] text-slate-400 block font-black">سرعت صفبندی RabbitMQ</span>
-                    <span className="text-base font-black text-rose-650 block font-mono">{(calcRabbitQueue).toLocaleString("fa-IR")} write/s</span>
-                    <p className="text-[8px] text-slate-400 font-mono">Kafka Event Throughput</p>
+                    <span className="text-[9px] text-slate-400 block font-black">وضعیت پایداری سرویس</span>
+                    <span className="text-base font-black text-emerald-600 block font-sans">{systemStability}</span>
                   </div>
                   <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
-                    <span className="text-[9px] text-slate-400 block font-black">کانتینر فعال API (Docker)</span>
-                    <span className="text-base font-black text-blue-905 block font-sans">{(calcKubernetesPods).toLocaleString("fa-IR")} غلاف (Pod)</span>
-                    <p className="text-[8px] text-slate-400 font-mono">Kubernetes Deployment scale</p>
-                  </div>
-                  <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
-                    <span className="text-[9px] text-slate-400 block font-black">پردازشگرهای موازی هوش مصنوعی</span>
-                    <span className="text-base font-black text-teal-700 block font-mono">{(calcAIWorkers).toLocaleString("fa-IR")} نخ (Thread)</span>
-                    <p className="text-[8px] text-slate-400 font-mono">Python Inference Workers</p>
-                  </div>
-                  <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
-                    <span className="text-[9px] text-slate-400 block font-black">سطح پهنای باند شبکه کلاود</span>
-                    <span className="text-xs font-black text-emerald-600 block leading-tight font-sans">{calcNetworkUplink}</span>
-                    <p className="text-[8px] text-slate-400 font-mono">Recommended Uplink Bandwidth</p>
+                    <span className="text-[9px] text-slate-400 block font-black">مدل زبانی پیش‌فرض</span>
+                    <span className="text-base font-black text-blue-900 block font-mono text-[10px]">Gemini 1.5 Flash</span>
                   </div>
                 </div>
               </div>
@@ -4383,7 +4370,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
               <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-right">
                 <HeartPulse className="text-emerald-700 animate-pulse flex-shrink-0" size={20} />
                 <div className="text-xs text-emerald-800 leading-relaxed font-semibold">
-                  سلامت سیستم پردازش ترنم مهر تایید شد. مدل `'gemini-2.5-flash'` به همراه مخزن وکتور سرفصل‌های کنکور بدون گلوگاه متصل است.
+                  سلامت سیستم ترنم مهر تایید شد. مدل `'gemini-1.5-flash'` به درستی متصل است.
                 </div>
               </div>
             </div>

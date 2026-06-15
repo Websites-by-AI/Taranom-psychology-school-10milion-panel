@@ -23,6 +23,9 @@ export default function IntelligentInterventionSystem({ student, onUpdateStudent
 
   // System State
   const [activeTab, setActiveTab] = useState<"student" | "counselor">("student");
+  // We'll hide counselor tab for students if onUpdateStudent is provided (meaning it's likely the student dashboard)
+  const showCounselorTab = !onUpdateStudent; 
+
   const [completedGoals, setCompletedGoals] = useState<Record<number, boolean>>({});
 
   const handleToggleGoal = (idx: number) => {
@@ -149,27 +152,29 @@ export default function IntelligentInterventionSystem({ student, onUpdateStudent
         </div>
 
         {/* View Switcher: Interactive Demo - Let client see both student flow and advisor flow */}
-        <div className="flex gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/50 w-full sm:w-auto">
-          <button
-            onClick={() => setActiveTab("student")}
-            className={`flex-1 sm:flex-initial py-2 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === "student" ? "bg-white text-blue-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Brain size={14} />
-            <span>بخش داوطلب (هوشمندِ همراه)</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("counselor")}
-            className={`flex-1 sm:flex-initial py-2 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === "counselor" ? "bg-white text-blue-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <UserCheck size={14} />
-            <span>بخش مشاور (داشبورد وضعیت قرمز)</span>
-          </button>
-        </div>
+        {showCounselorTab && (
+          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/50 w-full sm:w-auto">
+            <button
+              onClick={() => setActiveTab("student")}
+              className={`flex-1 sm:flex-initial py-2 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === "student" ? "bg-white text-blue-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Brain size={14} />
+              <span>بخش داوطلب (هوشمندِ همراه)</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("counselor")}
+              className={`flex-1 sm:flex-initial py-2 px-4 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === "counselor" ? "bg-white text-blue-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <UserCheck size={14} />
+              <span>بخش مشاور (داشبورد وضعیت قرمز)</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* TAB 1: STUDENT VIEW IN INTERVENTION SYSTEM */}
