@@ -67,6 +67,7 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
   const [sending, setSending] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
   const [lastDetailedError, setLastDetailedError] = useState<string | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ hasServerGeminiKey?: boolean; hasServerOpenRouterKey?: boolean } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const quickQuestions = [
@@ -131,6 +132,17 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
     setSessions(updated);
     localStorage.setItem(`taranom_mehr_sessions_${student.id}`, JSON.stringify(updated));
   };
+
+  useEffect(() => {
+    fetch("/api/ai-status")
+      .then(r => r.json())
+      .then(data => {
+        setServerStatus(data);
+      })
+      .catch(err => {
+        console.warn("Could not retrieve AI keys status from server:", err);
+      });
+  }, []);
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -541,34 +553,84 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
                   </div>
                 )}
                 
-                {connectionError && (
-                  <div className="mx-auto max-w-md p-4 bg-rose-50 border border-rose-150 rounded-2xl text-right shadow-sm animate-in zoom-in duration-300 space-y-2.5">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] font-black text-rose-850 flex items-center gap-1.5 font-sans">
-                        ⚠️ وضعیت: اتصال به هسته آفلاین (شبیه‌ساز کایزن)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const errorText = lastDetailedError || "Network/Chat error combined with API Quota Exhausted.";
-                          navigator.clipboard.writeText(errorText);
-                          alert("جزئیات خطای هوش مصنوعی در حافظه کپی شد! می‌توانید آن را اینجا پیست کنید. 📋");
-                        }}
-                        className="bg-white hover:bg-rose-100 border border-rose-200 text-rose-700 px-3 py-1.5 rounded-xl text-[9px] font-black transition-all active:scale-95 shrink-0 shadow-sm"
-                      >
-                        📋 کپی خطای خام هوش مصنوعی
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-rose-700 leading-relaxed font-semibold font-sans">
-                      سیستم هوش مصنوعی ترنم مهر به دلیل محدودیت‌های لایسنس یا کلید عمومی سرور، به صورت خودکار به پکیج آفلاین کایزن منتقل گشت تا فعالیت مشاوره‌ای داوطلب دچار وقفه نشود. برای راه‌اندازی مجدد هوش مصنوعی زنده، می‌توانید این خطای کپی شده را به تیم پشتیبان ارائه دهید یا کلید خام اختصاصی خود را در بخش ادمین ثبت کنید.
-                    </p>
-                    {lastDetailedError && (
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-[9px] font-mono text-rose-450 overflow-x-auto max-h-24 text-left scrollbar-thin" style={{ direction: "ltr" }}>
-                        {lastDetailedError}
+                {connectionError && (() => {
+                  const hasLocalGemini = !!(localStorage.getItem("arateb_gemini_api_key") && localStorage.getItem("arateb_gemini_api_key")!.trim().length > 10);
+                  const hasLocalOpenRouter = !!(localStorage.getItem("arateb_openrouter_api_key") && localStorage.getItem("arateb_openrouter_api_key")!.trim().length > 10);
+                  const hasLocalKeys = hasLocalGemini || hasLocalOpenRouter;
+
+                  const hasServerGemini = !!serverStatus?.hasServerGeminiKey;
+                  const hasServerOpenRouter = !!serverStatus?.hasServerOpenRouterKey;
+                  const hasServerKeys = hasServerGemini || hasServerOpenRouter;
+
+                  const isAnyKeyConfigured = hasLocalKeys || hasServerKeys;
+
+                  return (
+                    <div className="mx-auto max-w-md p-4 bg-rose-50 border border-rose-150 rounded-2xl text-right shadow-sm animate-in zoom-in duration-300 space-y-2.5">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-[10px] font-black text-rose-850 flex items-center gap-1.5 font-sans">
+                          ⚠️ وضعیت: اتصال به هسته آفلاین (شبیه‌ساز کایزن)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const errorText = lastDetailedError || "Network/Chat error combined with API Quota Exhausted.";
+                            navigator.clipboard.writeText(errorText);
+                            alert("جزئیات خطای هوش مصنوعی در حافظه کپی شد! می‌توانید آن را اینجا پیست کنید. 📋");
+                          }}
+                          className="bg-white hover:bg-rose-100 border border-rose-200 text-rose-700 px-3 py-1.5 rounded-xl text-[9px] font-black transition-all active:scale-95 shrink-0 shadow-sm"
+                        >
+                          📋 کپی خطای خام هوش مصنوعی
+                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
+                      <p className="text-[10px] text-rose-700 leading-relaxed font-semibold font-sans">
+                        سیستم هوش مصنوعی ترنم مهر به دلیل محدودیت‌های لایسنس یا کلید عمومی سرور، به صورت خودکار به پکیج آفلاین کایزن منتقل گشت تا فعالیت مشاوره‌ای داوطلب دچار وقفه نشود. برای راه‌اندازی مجدد هوش مصنوعی زنده، می‌توانید این خطای کپی شده را به تیم پشتیبان ارائه دهید یا کلید خام اختصاصی خود را در بخش ادمین ثبت کنید.
+                      </p>
+
+                      {/* Diagnostic Keys Config Status Indicator */}
+                      {!isAnyKeyConfigured ? (
+                        <div className="bg-amber-100 border border-amber-200 text-amber-900 rounded-xl p-3 text-[10px] space-y-1 text-right">
+                          <div className="font-bold flex items-center gap-1">
+                            <span>🛑</span>
+                            <span className="text-amber-950 font-black">خطا: کلید دسترسی (Secret) یافت نشد!</span>
+                          </div>
+                          <p className="leading-relaxed font-bold">
+                            هیچ کلید اختصاصی (API Key) در مرورگر شما ذخیره نشده و در متغیرهای محیطی سرور نیز کلیدی تعریف نشده است. مربی کایزن در حال حاضر به شبیه‌ساز آفلاین منتقل شده است. ابتدا کلید خود را در پنل ادمین یا تنظیمات سمت کلاینت قرار دهید.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-emerald-50 border border-emerald-150 text-emerald-950 rounded-xl p-3 text-[10px] space-y-1.5 text-right">
+                          <div className="font-bold flex items-center gap-1">
+                            <span>🔑</span>
+                            <span className="text-emerald-900 font-black">وضعیت تنظیمات Secret: پیکربندی تایید شد ✓</span>
+                          </div>
+                          <p className="leading-relaxed font-semibold text-emerald-800">
+                            کلید دسترسی هوش مصنوعی با موفقیت شناسایی شده است ({hasLocalKeys ? "ذخیره در مرورگر کلاینت" : "متغیرهای محیطی سیستم روی سرور"}). تنظیمات اولیه شما از نظر وجود Secret صحیح است.
+                          </p>
+                          <div className="pt-2 border-t border-emerald-200/50 text-rose-900 space-y-1">
+                            <p className="font-black flex items-center gap-1">
+                              <span>⚠️</span>
+                              <span>علت قطع ارتباط و خطا چیست؟</span>
+                            </p>
+                            <p className="leading-relaxed font-bold text-[9px]">
+                              ارتباط با سرور به دلیل اختلال تحریم، آی‌پی فایروال مقصد، یا مسدود شدن توسط ابر کلودفلر (آفلاین یا خطای ۴۰۵) ناموفق بود.
+                            </p>
+                            <ul className="list-disc list-inside space-y-0.5 text-[9px] font-bold text-slate-700">
+                              <li>سرورهای گوگل آی‌پی تحریم‌نشده یا فیلترشکن ناسازگار شما را مسدود کرده‌اند.</li>
+                              <li>تنظیمات دامنه/پورت روی کلودفلر باعث مسدود شدن مسیرهای درگاهی /api شده است (احتمال خطای ۴۰۵).</li>
+                              <li>IP سرور یا روتر انتخابی شما در سرویس‌های ابری معتبر نیست یا بلاک شده است.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      {lastDetailedError && (
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-[9px] font-mono text-rose-450 overflow-x-auto max-h-24 text-left scrollbar-thin" style={{ direction: "ltr" }}>
+                          {lastDetailedError}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div ref={messagesEndRef} />
               </div>
 

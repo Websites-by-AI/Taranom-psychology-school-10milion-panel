@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { AIProviderKey } from '../types';
 
-export default function AiCircuitBreaker() {
+export default function AiCircuitBreaker({ role }: { role?: string | null }) {
   const [lastFail, setLastFail] = useState<{ timestamp: number, providerName: string, activeProviderName?: string } | null>(null);
+  const isAdmin = role === "admin";
 
   useEffect(() => {
     let errorCount = 0;
@@ -95,7 +96,7 @@ export default function AiCircuitBreaker() {
     }
   };
 
-  if (!lastFail) return null;
+  if (!isAdmin || !lastFail) return null;
 
   return (
     <div className="fixed bottom-4 left-4 z-50 animate-bounce cursor-pointer flex items-center gap-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl shadow-lg"

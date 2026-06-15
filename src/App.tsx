@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { 
+  Routes, Route, useNavigate, useLocation, Navigate 
+} from "react-router-dom";
 import { INSTITUTIONS, BRAND_CONFIG, setBrandById } from "./constants";
 import { 
   Plus, LogOut, LayoutDashboard, FileSpreadsheet, 
@@ -9,6 +12,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Student } from "./types";
 import LoginView from "./components/LoginView";
 import WelcomeTourPortal from "./components/WelcomeTourPortal";
+import MainFooter from "./components/MainFooter";
 import ProfileSettingsView from "./components/ProfileSettingsView";
 import ViewFactory, { RoleType, ALLOWED_VIEWS_BY_ROLE } from "./components/ViewFactory";
 import { Brain, Settings, Database, Home, Lock } from "lucide-react";
@@ -20,19 +24,19 @@ import TourGuide from "./components/TourGuide";
 import { getProfileMetadata, getHydratedStudent } from "./lib/userProfiles";
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const mockStudents: Student[] = [
     { id: "1", name: "مریم حسینی (رشته علوم تجربی - هدف پزشکی تهران)", code: "9812405", field: "tajrobi", grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰" }
   ];
 
-  const checkAdminUrlMatch = () => {
-    if (typeof window !== "undefined") {
-      return window.location.pathname === '/admin' || window.location.search.includes('admin') || window.location.hash.includes('admin');
-    }
-    return false;
-  };
+  // Derived view name from current path - ensure we handle nested or complex paths safely
+  const rawPath = location.pathname.substring(1).split('/')[0];
+  const view = rawPath === "" || rawPath === "welcome" ? "welcome" : rawPath;
 
   const [student, setStudent] = useState<Student | null>(() => {
-    if (checkAdminUrlMatch()) return getHydratedStudent(mockStudents[0]);
+    if (location.pathname === '/admin') return getHydratedStudent(mockStudents[0]);
     const savedName = localStorage.getItem("arateb_student_profile_name");
     const savedGrade = localStorage.getItem("arateb_student_profile_grade");
     return getHydratedStudent({
@@ -43,13 +47,11 @@ export default function App() {
       grade: savedGrade || "دوازدهم تجربی - تراز فرضی ۷۲۰۰"
     });
   });
+
   const [role, setRole] = useState<"student" | "parent" | "admin" | "counselor" | "teacher" | null>(() => {
-    if (checkAdminUrlMatch()) return "admin";
+    if (location.pathname === '/admin') return "admin";
+    // Student is default role if not specifically logged in
     return "student";
-  });
-  const [view, setView] = useState<string>(() => {
-    if (checkAdminUrlMatch()) return "admin";
-    return "welcome";
   });
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem("taranom_app_theme") || BRAND_CONFIG.theme || "classic";
@@ -238,15 +240,15 @@ export default function App() {
     setStudent(getHydratedStudent(matchedStudent));
     setRole(selectedRole);
     if (selectedRole === "parent") {
-      setView("parents");
+      navigate("/parents");
     } else if (selectedRole === "admin") {
-      setView("admin");
+      navigate("/admin");
     } else if (selectedRole === "counselor") {
-      setView("counselor-dashboard");
+      navigate("/counselor-dashboard");
     } else if (selectedRole === "teacher") {
-      setView("teacher-dashboard");
+      navigate("/teacher-dashboard");
     } else {
-      setView("dashboard");
+      navigate("/dashboard");
     }
   };
 
@@ -259,9 +261,12 @@ export default function App() {
       grade: "دوازدهم تجربی - تراز فرضی ۷۲۰۰"
     }));
     setRole("student");
-    setView("welcome");
+    navigate("/welcome");
   };
 
+  // Auth checking and routing logic
+  const isPublicRoute = view === "welcome" || view === "login";
+  
   if (view === "welcome") {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900" id="public-homepage-root">
@@ -273,7 +278,7 @@ export default function App() {
               setStudent(null);
               setRole(null);
             }
-            setView(target);
+            navigate(`/${target}`);
           }} 
           onSwitchRole={(newRole) => setRole(newRole)} 
         />
@@ -287,27 +292,9 @@ export default function App() {
         {/* Parallel Font Loading Layer - Optimized via index.html Preconnect/Preload */}
         <style dangerouslySetInnerHTML={{ __html: getThemeCSS(theme) }} />
         <main className="flex-grow flex items-center justify-center py-10">
-          <LoginView onLogin={handleLogin} onBackToHome={() => setView("welcome")} />
+          <LoginView onLogin={handleLogin} onBackToHome={() => navigate("/welcome")} />
         </main>
-        <footer className="py-6 border-t border-slate-100 bg-white text-center text-xs text-slate-400">
-          <div>© {BRAND_CONFIG.fullName} | {BRAND_CONFIG.slogan} با هوش مصنوعی مرکزی</div>
-          <div className="mt-2 flex items-center justify-center gap-3">
-            <button
-              onClick={() => setView("welcome")}
-              className="text-indigo-600 hover:text-indigo-800 transition-colors font-bold text-xs"
-            >
-              بازگشت به صفحه اصلی سایت
-            </button>
-            <span className="text-slate-200">|</span>
-            <button
-              onClick={() => handleLogin(getHydratedStudent({ id: "1", name: "مدیر سیستم", code: "admin", field: "tajrobi", grade: "-" }), "admin")}
-              className="text-slate-300 hover:text-slate-500 transition-colors inline-flex items-center gap-1"
-            >
-              <Shield size={12} />
-              <span>ورود به پنل مدیریت</span>
-            </button>
-          </div>
-        </footer>
+        <MainFooter />
       </div>
     );
   }
@@ -319,15 +306,19 @@ export default function App() {
       <div className="bg-slate-900 text-white py-1 px-4 text-[9px] font-black flex justify-between items-center select-none">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>سامانه ابری و میکروسرویسی {BRAND_CONFIG.name} فعال است</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${role === 'admin' ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-400'} `} />
+            <span>{role === 'admin' ? `سامانه ابری و میکروسرویسی ${BRAND_CONFIG.name} فعال است` : `سیستم هوشمند ${BRAND_CONFIG.name} متصل است`}</span>
           </span>
-          <span className="hidden sm:inline text-slate-500">|</span>
-          <span className="hidden sm:inline bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/10">پروتکل امنیتی ادمین متصل است</span>
+          {role === 'admin' && (
+            <>
+              <span className="hidden sm:inline text-slate-500">|</span>
+              <span className="hidden sm:inline bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/10">پروتکل امنیتی ادمین متصل است</span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-4">
-          <ApiHealthMonitor />
-          <span className="font-mono text-amber-300">CLOUD_INGRESS_STABLE_3000</span>
+          <ApiHealthMonitor role={role} />
+          {role === 'admin' && <span className="font-mono text-amber-300">CLOUD_INGRESS_STABLE_3000</span>}
         </div>
       </div>
 
@@ -418,7 +409,7 @@ export default function App() {
                                 <button
                                   key={id}
                                   disabled={!isAllowed}
-                                  onClick={() => isAllowed && setView(id)}
+                                  onClick={() => isAllowed && navigate("/" + id)}
                                   className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
                                     !isAllowed 
                                       ? "opacity-40 grayscale pointer-events-none" 
@@ -452,7 +443,7 @@ export default function App() {
             <div className="flex items-center gap-4 relative">
               <SmartNotifications role={role} onAction={(type) => {
                 if (type === "challenge") setIsFocusChallengeOpen(true);
-                if (type === "nudge") setView("quiz");
+                if (type === "nudge") navigate("/quiz");
               }} />
               
               <div className="text-left hidden md:block">
@@ -660,7 +651,7 @@ export default function App() {
                           disabled={!isAllowed}
                           onClick={() => {
                             if (isAllowed) {
-                              setView(item.id);
+                              navigate(`/${item.id}`);
                               setIsMenuOpen(false);
                             }
                           }}
@@ -823,7 +814,7 @@ export default function App() {
           view={view}
           role={role as RoleType}
           student={student}
-          onNavigate={(target) => setView(target)}
+          onNavigate={(target) => navigate(`/${target}`)}
           onSwitchRole={(newRole) => setRole(newRole)}
           onUpdateStudent={handleUpdateStudent}
           onUpdateBrand={() => switchBrand(activeBrandId)}
@@ -845,13 +836,11 @@ export default function App() {
              console.log("Challenge completed with score:", score);
           }}
         />
-        <AiCircuitBreaker />
+        <AiCircuitBreaker role={role} />
       </main>
 
       {/* Persistent Footer */}
-      <footer className="bg-white border-t border-slate-100 py-6 text-center text-xs text-slate-400 mt-10">
-        <div>پلتفرم هوشمند آموزشی و برنامه‌ریزی درسی {BRAND_CONFIG.fullName} بر اساس مدل ارزیابی کنکور سراسری • کپی‌رایت ۱۴۰۵</div>
-      </footer>
+      <MainFooter />
     </div>
   );
 }

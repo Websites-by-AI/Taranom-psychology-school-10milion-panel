@@ -4,11 +4,13 @@ import {
   ArrowLeft, Activity, HelpCircle, CheckCircle,
   Zap, Phone, Globe, Mail, Clock, Award,
   Star, LayoutGrid, Fingerprint, Building2, BarChart3, Home, LayoutDashboard,
-  ShoppingBag, BookOpen, MessageCircle
+  ShoppingBag, BookOpen, MessageCircle, Menu, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BRAND_CONFIG } from '../constants';
 import { Student } from '../types';
+
+import MainFooter from './MainFooter';
 
 interface WelcomeTourPortalProps {
   currentRole: string;
@@ -24,6 +26,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
 
   // Character Toggle State
   const [showConsultationForm, setShowConsultationForm] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // FAQ/Knowledge Base Tabs
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
@@ -119,12 +122,19 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               </nav>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button 
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="lg:hidden p-2.5 text-slate-500 hover:text-indigo-600 bg-slate-100 rounded-xl transition-all active:scale-90"
+              >
+                <Menu size={20} />
+              </button>
               <button 
                 onClick={() => onNavigate("login")} 
-                className="bg-slate-900 hover:bg-indigo-600 text-white text-[11px] font-black px-6 py-2.5 rounded-2xl transition-all duration-300 active:scale-95 shadow-lg shadow-slate-200 hover:shadow-indigo-200 cursor-pointer flex items-center gap-2"
+                className="bg-slate-900 hover:bg-slate-800 text-white text-[10px] sm:text-[11px] font-black px-4 sm:px-6 py-2.5 rounded-2xl transition-all duration-300 active:scale-95 shadow-lg shadow-slate-200 cursor-pointer flex items-center gap-2 whitespace-nowrap"
               >
-                <span>ورود به سامانه</span>
+                <span className="hidden xs:inline">ورود به سامانه</span>
+                <span className="xs:hidden">ورود</span>
                 <ArrowLeft size={14} />
               </button>
             </div>
@@ -132,8 +142,79 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
         </div>
       </header>
 
+      {/* 📱 Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute right-0 top-0 bottom-0 w-80 bg-white shadow-2xl p-6 flex flex-col gap-8"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-6 border-b border-slate-100">
+                <div className="flex items-center gap-3 text-indigo-600 font-black">
+                  <Sparkles size={24} />
+                  <span>ترنم همدلی</span>
+                </div>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 bg-slate-100 rounded-xl text-slate-500"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <nav className="flex flex-col gap-2">
+                {[
+                  { id: "hero", label: "خانه", icon: Home },
+                  { id: "features", label: "قابلیت‌ها", icon: Zap },
+                  { id: "plans", label: "خدمات و پلن‌ها", icon: LayoutGrid },
+                  { id: "shop", label: "فروشگاه تخصصی", icon: ShoppingBag },
+                  { id: "blog", label: "وبلاگ و مقالات", icon: BookOpen },
+                  { id: "contact", label: "تماس با ما", icon: Phone },
+                ].map((link) => (
+                  <a 
+                    key={link.id}
+                    href={`#${link.id}`} 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-4 rounded-2xl bg-slate-50/50 hover:bg-indigo-50 hover:text-indigo-600 transition-all font-heavy text-sm flex items-center gap-4"
+                  >
+                    <div className="p-2 bg-white rounded-lg text-slate-400 group-hover:text-indigo-600 border border-slate-100">
+                      <link.icon size={18} />
+                    </div>
+                    <span>{link.label}</span>
+                  </a>
+                ))}
+              </nav>
+
+              <div className="mt-auto pt-6 border-t border-slate-100">
+                <button 
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    onNavigate("login");
+                  }}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-indigo-100"
+                >
+                  <User size={18} />
+                  <span>ورود به حساب کاربری</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 🚀 Premium Hero Section */}
-      <section className="relative pt-12 pb-24 md:pt-20 md:pb-28" id="hero">
+      <section className="relative pt-12 pb-12 md:pt-16 md:pb-16" id="hero">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center text-center space-y-12">
             
@@ -158,11 +239,11 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="text-5xl md:text-7xl lg:text-8xl font-black text-slate-900 leading-[1.1] tracking-tight"
+                className="text-5xl md:text-7xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight"
               >
-                با هم به <br />
+                با همدلی و همراهی علمی، <br />
                 <span className="relative inline-block mt-4">
-                  <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-violet-600 to-indigo-700">قبولی برسیم ❤️</span>
+                  <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-violet-600 to-indigo-700">چالش‌ها را حل کنیم ❤️</span>
                   <div className="absolute -bottom-3 left-0 w-full h-5 bg-indigo-100/60 -rotate-1 -z-10 rounded-full blur-md" />
                 </span>
               </motion.h1>
@@ -240,7 +321,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
       </section>
 
       {/* 💎 Section 2: Smart Tools (Bento Grid Style) */}
-      <section className="py-24 relative overflow-hidden" id="features">
+      <section className="py-16 relative overflow-hidden" id="features">
         {/* Decorative background elements for this section */}
         <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-indigo-50/30 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/4" />
         <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-violet-50/20 rounded-full blur-[100px] translate-y-1/4 -translate-x-1/4" />
@@ -265,6 +346,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               title="دستیار شخصی و صبور"
               desc="دیگه لازم نیست بین هزارتا منبع گم بشی. معلم هوشمندت بر اساسِ خودِ تو، بهترین راه رو پیدا می‌کنه."
               badge="صمیمانه"
+              image="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800"
             />
             <BentoCard 
               className="md:col-span-3 lg:col-span-8"
@@ -280,6 +362,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<Target size={24} />}
               title="حلِ چالش‌های تستی"
               desc="هر تستی که اشتباه می‌زنی، یه فرصته. ما تله‌هایی که طراح‌ها برات گذاشتن رو برات کالبدشکافی می‌کنیم."
+              image="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&q=80&w=800"
             />
             <BentoCard 
               className="md:col-span-3 lg:col-span-4"
@@ -287,6 +370,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<Activity size={24} />}
               title="آرامش و سلامتِ ذهن"
               desc="کنکور فقط درس نیست. ما حواسمون به سطح استرس و خستگی‌ت هست تا همیشه با انرژیِ خوب درس بخونی."
+              image="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=800"
             />
             <BentoCard 
               className="md:col-span-3 lg:col-span-4"
@@ -294,13 +378,14 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<LayoutDashboard size={24} />}
               title="برنامه‌ریزی که باهات راه میاد"
               desc="برنامه‌ای که خشک نیست! اگه یه روز خسته بودی، باهات هماهنگ می‌شه تا هیچ‌وقت احساس عقب‌موندگی نکنی."
+              image="https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&q=80&w=800"
             />
           </div>
         </div>
       </section>
 
       {/* 🤝 Section 3: For Groups (SaaS Layers) */}
-      <section className="py-24 bg-slate-50 relative overflow-hidden" id="plans">
+      <section className="py-16 bg-slate-50 relative overflow-hidden" id="plans">
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-20">
           
@@ -340,7 +425,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
       </section>
 
       {/* 💬 Section 4: Elegant Testimonials */}
-      <section className="py-24">
+      <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
              <div className="lg:col-span-5 space-y-8">
@@ -394,140 +479,85 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
       </section>
 
       {/* 🛒 Section 6: Marketplace & Blog Preview (New) */}
-      <section className="py-24 bg-slate-50/50 relative border-y border-slate-100" id="shop">
+      <section className="py-16 bg-slate-50/50 relative border-y border-slate-100" id="shop">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row gap-20">
+          <div className="flex flex-col lg:flex-row gap-12">
             {/* Shop Preview */}
-            <div className="lg:w-1/2 space-y-12">
+            <div className="lg:w-7/12 space-y-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-indigo-600">
                   <ShoppingBag size={20} />
                   <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-lg">فروشگاه ترنم همدلی</span>
                 </div>
-                <h2 className="text-4xl font-black text-slate-900 leading-tight">منابع آموزشی <br /> دست‌چین شده</h2>
-                <p className="text-base text-slate-500 font-bold leading-relaxed max-w-md">بسته‌های مکمل یادگیری و ابزارهای فیزیکی کایزن برای ارتقای کیفیت مطالعه شما.</p>
+                <h2 className="text-4xl font-black text-slate-900 leading-tight">منابع علمی و <br /> ابزارهای یادگیری</h2>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { title: "بسته کارت‌های یادگیری عمیق", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1544640808-32ca72ac7f67?auto=format&fit=crop&q=80&w=400" },
-                  { title: "دفتر برنامه‌ریزی کایزنی", price: "۹۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=400" }
+                  { title: "کارت‌های یادگیری عمیق زیست", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1544640808-32ca72ac7f67?auto=format&fit=crop&q=80&w=400" },
+                  { title: "دفتر برنامه‌ریزی کایزن", price: "۹۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=400" },
+                  { title: "بسته آزمون‌های جامع شبیه‌ساز", price: "۲۱۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=400" },
+                  { title: "کتاب کار عارضه‌یابی تحصیلی", price: "۱۲۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400" },
+                  { title: "پکیج فلش‌کارت‌های شیمی", price: "۱۶۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400" },
+                  { title: "جامدادی طرح کایزن", price: "۴۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1583339793403-3d9b001b5608?auto=format&fit=crop&q=80&w=400" },
+                  { title: "دفترچه نکات رتبه برترها", price: "۷۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&q=80&w=400" },
+                  { title: "پوستر بودجه‌بندی کنکور", price: "۳۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1503596476-1c12a8ba09a9?auto=format&fit=crop&q=80&w=400" }
                 ].map((item, idx) => (
-                  <div key={idx} className="group cursor-pointer">
-                    <div className="aspect-[4/5] rounded-[2.5rem] overflow-hidden mb-5 relative shadow-lg shadow-slate-200/50">
-                      <img src={item.img} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <motion.div 
+                    key={idx} 
+                    whileHover={{ y: -5 }}
+                    className="group cursor-pointer bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
+                  >
+                    <div className="aspect-[4/3] rounded-xl overflow-hidden mb-3 relative shadow-sm border border-slate-50">
+                      <img src={item.img} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     </div>
-                    <h4 className="text-base font-black text-slate-800 px-2">{item.title}</h4>
-                    <p className="text-sm text-indigo-600 font-black mt-2 px-2">{item.price}</p>
-                  </div>
+                    <div className="px-1">
+                      <h4 className="text-[11px] font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors uppercase">{item.title}</h4>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-[10px] text-indigo-600 font-black">{item.price}</p>
+                        <ShoppingBag size={12} className="text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                      </div>
+                    </div>
+                  </motion.div>
                 ))}
               </div>
-              <button className="text-xs font-black text-slate-900 flex items-center gap-3 hover:gap-4 transition-all px-2 py-4 group">
+              <button className="text-xs font-black text-slate-900 flex items-center gap-3 hover:gap-4 transition-all px-1 py-2 group">
                 <span className="border-b-2 border-indigo-200 group-hover:border-indigo-600 transition-colors pb-1">مشاهده همه محصولات فروشگاه</span>
                 <ArrowLeft size={18} className="text-indigo-600" />
               </button>
             </div>
 
             {/* Blog Preview */}
-            <div className="lg:w-1/2 space-y-12" id="blog">
+            <div className="lg:w-5/12 space-y-8 border-r border-slate-200 pr-12 hidden lg:block" id="blog">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-indigo-600">
                   <BookOpen size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-lg">مجله آموزشی و مربیگری</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-lg">مجله آموزشی</span>
                 </div>
-                <h2 className="text-4xl font-black text-slate-900 leading-tight">یادداشت‌های <br /> مربی همدل</h2>
-                <p className="text-base text-slate-500 font-bold leading-relaxed max-w-md">آخرین یافته‌های روان‌شناسی یادگیری و تکنیک‌های نوین مدیریت استرس کنکور.</p>
+                <h2 className="text-4xl font-black text-slate-900 leading-tight">یادداشت‌های <br /> نوین</h2>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {[
-                  { title: "چگونه با تکنیک ۲۰ دقیقه‌ای به تمرکز عمیق برسیم؟", date: "۲۴ خرداد ۱۴۰۵", time: "۵ دقیقه مطالعه", category: "تمرکز" },
-                  { title: "نقش خواب در تثبیت آموخته‌های روزانه برای داوطلبان تجربی", date: "۲۱ خرداد ۱۴۰۵", time: "۷ دقیقه مطالعه", category: "سلامت" },
-                  { title: "مدیریت اضطراب در جلسات آزمون‌های آزمایشی", date: "۱۸ خرداد ۱۴۰۵", time: "۴ دقیقه مطالعه", category: "روانشناسی" }
+                  { title: "تمرکز عمیق با تکنیک کایزن در کنکور", category: "تمرکز", img: "https://images.unsplash.com/photo-1484417894907-623942c8ee29?auto=format&fit=crop&q=80&w=150", date: "۲۵ اسفند ۱۴۰۲" },
+                  { title: "نقش خواب در تثبیت آموخته‌های روزانه", category: "سلامت", img: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&q=80&w=150", date: "۲۰ اسفند ۱۴۰۲" },
+                  { title: "مدیریت اضطراب در آزمون‌های شبیه‌ساز", category: "روانشناسی", img: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=150", date: "۱۵ اسفند ۱۴۰۲" },
+                  { title: "تغذیه هوشمندانه برای ذهن کنکوری", category: "تغذیه", img: "https://images.unsplash.com/photo-1490818387583-1baba5e638af?auto=format&fit=crop&q=80&w=150", date: "۱۰ اسفند ۱۴۰۲" },
+                  { title: "روش خلاصه نویسی به سبک رتبه‌های برتر", category: "روش مطالعه", img: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=150", date: "۰۵ اسفند ۱۴۰۲" }
                 ].map((post, idx) => (
-                  <div key={idx} className="p-8 bg-white rounded-[2rem] border border-slate-100 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all cursor-pointer group relative overflow-hidden">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">{post.category}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-black text-slate-400">{post.date}</span>
-                        <div className="w-1 h-1 rounded-full bg-slate-200" />
-                        <span className="text-[10px] font-black text-slate-400">{post.time}</span>
+                  <div key={idx} className="p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center gap-5">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-inner border border-slate-50">
+                      <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-tighter">{post.category}</span>
+                        <span className="text-[8px] text-slate-400 font-bold">{post.date}</span>
                       </div>
+                      <h4 className="text-[12px] font-black text-slate-800 group-hover:text-indigo-600 transition-colors leading-tight">{post.title}</h4>
                     </div>
-                    <h4 className="text-lg font-black text-slate-800 group-hover:text-indigo-600 transition-colors leading-relaxed">{post.title}</h4>
-                    <div className="absolute right-0 top-0 w-1.5 h-full bg-indigo-600 scale-y-0 group-hover:scale-y-100 transition-transform origin-top duration-500" />
-                  </div>
-                ))}
-              </div>
-              <button className="text-xs font-black text-slate-900 flex items-center gap-3 hover:gap-4 transition-all px-2 py-4 group">
-                <span className="border-b-2 border-indigo-200 group-hover:border-indigo-600 transition-colors pb-1">ورود به وبلاگ آموزشی</span>
-                <ArrowLeft size={18} className="text-indigo-600" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 🛒 Section 6: Marketplace & Blog Preview (New) */}
-      <section className="py-24 bg-white relative" id="shop">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row gap-16">
-            {/* Shop Preview */}
-            <div className="lg:w-1/2 space-y-10">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <ShoppingBag size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">فروشگاه ترنم همدلی</span>
-                </div>
-                <h2 className="text-3xl font-black text-slate-900">منابع آموزشی دست‌چین شده</h2>
-                <p className="text-sm text-slate-500 font-bold leading-relaxed">بسته‌های مکمل یادگیری و ابزارهای فیزیکی کایزن برای ارتقای کیفیت مطالعه شما.</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {[
-                  { title: "بسته کارت‌های یادگیری عمیق", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1544640808-32ca72ac7f67?auto=format&fit=crop&q=80&w=400" },
-                  { title: "دفتر برنامه‌ریزی کایزنی", price: "۹۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=400" }
-                ].map((item, idx) => (
-                  <div key={idx} className="group cursor-pointer">
-                    <div className="aspect-[4/3] rounded-3xl overflow-hidden mb-4 relative">
-                      <img src={item.img} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                      <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors" />
-                    </div>
-                    <h4 className="text-sm font-black text-slate-800">{item.title}</h4>
-                    <p className="text-xs text-indigo-600 font-bold mt-1">{item.price}</p>
-                  </div>
-                ))}
-              </div>
-              <button className="text-xs font-black text-slate-900 flex items-center gap-2 hover:gap-3 transition-all">
-                <span>مشاهده همه محصولات</span>
-                <ArrowLeft size={16} />
-              </button>
-            </div>
-
-            {/* Blog Preview */}
-            <div className="lg:w-1/2 space-y-10" id="blog">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <BookOpen size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">مجله آموزشی و مربیگری</span>
-                </div>
-                <h2 className="text-3xl font-black text-slate-900">یادداشت‌های مربی همدل</h2>
-                <p className="text-sm text-slate-500 font-bold leading-relaxed">آخرین یافته‌های روان‌شناسی یادگیری و تکنیک‌های نوین مدیریت استرس کنکور.</p>
-              </div>
-
-              <div className="space-y-6">
-                {[
-                  { title: "چگونه با تکنیک ۲۰ دقیقه‌ای به تمرکز عمیق برسیم؟", date: "۲۴ خرداد ۱۴۰۵", time: "۵ دقیقه مطالعه" },
-                  { title: "نقش خواب در تثبیت آموخته‌های روزانه برای داوطلبان تجربی", date: "۲۱ خرداد ۱۴۰۵", time: "۷ دقیقه مطالعه" },
-                  { title: "مدیریت اضطراب در جلسات آزمون‌های آزمایشی", date: "۱۸ خرداد ۱۴۰۵", time: "۴ دقیقه مطالعه" }
-                ].map((post, idx) => (
-                  <div key={idx} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer group">
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="text-[9px] font-black text-slate-400">{post.date}</span>
-                      <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg">{post.time}</span>
-                    </div>
-                    <h4 className="text-sm font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{post.title}</h4>
+                    <ArrowLeft size={16} className="text-slate-200 group-hover:text-indigo-600 group-hover:-translate-x-1 transition-all" />
                   </div>
                 ))}
               </div>
@@ -537,7 +567,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
       </section>
 
       {/* 🚀 Ready to Start Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <div className="bg-slate-900 rounded-[3rem] p-8 md:p-16 text-center space-y-8 relative overflow-hidden">
           {/* Decorative circles */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -563,79 +593,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
         </div>
       </section>
 
-      {/* 👣 Modern Multi-column Footer */}
-      <footer className="bg-slate-900 pt-20 pb-12 overflow-hidden relative text-white" id="contact">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-16 text-right">
-            
-            <div className="lg:col-span-4 space-y-8">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-600/20">
-                  <Sparkles size={24} />
-                </div>
-                <h2 className="text-2xl font-black tracking-tight">ترنم همدلی</h2>
-              </div>
-              <p className="text-sm text-slate-400 font-bold leading-relaxed max-w-sm text-justify">
-                ما پلی میان تکنولوژی و همدلی ساخته‌ایم. رسالت ما در ترنم همدلی، تبدیل کردن مسیر پرفشار آموزش به راهی هموار و سرشار از خودشناسی است.
-              </p>
-              <div className="flex items-center gap-5 pt-4">
-                 <FooterIcon icon={<Globe size={20} />} />
-                 <FooterIcon icon={<Mail size={20} />} />
-                 <FooterIcon icon={<Phone size={20} />} />
-              </div>
-            </div>
-
-            <div className="lg:col-span-2 lg:col-start-6 space-y-6">
-              <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5 inline-block px-3 py-1 rounded-lg">پلتفرم</h3>
-              <nav className="flex flex-col gap-4 text-xs text-slate-400 font-bold">
-                <a href="#hero" className="hover:text-indigo-400 transition-colors">پیشواز و خانه</a>
-                <a href="#features" className="hover:text-indigo-400 transition-colors">مسیریابی هوشمند</a>
-                <a href="#plans" className="hover:text-indigo-400 transition-colors">همراهی ویژه</a>
-                <a href="#contact" className="hover:text-indigo-400 transition-colors">همدلی با ما</a>
-              </nav>
-            </div>
-
-            <div className="lg:col-span-2 space-y-6">
-              <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5 inline-block px-3 py-1 rounded-lg">همراهان</h3>
-              <nav className="flex flex-col gap-4 text-xs text-slate-400 font-bold">
-                <span className="hover:text-indigo-400 cursor-pointer">مشاور هوشمند</span>
-                <span className="hover:text-indigo-400 cursor-pointer">تحلیل مانوا</span>
-                <span className="hover:text-indigo-400 cursor-pointer">پایش مستمر</span>
-                <span className="hover:text-indigo-400 cursor-pointer">راهنمای یادگیری</span>
-              </nav>
-            </div>
-
-            <div className="lg:col-span-4 space-y-8 bg-white/5 p-10 rounded-[2.5rem] border border-white/10 backdrop-blur-sm">
-               <h3 className="text-sm font-black text-white">در مسیر رشد، همراه هم باشیم</h3>
-               <p className="text-xs text-slate-400 font-bold leading-relaxed">
-                 آخرین یادداشت‌های مربیگری و تحلیل‌های آموزشی را مستقیم در صندوق پستی‌تان دریافت کنید.
-               </p>
-               <div className="flex gap-3">
-                  <input 
-                    type="email" 
-                    placeholder="نشانی رایانامه شما..." 
-                    className="flex-grow bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all placeholder:text-slate-500"
-                  />
-                  <button className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-xs font-black shadow-lg shadow-indigo-600/10 hover:bg-white hover:text-slate-900 transition-all duration-300">تایید</button>
-               </div>
-            </div>
-
-          </div>
-
-          <div className="pt-12 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-8">
-            <p className="text-[11px] text-slate-500 font-bold">© ۱۴۰۵ تمامی حقوق برای آکادمی ترنم همدلی محفوظ است.</p>
-            <div className="flex items-center gap-6">
-               <div className="flex gap-6 text-[11px] text-slate-500 font-bold">
-                 <span className="hover:text-white cursor-pointer transition-colors">حریم خصوصی</span>
-                 <span className="hover:text-white cursor-pointer transition-colors">شرایط همراهی</span>
-               </div>
-               <div className="w-px h-5 bg-white/10 mx-2" />
-               <p className="text-white/30 font-black text-[10px] tracking-[0.2em] uppercase">Built with heart & AI</p>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <MainFooter />
     </div>
   );
 }

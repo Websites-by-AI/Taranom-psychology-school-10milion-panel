@@ -39,21 +39,21 @@ export const ALLOWED_VIEWS_BY_ROLE: Record<RoleType, string[]> = {
   student: [
     "welcome", "dashboard", "manova", "report", "schedule", "counselor", 
     "progress", "traps", "quiz", "psychology", "metacognition", "counseling", 
-    "historical-db"
+    "historical-db", "shop", "blog", "contact"
   ],
   parent: [
     "welcome", "parents", "manova", "report", "psychology", "counseling", 
-    "historical-db"
+    "historical-db", "shop", "blog", "contact"
   ],
   admin: [
-    "welcome", "admin", "manova"
+    "welcome", "admin", "manova", "shop", "blog", "contact"
   ],
   counselor: [
     "welcome", "counselor-dashboard", "manova", "report", "psychology", 
-    "counselor-chat", "traps"
+    "counselor-chat", "traps", "shop", "blog", "contact"
   ],
   teacher: [
-    "welcome", "teacher-dashboard", "report", "traps"
+    "welcome", "teacher-dashboard", "report", "traps", "shop", "blog", "contact"
   ]
 };
 
@@ -171,6 +171,89 @@ export default function ViewFactory({
           onNavigate={onNavigate} 
           onUpdateStudent={onUpdateStudent} 
         />
+      );
+
+    case "shop":
+      return (
+        <div className="p-12 text-center bg-white border border-slate-100 rounded-[2.5rem] shadow-xl space-y-8 animate-in fade-in zoom-in-95 duration-500 RTL" style={{ direction: 'rtl' }}>
+          <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner ring-4 ring-indigo-50/50">
+             <span className="text-4xl animate-bounce">🛍️</span>
+          </div>
+          <div className="space-y-3">
+             <h2 className="text-3xl font-black text-slate-900">فروشگاه ابزارهای کایزن</h2>
+             <p className="text-sm text-slate-500 font-bold max-w-md mx-auto leading-relaxed">
+               به زودی مجموعه کاملی از دفترهای برنامه‌ریزی، اشتراک‌های ویژه تحلیل آزمون و کتاب‌های نایاب در این بخش قرار می‌گیرد.
+             </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
+             {["کتاب‌های تخصصی", "اشتراک نقره‌ای", "دوره مربیگری"].map((item, i) => (
+                <div key={i} className="p-6 bg-slate-50 border border-slate-100 rounded-2xl hover:border-indigo-200 transition-all cursor-pointer group">
+                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-3 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-sm">
+                      <span className="text-lg">⭐</span>
+                   </div>
+                   <h4 className="text-xs font-black text-slate-850 mb-1">{item}</h4>
+                   <span className="text-[10px] text-slate-400 font-bold">به زودی...</span>
+                </div>
+             ))}
+          </div>
+          <button onClick={() => onNavigate("welcome")} className="text-indigo-600 text-xs font-black hover:underline">بازگشت به پیشخوان</button>
+        </div>
+      );
+
+    case "blog":
+      return (
+        <div className="p-12 text-center bg-white border border-slate-100 rounded-[2.5rem] shadow-xl space-y-8 animate-in fade-in zoom-in-95 duration-500 RTL" style={{ direction: 'rtl' }}>
+          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner ring-4 ring-emerald-50/50">
+             <span className="text-4xl">✍️</span>
+          </div>
+          <div className="space-y-3">
+             <h2 className="text-3xl font-black text-slate-900">وبلاگ تحلیلی و آموزشی</h2>
+             <p className="text-sm text-slate-500 font-bold max-w-md mx-auto leading-relaxed">
+               آخرین مقالات مربوط به روانشناسی کنکور، مدیریت زمان و تکنیک‌های تست‌زنی سرعتی را اینجا بخوانید.
+             </p>
+          </div>
+          <div className="space-y-4 max-w-3xl mx-auto">
+             {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center gap-6 p-5 hover:bg-slate-50 rounded-2xl transition-all border border-transparent hover:border-slate-100 text-right cursor-pointer">
+                   <div className="w-32 h-20 bg-slate-100 rounded-xl shrink-0 overflow-hidden relative">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-slate-200 to-transparent" />
+                   </div>
+                   <div className="space-y-2">
+                      <h4 className="text-sm font-black text-slate-900">چگونه در آزمون‌های جامع تراز خود را ۱۰٪ افزایش دهیم؟</h4>
+                      <p className="text-[11px] text-slate-400 font-bold">منتشر شده در ۲۴ خرداد ۱۴۰۵ • زمان مطالعه: ۵ دقیقه</p>
+                   </div>
+                </div>
+             ))}
+          </div>
+          <button onClick={() => onNavigate("welcome")} className="text-emerald-600 text-xs font-black hover:underline">بازگشت به پیشخوان</button>
+        </div>
+      );
+
+    case "contact":
+      return (
+        <div className="p-12 text-center bg-white border border-slate-100 rounded-[2.5rem] shadow-xl space-y-8 animate-in fade-in zoom-in-95 duration-500 RTL" style={{ direction: 'rtl' }}>
+          <div className="w-20 h-20 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner ring-4 ring-amber-50/50">
+             <span className="text-4xl">📞</span>
+          </div>
+          <div className="space-y-3">
+             <h2 className="text-3xl font-black text-slate-900">مرکز همدلی و پشتیبانی</h2>
+             <p className="text-sm text-slate-500 font-bold max-w-md mx-auto leading-relaxed">
+               تیم پشتیبانی ما ۲۴ ساعته برای پاسخ به سوالات شما و حل مشکلات فنی در کنار شماست.
+             </p>
+          </div>
+          <div className="max-w-xl mx-auto p-8 bg-slate-50 rounded-3xl border border-slate-100 text-right space-y-4">
+             <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-slate-500 mr-2">موضوع پیام</label>
+                <input type="text" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs focus:ring-2 focus:ring-amber-500/20 outline-none transition-all" placeholder="مثلاً: سوال در مورد پنل والدین" />
+             </div>
+             <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-slate-500 mr-2">شرح پیام شما</label>
+                <textarea className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs focus:ring-2 focus:ring-amber-500/20 outline-none transition-all min-h-[120px]" placeholder="پیام خود را اینجا بنویسید..." />
+             </div>
+             <button className="w-full bg-slate-900 text-white py-4 rounded-xl text-xs font-black hover:bg-slate-800 transition active:scale-[0.98] shadow-lg shadow-slate-200">ارسال پیام به تیم فنی</button>
+          </div>
+          <button onClick={() => onNavigate("welcome")} className="text-amber-600 text-xs font-black hover:underline">بازگشت به پیشخوان</button>
+        </div>
       );
     
     default:

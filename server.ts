@@ -338,11 +338,16 @@ function getAI(req: express.Request, res?: express.Response) {
 
 // REST Api endpoints
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", industry: "High School Education & Konkur Prep", brand: "ترنم مهر", time: new Date().toISOString() });
+  res.json({ status: "ok", industry: "High School Education & Konkur Prep", brand: "ترنم همدلی", time: new Date().toISOString() });
 });
 
 app.get("/api/ai-status", (req, res) => {
-  res.json({ status: "online", models: ["gemini-3.5-flash", "gemini-3.1-pro-preview"] });
+  res.json({ 
+    status: "online", 
+    models: ["gemini-3.5-flash", "gemini-3.1-pro-preview"],
+    hasServerGeminiKey: !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.includes("AIzaSy") && process.env.GEMINI_API_KEY.length > 10),
+    hasServerOpenRouterKey: !!(process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.startsWith("sk-") && process.env.OPENROUTER_API_KEY.length > 10)
+  });
 });
 
 // Offline & Simulation Fallback Utility Functions
@@ -580,9 +585,9 @@ function getOfflinePsychologyAnalysis(qAnxiety: number, qFocus: number, qPerfect
 app.get("/api/motivational", async (req, res) => {
   console.log("GET /api/motivational called");
   const quotes = [
-    "اعتبار ترنم مهر در طول سالیان، حاصل ممارست فرزندان شایسته‌ای است که امروز رتبه‌های برتر دانشگاه‌های تهران، شریف و بهشتی کشور هستند. به پالس‌های تلاش روزانه خود وفادار بمانید!",
+    "اعتبار ترنم همدلی در طول سالیان، حاصل ممارست فرزندان شایسته‌ای است که امروز رتبه‌های برتر دانشگاه‌های تهران، شریف و بهشتی کشور هستند. به پالس‌های تلاش روزانه خود وفادار بمانید!",
     "تلاش متعهدانه ثمر خواهد داد. خواندن خط‌به‌خط تصویر زیست یا دست‌ورزی مسئله فیزیک، پله‌ای برای پزشک، مهندس یا رتبه برتر شدن است.",
-    "هر کارنامه آزمایشی در سامانه ترنم مهر، یک نقشه دقیق مربی‌گری کایزن برای غلبه تدریجی بر تله‌های طراحان ماهر کنکور است. شجاعانه ادامه دهید!",
+    "هر کارنامه آزمایشی در سامانه ترنم همدلی، یک نقشه دقیق مربی‌گری کایزن برای غلبه تدریجی بر تله‌های طراحان ماهر کنکور است. شجاعانه ادامه دهید!",
     "تراز کمال علمی حاصل تصادف و بخت نیست؛ بلکه فرآیند مداوم بهسازی عادات، مهار نمره‌های منفی و انگیزه درخشیدن شماست. پرانرژی ماراتن را مهار کنید!",
     "شما مجهز به برترین تکنولوژی مربی‌گری و روانشناسی تحصیلی هستید. از هر پومودوروی مطالعاتی برای پیشی گرفتن از رقبای خسته خود استفاده کنید."
   ];
@@ -705,11 +710,11 @@ app.post("/api/goal-insight", async (req, res) => {
       return res.json(getOfflineGoalInsight(student, currentTraz, currentPercentage, targetTraz, targetGrowth, latestQuizScore));
     }
 
-    const prompt = `شما یک مشاور ارشد تحصیلی، ارزیاب ترازهای علمی و طراح کایزن درگاه آموزشی عالی موسسه "ترنم مهر" (سامانه هوشمند پایش اهداف داوطلبان کنکور سراسری ایران) هستید.
+    const prompt = `شما یک مشاور ارشد تحصیلی، ارزیاب ترازهای علمی و طراح کایزن درگاه آموزشی عالی موسسه "ترنم همدلی" (سامانه هوشمند پایش اهداف داوطلبان کنکور سراسری ایران) هستید.
 امکانات و اهداف تحصیلی دانش‌آموز به شرح زیر است:
 - نام و دوره هدف: ${student?.name || "داوطلب فرضی"} - هدف ${student?.grade || ""} رشته تخصصی کنکور ${fieldName}
 - سرفصل‌های اولویت‌دار و مباحث درسی ضعیف (اعلام شده توسط داوطلب): ${student?.priorityTopics || "موردی ثبت نشده است"}
-- تراز آزمون تستی فعلی داوطلب در ترنم مهر: ${currentTraz || 6500}
+- تراز آزمون تستی فعلی داوطلب در ترنم همدلی: ${currentTraz || 6500}
 - تراز هدف‌گذاری شده دانشگاه اول کشور: ${targetTraz || 8500}
 - درصد محصولات تستی پاسخ صحیح فعلی: ${currentPercentage || 59}٪
 - راندمان تست‌زنی هدف نهایی: ${targetPercentage}٪ (شامل بازدهی قبلی به همراه بهبود مربی‌گری)
@@ -728,7 +733,7 @@ app.post("/api/goal-insight", async (req, res) => {
   "text": "تحلیل صمیمی، ارزیابی بهداشت ذهن داوطلب، فرمول تلاش و مربی‌گری در ۳ الی ۴ جمله فارسی ترغیب‌کننده و معمارانه با لحن صمیمی (با تاکید و وزن بیشتر بر سرفصل‌های اولویت‌دار اعلامی داوطلب)",
   "recommendations": [
     "توصیه کاربردی ۱ جهت رفع تله تستی دروس آسیب دیده و ارتقای احتمال قبولی در رشته و دانشگاه هدف",
-    "توصیه کاربردی ۲ جهت بهینه‌سازی کایزن مطالعاتی درسنامه گام به گام ترنم مهر",
+    "توصیه کاربردی ۲ جهت بهینه‌سازی کایزن مطالعاتی درسنامه گام به گام ترنم همدلی",
     "توصیه کاربردی ۳ درباره مانیتورینگ دقیق ترازهای رقبا در آزمون‌های جامع پیش‌رو"
   ]
 }

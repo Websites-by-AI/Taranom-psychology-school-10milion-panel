@@ -18,7 +18,7 @@ export interface AIProviderKey {
 
 export interface Student {
   id: string;
-  name: string; // نام داوطلب آزمون سراسری کنکور ترنم مهر
+  name: string; // نام داوطلب آزمون سراسری کنکور ترنم همدلی
   code: string; // شماره داوطلبی یا شناسه کاربری
   field: "tajrobi" | "riazi" | "ensani"; // رشته‌های تحصیلی کنکور: علوم تجربی (tajrobi)، ریاضی فیزیک (riazi)، علوم انسانی (ensani)
   grade: string; // نام شعبه، رتبه یا دوره هدف آموزشی (مثلا "هدف پزشکی تهران - تراز شبیه‌ساز ۷,۸۶۰")
@@ -70,7 +70,7 @@ export interface ZarinPalConfig {
 
 export interface Exam {
   id: string;
-  date: string; // تاریخ برگزاری آزمون آزمایشی ترنم مهر
+  date: string; // تاریخ برگزاری آزمون آزمایشی ترنم همدلی
   title: string; // عنوان آزمون (مثلا "شبیه‌ساز جامع کنکور سراسری شماره ۱")
   traz: number; // تراز علمی داوطلب (بین ۴۰۰۰ تا ۱۲۰۰0)
   rank: number; // رتبه داوطلب در کل کشور
@@ -90,14 +90,14 @@ export interface Weakness {
   topic: string; // مبحث درسی ضعیف (مثلا "روابط همبستگی زیست" یا "مشتق و کاربرد آن")
   subject: string; // نام درس تخصصی آسیب‌دیده
   percentage: number; // سطح تسلط فعلی داوطلب در این مبحث
-  recommendation: string; // توصیه مربیان ترنم مهر جهت اصلاح علمی و حذف تله تستی
+  recommendation: string; // توصیه مربیان ترنم همدلی جهت اصلاح علمی و حذف تله تستی
   questionsCount: number; // تعداد تست‌های تمرینی پیشنهادی در آزمون بعدی جهت غلبه بر چالش
   severity: "critical" | "warning" | "mild"; // میزان اضطرار رفع اشکال علمی
 }
 
 export interface PsychologicalAnalysis {
   pattern: string; // الگوی فرسودگی ذهنی یا اضطراب آزمون (مثلا "وسواس فکری پاسخ غلط"، "نوسان تمرکز در زمان خستگی")
-  description: string; // تحلیل روانشناختی و برنامه‌ریزی مربیان ترنم مهر درباره ریتم مطالعاتی داوطلب
+  description: string; // تحلیل روانشناختی و برنامه‌ریزی مربیان ترنم همدلی درباره ریتم مطالعاتی داوطلب
   correctToWrongRate: number; // درصد پاسخ‌های نادرست به سوالات کل آزمون (%)
   suggestion: string; // پیشنهاد تخصصی افزایش تاب‌آوری روحی و شگردهای آرامش متمرکز
   cardColor: "red" | "orange" | "amber" | "blue";
