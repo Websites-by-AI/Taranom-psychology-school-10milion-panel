@@ -56,6 +56,14 @@ export default function App() {
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem("taranom_app_theme") || BRAND_CONFIG.theme || "classic";
   });
+
+  useEffect(() => {
+    const handleThemeEvent = () => {
+      setTheme(localStorage.getItem("taranom_app_theme") || "classic");
+    };
+    window.addEventListener("taranom_theme_changed", handleThemeEvent);
+    return () => window.removeEventListener("taranom_theme_changed", handleThemeEvent);
+  }, []);
   const [activeBrandId, setActiveBrandId] = useState(BRAND_CONFIG.id);
 
   const switchBrand = (id: string) => {
@@ -231,8 +239,35 @@ export default function App() {
             --color-indigo-100: #f1f5f9 !important;
           }
         `;
+      case "chromebook":
+        return `
+          :root {
+            --color-blue-900: #1a73e8 !important;
+            --color-blue-950: #0d1b2a !important;
+            --color-indigo-900: #1557b0 !important;
+            --color-indigo-950: #174ea6 !important;
+            --color-blue-50: #e8f0fe !important;
+            --color-blue-100: #d2e3fc !important;
+            --color-amber-400: #1a73e8 !important;
+            --color-indigo-50: #e8f0fe !important;
+            --color-indigo-100: #d2e3fc !important;
+          }
+        `;
+      case "classic":
       default:
-        return "";
+        return `
+          :root {
+            --color-blue-900: #4f46e5 !important; /* Vibrant Violet-Indigo */
+            --color-blue-950: #1e1b4b !important; /* Deep Indigo Velvet */
+            --color-indigo-900: #ec4899 !important; /* Cheerful Hot-Pink / Sunset Rose */
+            --color-indigo-950: #831843 !important; /* Rich Rose-Wine */
+            --color-blue-50: #f5f3ff !important; /* Airy Soft Lavender-Mint Highlight */
+            --color-blue-100: #e0e7ff !important; /* Soft Indigo Sky Tint */
+            --color-amber-400: #f59e0b !important; /* Sun-Warm Golden Amber Accent */
+            --color-indigo-50: #fdf2f8 !important; /* Cotton Candy Soft Rose Highlight */
+            --color-indigo-100: #fce7f3 !important; /* Smooth Baby Pink */
+          }
+        `;
     }
   };
 
@@ -504,7 +539,8 @@ export default function App() {
                         { id: "emerald", name: "سبز کانون (آموزشی)", color: "bg-emerald-800" },
                         { id: "ruby", name: "یاقوت درخشان (زرشکی)", color: "bg-rose-900" },
                         { id: "amber", name: "کهربایی گرم (طلایی)", color: "bg-amber-850" },
-                        { id: "obsidian", name: "فولاد دودی (مدرن)", color: "bg-slate-705" }
+                        { id: "obsidian", name: "فولاد دودی (مدرن)", color: "bg-slate-705" },
+                        { id: "chromebook", name: "آبی متریال کروم‌بوک (گوگل)", color: "bg-blue-600" }
                       ].map((t) => (
                         <button
                           key={t.id}

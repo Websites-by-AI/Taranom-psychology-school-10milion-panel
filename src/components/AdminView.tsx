@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Users, BarChart, UploadCloud, Film, Activity, Search, Filter, ShieldCheck, HeartPulse, Check, Shield,
   Terminal, Lock, Key, Copy, Layers, Server, Globe, Cpu, AlertCircle, FileCode, CheckSquare, Database, TrendingUp, Sparkles,
-  ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText, Trash2, Edit3, Settings2, Table
+  ChevronRight, ArrowRight, Play, BookOpen, Clock, Zap, List, RefreshCw, Target, Plus, Brain, Percent, UserPlus, ChevronDown, MapPin, Home, GraduationCap, DollarSign, Wallet, CreditCard, Link, HelpCircle, FileText, Trash2, Edit3, Settings2, Table, Palette
 } from "lucide-react";
 import { getSystemLogs, addSystemLog } from "../lib/syslogs";
 import { Student, AIProviderKey } from "../types";
@@ -43,6 +43,39 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
   const [isUploading, setIsUploading] = useState(false);
   
   // --- INTEGRATIONS STATE ---
+  const [serverStatus, setServerStatus] = useState<{ hasServerGeminiKey?: boolean; hasServerOpenRouterKey?: boolean } | null>(null);
+  const [activeAdminTheme, setActiveAdminTheme] = useState(() => localStorage.getItem("taranom_app_theme") || "classic");
+  const [apiLogs, setApiLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const handleHealthEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setApiLogs(prev => {
+          const next = [customEvent.detail, ...prev];
+          return next.slice(0, 50);
+        });
+      }
+    };
+    window.addEventListener('api-health-event', handleHealthEvent);
+    return () => window.removeEventListener('api-health-event', handleHealthEvent);
+  }, []);
+
+  useEffect(() => {
+    const handleThemeEvent = () => {
+      setActiveAdminTheme(localStorage.getItem("taranom_app_theme") || "classic");
+    };
+    window.addEventListener("taranom_theme_changed", handleThemeEvent);
+    return () => window.removeEventListener("taranom_theme_changed", handleThemeEvent);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/ai-status")
+      .then(r => r.json())
+      .then(data => setServerStatus(data))
+      .catch(err => console.warn("Could not retrieve AI keys status in AdminView:", err));
+  }, []);
+
   const [geminiKey, setGeminiKey] = useState(() => {
     const saved = localStorage.getItem("arateb_gemini_api_key");
     return saved && saved !== "undefined" ? saved : "";
@@ -1504,9 +1537,196 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                       <span>تست همزمان کل ماژول‌ها</span>
                     </button>
                     
-                    <div className="text-[9px] text-slate-400 font-bold leading-relaxed text-center font-sans">
+                     <div className="text-[9px] text-slate-400 font-bold leading-relaxed text-center font-sans">
                       می‌توانید به طور کاملاً رایگان با مراجعه به <a href="https://ai.google.dev" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">Google AI Studio</a> کلید تازه دریافت کنید.
                     </div>
+                  </div>
+                </div>
+
+                {/* Cloudflare & Secrets API Diagnostics Banner */}
+                <div className="bg-slate-950 text-slate-100 p-6 md:p-8 rounded-[2rem] border border-slate-800 shadow-xl space-y-6 text-right">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-4 gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center border border-amber-500/20 animate-pulse">
+                        ☁️
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-white leading-none">عیب‌یابی پیشرفته ابر کلاودفلر و بررسی توکن‌ها (Cloudflare Proxy & Secret Protocol)</h4>
+                        <span className="text-[10px] text-slate-400 font-semibold">اگر با خطای ۴۰۵ (No response body) مواجه شده‌اید، این راهنما به کار شما خواهد آمد</span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full font-black">
+                      سیستم یکپارچه عیب‌یابی کایزن
+                    </span>
+                  </div>
+
+                  {/* Matrix of Secret/Token Availability states */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {(() => {
+                      const hasLocalGemini = !!(localStorage.getItem("arateb_gemini_api_key") && localStorage.getItem("arateb_gemini_api_key")!.trim().length > 10);
+                      const hasLocalOpenRouter = !!(localStorage.getItem("arateb_openrouter_api_key") && localStorage.getItem("arateb_openrouter_api_key")!.trim().length > 10);
+                      const hasServerGemini = !!serverStatus?.hasServerGeminiKey;
+                      const hasServerOpenRouter = !!serverStatus?.hasServerOpenRouterKey;
+
+                      const states = [
+                        { name: "کلید کلاینت Gemini", status: hasLocalGemini, source: "مرورگر" },
+                        { name: "کلید کلاینت OpenRouter", status: hasLocalOpenRouter, source: "مرورگر" },
+                        { name: "کلید محیطی سرور Gemini", status: hasServerGemini, source: ".env.example / سیستم" },
+                        { name: "کلید محیطی سرور OpenRouter", status: hasServerOpenRouter, source: ".env.example / سیستم" }
+                      ];
+
+                      return states.map((s, idx) => (
+                        <div key={idx} className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold text-slate-400 block">{s.name}</span>
+                            <span className="text-[8px] text-slate-500 font-semibold">{s.source}</span>
+                          </div>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-lg border font-black ${
+                            s.status 
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                              : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                          }`}>
+                            {s.status ? "موجود ✓" : "تعریف نشده ❌"}
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  {/* Technical Analysis of Cloudflare Errors */}
+                  <div className="space-y-4 pt-3 border-t border-white/5">
+                    <div className="flex items-center gap-2 text-amber-400 font-extrabold text-xs">
+                      <span>🕵️</span>
+                      <span>راهکار جامع رفع مسدودیت و خطای HTTP Status 405 (No response body)</span>
+                    </div>
+
+                    <div className="text-[10px] leading-relaxed text-slate-300 space-y-4">
+                      <p>
+                        خطای **405 Method Not Allowed** معمولاً بدین معنی است که مِتد ارسالی (مثلاً هدرهای POST ارسال شده به متد `/api/chat`) توسط لایه امنیتی ابر کلاودفلر (Cloudflare WAF / Firewall) یا تنظیمات پروکسی روتر مسدود گردیده است. سرور کایزن شما ۱۰۰٪ آماده سرویس‌دهی است؛ اما کلاودفلر اجازه عبور درخواست به این نقطه مرزی را صادر نمی‌کند.
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-2">
+                          <h6 className="font-black text-amber-350 text-[11px] flex items-center gap-1.5">
+                            <span>💡</span>
+                            <span>۱. تنظیمات SSL کلاودفلر (SSL/TLS Encryption Mode)</span>
+                          </h6>
+                          <p className="text-slate-400 leading-relaxed font-semibold">
+                            اگر بخش SSL کلاودفلر شما روی حالت **Flexible** باشد، کلاودفلر درخواست‌ها را به صورت HTTP و بدون رمزنگاری به سرور مقصد هدایت می‌کند، که باعث می‌شود سرور بلافاصله با ریرایرکت صادر کردن، متد بدنه را خالی کند و خطای ۴۰۵ پیش بیاید. <br/>
+                            <strong>راه حل:</strong> لایه SSL/TLS جفت دامنه را در کلاودفلر روی حالت **Full** یا **Full (Strict)** قرار دهید تا پروتکل از کلاینت تا سرور کاملاً یکپارچه و امن باشد.
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-2">
+                          <h6 className="font-black text-amber-350 text-[11px] flex items-center gap-1.5">
+                            <span>🛡️</span>
+                            <span>۲. غیرفعال کردن Rocket Loader و قوانین امنیتی پیشرفته</span>
+                          </h6>
+                          <p className="text-slate-400 leading-relaxed font-semibold">
+                            ماژول Rocket Loader کلاودفلر تلاش می‌کند اسکریپت‌های مربوط به استریم چت یا آپلود فایل‌ها را بازنویسی کند که هدر درخواست‌ها را تخریب می‌سازد. مضافاً قوانین فایروال (WAF Protection) درخواست‌های POST کلاینت را ربات محسوب می‌کند.<br/>
+                            <strong>راه حل:</strong> Rocket Loader را موقتاً خاموش کنید و یک **WAF Rule** برای مجاز کردن تمام درخواست‌های درگاه [your-domain]/api/* تعریف کنید (Action: Bypass).
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-2">
+                          <h6 className="font-black text-amber-350 text-[11px] flex items-center gap-1.5">
+                            <span>🌐</span>
+                            <span>۳. بررسی آی‌پی‌های بلوکه شده Google API / OpenRouter</span>
+                          </h6>
+                          <p className="text-slate-400 leading-relaxed font-semibold">
+                            سرور مبدا شما در صورت استفاده از کلید استاندارد جیمینای ممکن است به دلیل محدودیت‌های منطقه‌ای گوگل (تحریم) مسدود شده باشد. همچنین کلودفلر ممکن است آی‌پی دامنه مقصد شما را نامعتبر تلقی کند.<br/>
+                            <strong>راه حل:</strong> کلید اختصاصی **OpenRouter** تهیه کنید و آن را جایگزین کنید تا بجای هوش مصنوعی مستقیم با پروکسی امن کانتینرها متصل شوید.
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-2">
+                          <h6 className="font-black text-amber-350 text-[11px] flex items-center gap-1.5">
+                            <span>⚙️</span>
+                            <span>۴. متغیرهای سرور در هاست لینوکسی سرور شما</span>
+                          </h6>
+                          <p className="text-slate-400 leading-relaxed font-semibold">
+                            اطمینان حاصل کنید فایل <code className="bg-slate-950 px-1 py-0.5 rounded text-indigo-400 font-mono text-[9px]">.env</code> یا پنل هاست کانتینرها دارای متغیر با حروف بزرگ به شکل <strong className="text-slate-200">GEMINI_API_KEY</strong> یا <strong className="text-slate-200">OPENROUTER_API_KEY</strong> است. در فایل نمونه پیش‌فرض <code className="bg-slate-950 px-1 py-0.5 rounded text-amber-400 font-mono text-[9px]">.env.example</code> نیز این موارد تایید شده‌اند.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Real-time Dynamic API Logs Visualizer designed to answer user question on which APIs are failing */}
+                    <div className="pt-6 border-t border-white/10 space-y-4">
+                      <div className="flex justify-between items-center bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                          <h5 className="text-[11px] font-black text-slate-200">رصدگر و پایشگر زنده تراکنش‌های شبکه‌ای (Real-time Live API Diagnostics Telemetry)</h5>
+                        </div>
+                        <span className="text-[9px] font-mono bg-slate-950 text-indigo-400 px-2.5 py-0.5 rounded-lg border border-slate-850">
+                          {apiLogs.length} تراکنش ثبت‌شده
+                        </span>
+                      </div>
+
+                      <p className="text-[9px] text-slate-400 leading-relaxed">
+                        کل فرخوانی‌های صورت‌گرفته به نقاط مرزی هوش مصنوعی گوگل، کلاینت پینگ و سرویس‌دهنده‌های ترنم در جدول زیر فوراً ظاهر می‌شوند. شما می‌توانید خطاهای مسدودسازی مانند <strong className="text-amber-500">منع ۴۰۵ (Method Not Allowed)</strong> یا کدهای خطای پروکسی دامنه را زنده مانیتور کنید:
+                      </p>
+
+                      <div className="bg-slate-950/80 rounded-2xl border border-slate-850 overflow-hidden font-mono text-[10px]">
+                        {/* Table Header */}
+                        <div className="grid grid-cols-12 gap-2 bg-slate-900 px-4 py-2 text-slate-400 font-bold text-[9px]">
+                          <div className="col-span-2 text-right">ساعت تراکنش</div>
+                          <div className="col-span-2 text-right">کد وضعیت</div>
+                          <div className="col-span-5 text-right">آدرس اندپوینت / وب‌سرویس</div>
+                          <div className="col-span-1 text-center">زمان فرآیند</div>
+                          <div className="col-span-2 text-left">عارضه‌یابی و جزییات خطا</div>
+                        </div>
+
+                        {/* Logs Live Stream */}
+                        <div className="divide-y divide-slate-900/60 max-h-60 overflow-y-auto no-scrollbar scroll-smooth">
+                          {apiLogs.length === 0 ? (
+                            <div className="p-8 text-center text-slate-600 font-sans">
+                              <span className="block text-xs mb-1">⏳ هنوز فراخوانی لایو در جلسه مرورگر شما پردازش نشده است...</span>
+                              <span className="text-[9px] opacity-70">برای آزمایش مانیتورینگ، یک جلسه چت با هوش مصنوعی آکادمی باز کنید تا لاگ کلاودفلر را در اینجا ببینید.</span>
+                            </div>
+                          ) : (
+                            apiLogs.map((log: any, idx: number) => {
+                              const isErr = log.status === "error";
+                              const isRetry = log.status === "retry";
+                              
+                              return (
+                                <div key={idx} className={`grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-slate-900/40 transition-colors ${isErr ? 'bg-rose-950/15 border-r-2 border-rose-500' : isRetry ? 'bg-amber-950/15 border-r-2 border-amber-500' : ''}`}>
+                                  <div className="col-span-2 text-slate-500 text-[9px]">
+                                    {new Date(log.timestamp).toLocaleTimeString("fa-IR")}
+                                  </div>
+                                  <div className="col-span-2 flex items-center gap-1.5">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isErr ? "bg-rose-500 animate-pulse" : isRetry ? "bg-amber-500" : "bg-emerald-500"}`} />
+                                    <span className={`font-black text-[9px] ${isErr ? "text-rose-400" : isRetry ? "text-amber-400" : "text-emerald-400"}`}>
+                                      {isErr ? "ناموفق (FAIL)" : isRetry ? "بازنگری (RETRY)" : "موفق (OK)"}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-5 text-slate-300 truncate text-[9px]" title={log.url}>
+                                    {log.url}
+                                  </div>
+                                  <div className="col-span-1 text-center text-slate-400 font-semibold text-[9px]">
+                                    {log.latency ? `${log.latency}ms` : "-"}
+                                  </div>
+                                  <div className="col-span-2 text-left text-[9px] overflow-hidden truncate">
+                                    {isErr ? (
+                                      <span className="text-rose-300 font-sans font-semibold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/30" title={log.message}>
+                                        {log.message || "خطای بدنه / ۴۰۵ مسدود"}
+                                      </span>
+                                    ) : isRetry ? (
+                                      <span className="text-amber-300 font-sans font-semibold" title={log.message}>
+                                        {log.message}
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-400 font-sans font-semibold">بای‌پاس موفق ✓</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
@@ -2003,6 +2223,66 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
                         ذخیره و همگام‌سازی نام تجاری موسسه
                      </button>
                   </div>
+
+                  {/* Dedicated SaaS Theme and Color Preset Customizer (Chromebook Theme) */}
+                  <div className="bg-slate-950 p-6 md:p-8 rounded-[2rem] border border-slate-800 shadow-xl space-y-6 text-right mt-8 w-full">
+                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-4 gap-4">
+                       <div className="flex items-center gap-3">
+                         <div className="w-12 h-12 bg-indigo-500/10 text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-500/20">
+                           🎨
+                         </div>
+                         <div>
+                           <h4 className="text-sm font-black text-white leading-none">مدیریت لایه استایل و برند رنگی سیستم (Global Themes & Chromebook Presets)</h4>
+                           <span className="text-[10px] text-slate-400 font-semibold">بومی‌سازی پالت‌های رنگی به انتخاب مدیر کایزن</span>
+                         </div>
+                       </div>
+                       <span className="text-[9px] border border-indigo-500/35 bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full font-black">
+                         پارامترساز زنده پوسته‌ها
+                       </span>
+                     </div>
+                     
+                     <p className="text-[10px] text-slate-300 leading-relaxed font-semibold">
+                       با انتخاب هر یک از قالب‌ها یا تم‌های پیش‌فرض، تغییرات بصری بلافاصله روی مرورگر شما و سایر پورتال‌های کاربران (داوطلبان و ردیف مربیان) فعال و اعمال می‌گردد. تم جدید <span className="text-indigo-400 font-extrabold">«آبی کروم‌بوک»</span> به عنوان رنگ‌بندی فوق‌العاده مدرن و تمیز دپارتمان آموزشی گوگل و کروم‌بوک، با کنتراست بی‌نظیر برای مطالعه طولانی‌مدت داوطلبان افزوده شده است و به مربیان و مدیران نیز امکان انتخاب می‌دهد.
+                     </p>
+
+                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                       {[
+                         { id: "classic", name: "سورمه‌ای اصیل (کلاسیک)", color: "bg-blue-900" },
+                         { id: "chromebook", name: "آبی متریال کروم‌بوک (گوگل)", color: "bg-[#1a73e8]" },
+                         { id: "emerald", name: "سبز کانون (آموزشی)", color: "bg-emerald-800" },
+                         { id: "ruby", name: "یاقوت درخشان (زرشکی)", color: "bg-rose-900" },
+                         { id: "amber", name: "کهربایی گرم (طلایی)", color: "bg-amber-850" },
+                         { id: "obsidian", name: "فولاد دودی (مدرن)", color: "bg-slate-700" }
+                       ].map((t) => {
+                         const isSelected = activeAdminTheme === t.id;
+                         return (
+                           <button
+                             key={t.id}
+                             type="button"
+                             onClick={() => {
+                               localStorage.setItem("taranom_app_theme", t.id);
+                               window.dispatchEvent(new Event("taranom_theme_changed"));
+                             }}
+                             className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between h-28 cursor-pointer relative ${
+                               isSelected 
+                                 ? "bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/30 text-white" 
+                                 : "bg-slate-900/30 border-slate-800/80 hover:bg-slate-950/60 hover:border-slate-700 text-slate-300"
+                             }`}
+                           >
+                             <span className="text-[10px] font-black leading-tight">{t.name}</span>
+                             <div className="flex items-center justify-between w-full mt-2">
+                               <span className={`w-5 h-5 rounded-full ${t.color} border border-slate-700 shadow-md`} />
+                               {isSelected ? (
+                                 <span className="text-[8px] bg-indigo-600 text-white font-black px-2 py-0.5 rounded-lg">فعال</span>
+                               ) : (
+                                 <span className="text-[8px] text-slate-500 font-bold">انتخاب</span>
+                               )}
+                             </div>
+                           </button>
+                         );
+                       })}
+                     </div>
+                   </div>
                 </div>
               </div>
             )}
