@@ -8,6 +8,47 @@ import axios from "axios";
 // Load environment variables
 dotenv.config();
 
+function getOpenRouterEndpoint() {
+  if (process.env.CLOUDFLARE_GATEWAY_URL) {
+    const baseUrl = process.env.CLOUDFLARE_GATEWAY_URL.endsWith('/') 
+      ? process.env.CLOUDFLARE_GATEWAY_URL.slice(0, -1) 
+      : process.env.CLOUDFLARE_GATEWAY_URL;
+    return `${baseUrl}/chat/completions`;
+  }
+  return 'https://openrouter.ai/api/v1/chat/completions';
+}
+
+const DEFAULT_AGENTROUTER_KEY = "sk-XKayPToQQPv8LFu0ctNNoiptMen1aQGcONoI4nXE7G9g3Iwf";
+
+function isAgentRouterKey(key: string, req?: express.Request): boolean {
+  if (!key) return false;
+  const cleanKey = key.trim();
+  if (cleanKey === DEFAULT_AGENTROUTER_KEY) return true;
+  if (process.env.AGENTROUTER_API_KEY && cleanKey === process.env.AGENTROUTER_API_KEY.trim()) return true;
+  if (req) {
+    try {
+      const rawAll = req.headers["x-ai-provider-keys"] || req.headers["X-AI-Provider-Keys"];
+      if (rawAll) {
+        const strVal = Array.isArray(rawAll) ? rawAll[0] : (rawAll as string);
+        if (strVal) {
+          let decoded = strVal;
+          try {
+            if (strVal.includes("%")) {
+              decoded = decodeURIComponent(strVal);
+            }
+          } catch(e){}
+          const parsed = JSON.parse(decoded);
+          if (Array.isArray(parsed)) {
+            const found = parsed.find(k => k.key === cleanKey);
+            if (found && found.provider === "AgentRouter") return true;
+          }
+        }
+      }
+    } catch(e) {}
+  }
+  return false;
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -17,12 +58,14 @@ app.use(express.json());
 class AIAdapter {
   apiKey: string;
   isOpenRouter: boolean;
+  isAgentRouter: boolean;
   googleAI: GoogleGenAI | null = null;
   
-  constructor(apiKey: string) {
+  constructor(apiKey: string, req?: express.Request) {
     this.apiKey = apiKey.trim();
     this.isOpenRouter = this.apiKey.startsWith("sk-or-");
-    if (!this.isOpenRouter) {
+    this.isAgentRouter = isAgentRouterKey(this.apiKey, req);
+    if (!this.isOpenRouter && !this.isAgentRouter) {
       this.googleAI = new GoogleGenAI({ 
         apiKey: this.apiKey,
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
@@ -35,6 +78,8 @@ class AIAdapter {
       generateContent: async (params: any) => {
         if (this.isOpenRouter) {
           return this.generateContentOpenRouter(params);
+        } else if (this.isAgentRouter) {
+          return this.generateContentAgentRouter(params);
         } else {
           return this.googleAI!.models.generateContent(params);
         }
@@ -45,15 +90,15 @@ class AIAdapter {
   get chats() {
     return {
       create: (params: any) => {
-        if (this.isOpenRouter) {
-          // OpenRouter stateless chat wrapper
+        if (this.isOpenRouter || this.isAgentRouter) {
+          // OpenRouter / AgentRouter stateless chat wrapper
           let history: any[] = params.history || [];
           return {
             sendMessage: async (msgParams: any) => {
               const userMessage = typeof msgParams === "string" ? msgParams : msgParams.message;
               history.push({ role: "user", parts: [{ text: userMessage }] });
               
-              // converting format for openrouter
+              // converting format for openrouter/agentrouter
               const messages = [];
               if (params.config?.systemInstruction) {
                 messages.push({ role: "system", content: params.config.systemInstruction });
@@ -68,30 +113,41 @@ class AIAdapter {
                 messages.push({ role: h.role === "model" ? "assistant" : "user", content: text.trim() });
               }
               
-              const openrouterModel = (params.model && typeof params.model === "string" && params.model.includes("/")) 
-                  ? params.model 
-                  : (params.model === "gemini-2.5-flash" ? "google/gemini-2.5-flash" : "openrouter/auto");
+              let modelName = "gpt-4o-mini";
+              let endpoint = "";
+              let headers: any = { 'Content-Type': 'application/json' };
+
+              if (this.isOpenRouter) {
+                endpoint = getOpenRouterEndpoint();
+                headers['Authorization'] = `Bearer ${this.apiKey}`;
+                headers['HTTP-Referer'] = 'https://ai.hamdeltar.ir';
+                headers['X-OpenRouter-Title'] = 'TaranomAcademy';
+                modelName = (params.model && typeof params.model === "string" && params.model.includes("/")) 
+                    ? params.model 
+                    : (params.model === "gemini-2.5-flash" ? "google/gemini-2.5-flash" : "openrouter/auto");
+              } else {
+                endpoint = "https://agentrouter.org/v1/chat/completions";
+                headers['Authorization'] = `Bearer ${this.apiKey}`;
+                modelName = (params.model && typeof params.model === "string" && !params.model.includes("gemini") && !params.model.includes("flash"))
+                    ? params.model
+                    : "gpt-4o-mini";
+              }
 
               const reqBody: any = {
-                model: openrouterModel,
+                model: modelName,
                 messages: messages,
                 max_tokens: params.config?.maxOutputTokens || 2048,
               };
 
-              const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${this.apiKey}`,
-                  'HTTP-Referer': 'https://ai.hamdeltar.ir',
-                  'X-OpenRouter-Title': 'TaranomAcademy',
-                  'Content-Type': 'application/json',
-                },
+                headers: headers,
                 body: JSON.stringify(reqBody),
               });
 
               if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`OpenRouter error: ${errorText}`);
+                throw new Error(`${this.isOpenRouter ? "OpenRouter" : "AgentRouter"} error: ${errorText}`);
               }
               const data = await response.json();
               const contentText = data.choices[0]?.message?.content || "";
@@ -151,7 +207,7 @@ class AIAdapter {
        reqBody.response_format = { type: "json_object" };
      }
 
-     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+     const response = await fetch(getOpenRouterEndpoint(), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -160,11 +216,63 @@ class AIAdapter {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(reqBody),
+       });
+ 
+       if (!response.ok) {
+         const errorText = await response.text();
+         throw new Error(`OpenRouter error: ${errorText}`);
+       }
+       const data = await response.json();
+       const contentText = data.choices[0]?.message?.content || "";
+       return { text: contentText };
+  }
+
+  async generateContentAgentRouter(params: any): Promise<{text: string; textOutput?: string}> {
+     const messages: any[] = [];
+     
+     if (typeof params.contents === "string") {
+       messages.push({ role: "user", content: params.contents });
+     } else if (Array.isArray(params.contents)) {
+       for (const content of params.contents) {
+          let text = "";
+          if (content.parts) {
+            for (const part of content.parts) {
+              if (part.text) {
+                text += part.text + "\n";
+              }
+            }
+          }
+          const role = content.role === "model" ? "assistant" : "user";
+          messages.push({ role, content: text.trim() });
+       }
+     }
+
+     const agentrouterModel = (params.model && typeof params.model === "string" && !params.model.includes("gemini") && !params.model.includes("flash")) 
+        ? params.model 
+        : "gpt-4o-mini";
+
+     const reqBody: any = {
+       model: agentrouterModel,
+       messages: messages,
+       max_tokens: params.config?.maxOutputTokens || 2048,
+     };
+     
+     if (params.config?.responseMimeType === "application/json") {
+       reqBody.response_format = { type: "json_object" };
+     }
+
+     const response = await fetch("https://agentrouter.org/v1/chat/completions", {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reqBody),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`OpenRouter error: ${errorText}`);
+        throw new Error(`AgentRouter error: ${errorText}`);
       }
       const data = await response.json();
       const contentText = data.choices[0]?.message?.content || "";
@@ -209,7 +317,7 @@ function getRequestKeys(req: express.Request): string[] {
   const k5 = req.query?.geminiKey as string;
   const k6 = req.query?.openRouterKey as string;
   
-    const allKeys = [...fallbackKeys, k1, k2, k3, k4, k5, k6, process.env.OPENROUTER_API_KEY, process.env.GEMINI_API_KEY]
+  const allKeys = [...fallbackKeys, k1, k2, k3, k4, k5, k6, process.env.AGENTROUTER_API_KEY, DEFAULT_AGENTROUTER_KEY, process.env.OPENROUTER_API_KEY, process.env.GEMINI_API_KEY]
     .filter(k => k && typeof k === "string" && k.trim() !== "" && k !== "undefined" && k !== "null" && !k.includes("YOUR_API_KEY") && k.length > 10);
     
   return [...new Set(allKeys)];
@@ -226,6 +334,8 @@ function getProviderNameForKey(key: string, req: express.Request): string {
       }
     }
   } catch(e) {}
+  if (key === DEFAULT_AGENTROUTER_KEY) return "AgentRouter (Provided Key)";
+  if (key === process.env.AGENTROUTER_API_KEY) return "AgentRouter (Environment)";
   if (key.startsWith("sk-or-")) return "OpenRouter";
   if (key.startsWith("sk-")) return "OpenAI/Anthropic";
   if (key === process.env.OPENROUTER_API_KEY) return "OpenRouter (Environment)";
@@ -255,11 +365,23 @@ class AIFallbackWrapper {
             // Force use of modern model if not specified or using legacy names
             const effectiveParams = { ...params };
             if (!effectiveParams.model || effectiveParams.model.includes("gemini-2.5") || effectiveParams.model.includes("gemini-3.5")) {
-               effectiveParams.model = "gemini-1.5-flash";
+               effectiveParams.model = "gemini-3.5-flash";
             }
 
-            const ai = new AIAdapter(key);
-            const result = await ai.models.generateContent(effectiveParams);
+            const ai = new AIAdapter(key, this.req);
+            let result;
+            try {
+              result = await ai.models.generateContent(effectiveParams);
+            } catch (e: any) {
+              const errStatus = e.status || (e.response ? e.response.status : undefined);
+              if (errStatus === 429 && effectiveParams.model === "gemini-3.5-flash") {
+                 console.log("Quota exceeded on flash, trying pro...");
+                 effectiveParams.model = "gemini-3.1-pro-preview";
+                 result = await ai.models.generateContent(effectiveParams);
+              } else {
+                throw e;
+              }
+            }
             
             if (this.res && !this.res.headersSent) {
                const providerName = getProviderNameForKey(key, this.req);
@@ -273,8 +395,8 @@ class AIFallbackWrapper {
             lastError = e;
             const errStatus = e.status || (e.response ? e.response.status : undefined);
             console.warn(`[AI Fallback Wrapper] Key ${i} (${key.substring(0, 8)}...) failed. Status: ${errStatus}. Error:`, e.message);
-            // If it's a model not found error, don't just retry all keys with the same model if it might be a model name issue
           }
+
         }
         throw lastError;
       }
@@ -293,12 +415,25 @@ class AIFallbackWrapper {
                 // Ensure modern model name
                 const paramsClone = { ...params, history: params.history ? [...params.history] : [] };
                 if (!paramsClone.model || paramsClone.model.includes("gemini-2.5") || paramsClone.model.includes("gemini-3.5")) {
-                  paramsClone.model = "gemini-1.5-flash";
+                  paramsClone.model = "gemini-3.5-flash";
                 }
 
-                const ai = new AIAdapter(key);
+                const ai = new AIAdapter(key, this.req);
                 const chat = ai.chats.create(paramsClone);
-                const result = await chat.sendMessage(msgParams);
+                let result;
+                try {
+                  result = await chat.sendMessage(msgParams);
+                } catch (e: any) {
+                  const errStatus = e.status || (e.response ? e.response.status : undefined);
+                  if (errStatus === 429 && paramsClone.model === "gemini-3.5-flash") {
+                     console.log("Quota exceeded on flash, trying pro...");
+                     paramsClone.model = "gemini-3.1-pro-preview";
+                     const chatPro = ai.chats.create(paramsClone); // Re-create with new model
+                     result = await chatPro.sendMessage(msgParams);
+                  } else {
+                     throw e;
+                  }
+                }
                 
                 if (this.res && !this.res.headersSent) {
                    const providerName = getProviderNameForKey(key, this.req);
@@ -313,6 +448,7 @@ class AIFallbackWrapper {
                 const errStatus = e.status || (e.response ? e.response.status : undefined);
                 console.warn(`[AI Fallback Wrapper Chat] Key ${i} (${key.substring(0, 8)}...) failed. Status: ${errStatus}. Error:`, e.message);
               }
+
             }
             throw lastError;
           }
@@ -332,6 +468,81 @@ function getAI(req: express.Request, res?: express.Response) {
   } catch (err) {
     console.error("Failed to initialize AI client:", err);
     return null;
+  }
+}
+
+/**
+ * CENTRALIZED AI CALL UTILITY (کدنویسی تمیز هوش مصنوعی)
+ * This is the single, unified main function for all AI generation requests across the system.
+ * It manages keys, fallbacks, provider-specific conversions (Gemini vs OpenRouter vs AgentRouter),
+ * and handles failures or quota errors gracefully.
+ */
+export async function executeAICall(
+  req: express.Request, 
+  res: express.Response | undefined, 
+  options: {
+    systemInstruction?: string;
+    prompt: string;
+    history?: { role: "user" | "model" | "assistant"; content: string }[];
+    model?: string;
+    responseMimeType?: string;
+    fallbackOfflineResponse?: () => string | any;
+  }
+): Promise<string> {
+  try {
+    const ai = getAI(req, res);
+    if (!ai) {
+      if (options.fallbackOfflineResponse) {
+        const fb = options.fallbackOfflineResponse();
+        return typeof fb === "string" ? fb : JSON.stringify(fb);
+      }
+      throw new Error("No active AI provider keys found and no offline fallback defined.");
+    }
+
+    const model = options.model || "gemini-3.5-flash";
+    const contents = [];
+
+    if (options.history && options.history.length > 0) {
+      for (const h of options.history) {
+        contents.push({
+          role: h.role === "assistant" || h.role === "model" ? "model" : "user",
+          parts: [{ text: h.content }]
+        });
+      }
+    }
+    
+    contents.push({
+      role: "user",
+      parts: [{ text: options.prompt }]
+    });
+
+    const config: any = {};
+    if (options.systemInstruction) {
+      config.systemInstruction = options.systemInstruction;
+    }
+    if (options.responseMimeType) {
+      config.responseMimeType = options.responseMimeType;
+    }
+
+    const response = await ai.models.generateContent({
+      model,
+      contents,
+      config
+    });
+
+    const text = response.text?.trim();
+    if (!text) {
+      throw new Error("AI returned an empty response.");
+    }
+    return text;
+  } catch (error: any) {
+    console.error("[Central AI Executor Error]:", error?.message || error);
+    if (options.fallbackOfflineResponse) {
+      console.warn("Using offline fallback due to API error.");
+      const fb = options.fallbackOfflineResponse();
+      return typeof fb === "string" ? fb : JSON.stringify(fb);
+    }
+    throw error;
   }
 }
 
@@ -600,7 +811,7 @@ app.get("/api/motivational", async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.5-flash",
       contents: [{ role: "user", parts: [{ text: "یک جمله انگیزشی صمیمی، همدلانه، خلاقانه، عاطفی، علمی و روان‌شناختی مناسب داوطلبان کنکور سراسری ایران (تجربی، ریاضی، انسانی) برای نصب در بالای پرتال آموزشی 'ترنم مهر' بنویس. شیوه کایزن، تعهد به پیشرفت تدریجی و با هم بودن تا هدف نهایی را تداعی کند. لحن صمیمی و عمیق فارسی داشته باشد، بدون پیشوند و پسوند." }] }],
     });
     return res.json({ quote: response.text?.trim() || quotes[Math.floor(Math.random() * quotes.length)] });
@@ -654,7 +865,7 @@ app.post("/api/chat", async (req, res) => {
 ۵. از ایموجی‌های مناسب (📚, 🌱, ✨, 💡) استفاده کنید.`;
 
     const chat = ai.chats.create({ 
-      model: "gemini-1.5-flash",
+      model: "gemini-3.5-flash",
       history: formattedHistory,
       config: {
         systemInstruction: systemInstruction
@@ -686,6 +897,59 @@ app.post("/api/chat", async (req, res) => {
       isOfflineFallback: true,
       error: rawErrorMsg
     });
+  }
+});
+
+// Endpoint to audit module with AI
+app.post("/api/audit-module", async (req, res) => {
+  const { moduleName, logs, selectedSubModules, type, history, healthLogs } = req.body;
+  try {
+    const ai = getAI(req, res);
+    if (!ai) return res.status(500).json({ suggestion: "سرویس هوش مصنوعی در دسترس نیست." });
+
+    const logSummary = logs.map((l: any) => `${l.timestamp}: ${l.action} - ${l.detail}`).join("\n");
+    const healthLogSummary = healthLogs ? healthLogs.map((l: any) => `${l.timestamp}: ${l.type} - ${l.message}`).join("\n") : "";
+    const historySummary = history && Array.isArray(history) ? `تحلیل‌های قبلی:\n${history.map(h => typeof h === 'string' ? h : h.analysis).join("\n---\n")}` : "";
+    
+    let systemInstruction = "";
+    let userPrompt = "";
+
+    if (type === "project") {
+        systemInstruction = `شما یک مهندس ارشد قابلیت اطمینان سیستم (SRE) و تحلیلگر معماری هستید.
+             وظیفه شما: ارائه یک تحلیل عمیق از دیدگاه SRE درباره سلامت کلی سیستم، شناسایی الگوهای خطا در لاگ‌ها، پیشنهاد بهبودهای زیرساختی و شناسایی نقاط گلوگاه احتمالی.
+             پاسخ باید فنی، استراتژیک و مبتنی بر داده‌های ارائه شده باشد.`;
+        userPrompt = `لاگ‌های سیستم:\n${logSummary}\n\nلاگ‌های سلامت عملکرد:\n${healthLogSummary}\n\nتحلیل‌های قبلی:\n${historySummary}\nلطفا وضعیت سلامت کلی سیستم را تحلیل کن و پیشنهاداتی برای پایداری و بهبود ارائه بده.`;
+    } else {
+        systemInstruction = `شما یک متخصص تحلیل خطا و بهبود کد هستید.
+             وظیفه شما: تحلیل عمیق لاگ‌های ماژول ${moduleName}، بخش‌های انتخابی: ${selectedSubModules?.join(', ') || 'همه موارد'}، شناسایی الگوهای تکرارشونده خطا، تحلیل ریشه‌ای (Root Cause Analysis)، و ارائه پیشنهادهای عملیاتی برای رفع خطاها و بهبود کارایی کد.`;
+        userPrompt = `لاگ‌های ماژول ${moduleName}، بخش‌های انتخابی: ${selectedSubModules?.join(', ') || 'همه موارد'}:\n${logSummary}\n\nلاگ‌های سلامت عملکرد:\n${healthLogSummary}\n\nتحلیل‌های قبلی:\n${historySummary}\nلطفا خطاها را کلاسترینگ کن (دسته‌بندی کن)، ریشه آن‌ها را شناسایی کن و راهکارهای فنی و مشخص برای بهبود ارائه بده.`;
+    }
+
+    const response = await ai.models.generateContent({
+       model: "gemini-3.5-flash",
+       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+       config: { 
+         systemInstruction: `${systemInstruction}
+         
+         پاسخ را دقیقاً در قالب فرمت JSON زیر بدون تگ‌های خارجی تحویل دهید:
+         {
+           "analysis": "تحلیل عمیق و فنی وضعیت",
+           "recommendations": ["راهکار بهبود ۱", "راهکار بهبود ۲"],
+           "riskLevel": "high" | "medium" | "low"
+         }`,
+         responseMimeType: "application/json"
+       }
+    });
+
+    const resultText = response.text?.trim() || "{}";
+    const cleanedText = resultText.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const resultJson = JSON.parse(cleanedText);
+
+    res.json({ suggestion: resultJson });
+  } catch (e: any) {
+    console.error("AI Audit Error:", e);
+    const errorMessage = e.message || "خطای نامشخص";
+    res.status(500).json({ error: `خطا در اتصال به هوش مصنوعی: ${errorMessage}` });
   }
 });
 
@@ -1089,10 +1353,12 @@ app.post("/api/sandbox", async (req, res) => {
     let adapterType = provider;
     if (keyToUse.trim().startsWith("sk-or-")) {
       adapterType = "OpenRouter";
+    } else if (isAgentRouterKey(keyToUse, req)) {
+      adapterType = "AgentRouter";
     }
 
-    if (adapterType === "Google Gemini" || adapterType === "OpenRouter" || !adapterType) {
-      const tempAi = new AIAdapter(keyToUse);
+    if (adapterType === "Google Gemini" || adapterType === "OpenRouter" || adapterType === "AgentRouter" || !adapterType) {
+      const tempAi = new AIAdapter(keyToUse, req);
       const result = await tempAi.models.generateContent({
         model: "gemini-2.5-flash", 
         contents: prompt
@@ -1125,8 +1391,8 @@ app.post("/api/test-provider", async (req, res) => {
 
   const start = performance.now();
   try {
-    if (provider === "Google Gemini" || provider === "OpenRouter") {
-      const tempAi = new AIAdapter(apiKey);
+    if (provider === "Google Gemini" || provider === "OpenRouter" || provider === "AgentRouter") {
+      const tempAi = new AIAdapter(apiKey, req);
       await tempAi.models.generateContent({
         model: "gemini-2.5-flash", // OpenRouter in our AIAdapter maps to openrouter chat completions
         contents: "test"

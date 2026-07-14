@@ -1,379 +1,30 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { 
-  Sparkles, Calendar, TrendingUp, AlertTriangle, CheckSquare, Target, 
-  Quote, ChevronLeft, Zap, Smile, HeartPulse, Brain, Compass, BookOpen, Clock, Check, Layers, Users, ShieldAlert,
-  RefreshCw, X, Timer, MousePointer2, LayoutGrid
+  Sparkles, Calendar, CheckSquare, Quote, HeartPulse, Clock, ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Student, Weakness, DailyPlan, TestTrap } from "../types";
-import { BRAND_CONFIG } from "../constants";
-import GoalTracker from "./GoalTracker";
-import AIExamPredictor from "./AIExamPredictor";
-import RealTimeExamSimulator from "./RealTimeExamSimulator";
-import AdmissionForecastWidget from "./AdmissionForecastWidget";
-import IntelligentInterventionSystem from "./IntelligentInterventionSystem";
-import StudentAchievements from "./StudentAchievements";
-import { addSystemLog } from "../lib/syslogs";
-import { getTestTraps } from "../lib/traps";
-import TrapsTreeMap from "./TrapsTreeMap";
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Cell 
-} from "recharts";
+import { Student, DailyPlan } from "../types";
 
 interface DashboardViewProps {
   student: Student;
   onNavigate: (view: string) => void;
+  onUpdateStudent?: (updatedStudent: Student) => void;
 }
 
 export default function DashboardView({ student, onNavigate }: DashboardViewProps) {
   const [quote, setQuote] = useState("یادگیری یک مسیر است، نه یک مسابقه. ما اینجا هستیم تا در هر گام، با آرامش و دقت بیشتری در کنار شما باشیم.");
   const [loadingQuote, setLoadingQuote] = useState(true);
   
-  const [isTroubleshootingOpen, setIsTroubleshootingOpen] = useState<boolean>(false);
-  const [trapsRefreshTrigger, setTrapsRefreshTrigger] = useState<number>(0);
-  
-  const criticalTrapsCount = getTestTraps().filter(t => t.importance === "high").length;
-  
-  // Dynamic metrics state
-  const [qeiValue, setQeiValue] = useState<number>(() => {
-    const saved = localStorage.getItem(`arateb_goals_${student.id}`);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.currentQeiValue) return parsed.currentQeiValue;
-      } catch (e) {}
-    }
-    return 5575; // Initial base value
-  });
-
-  const [successRate, setSuccessRate] = useState<number>(() => {
-    const saved = localStorage.getItem(`arateb_goals_${student.id}`);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.currentSuccessRate) return parsed.currentSuccessRate;
-      } catch (e) {}
-    }
-    return 59; // Initial base percentage (٪)
-  });
-
-  const [bottleneckCount, setBottleneckCount] = useState<number>(() => {
-    const saved = localStorage.getItem(`arateb_goals_${student.id}`);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.currentBottleneckCount !== undefined) return parsed.currentBottleneckCount;
-      } catch (e) {}
-    }
-    return 3; // Initially 3 flaws
-  });
-
-  const [streakDays, setStreakDays] = useState<number>(() => {
-    const saved = localStorage.getItem(`arateb_goals_${student.id}`);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.currentStreakDays !== undefined) return parsed.currentStreakDays;
-      } catch (e) {}
-    }
-    return 14; 
-  });
-
-  // Kaizen process states
-  const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
-  const [optimizationStep, setOptimizationStep] = useState<number>(0);
-  const [optimizationLogs, setOptimizationLogs] = useState<string[]>([]);
-  const [showCelebration, setShowCelebration] = useState<boolean>(false);
-  const [isMetricsCondensed, setIsMetricsCondensed] = useState<boolean>(false);
-
-  const toPersianNum = (num: number | string) => {
-    const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
-    return num.toString().replace(/\d/g, (x) => persianDigits[parseInt(x)]);
-  };
-
-  const startQualityImprovement = () => {
-    setIsOptimizing(true);
-    setOptimizationStep(0);
-    setOptimizationLogs([]);
-    setShowCelebration(false);
-
-    const logs = [
-      "بخش فنی: تحلیل تله‌های تستی تکراری و بهینه‌سازی بودجه‌بندی دروس کنکوری...",
-      "بخش علمی: بررسی و تنظیم تعادل مطالعاتی زیست‌شناسی و ریاضیات تخصصی...",
-      "بخش پایش: مانیتورینگ آنلاین ساعت حضور فیزیکی کاندید و ثبات تمرکز ذهنی...",
-      "بخش مربیگری: استقرار توصیه‌های کایزن علمی در پرونده داوطلب تجربی/ریاضی...",
-      "کارنامه نهایی: بارگذاری تمام پارامترها و همگام‌سازی شاخص تراز نهایی آزمونها..."
-    ];
-
-    let currentStep = 0;
-    
-    const timer = setInterval(() => {
-      if (currentStep < logs.length) {
-        setOptimizationLogs(prev => [...prev, logs[currentStep]]);
-        setOptimizationStep(currentStep + 1);
-        currentStep++;
-      } else {
-        clearInterval(timer);
-        
-        const targetQei = 6850;
-        const targetSuccess = 85;
-        const targetBottlenecks = 0;
-        const targetDays = 15;
-
-        setQeiValue(targetQei);
-        setSuccessRate(targetSuccess);
-        setBottleneckCount(targetBottlenecks);
-        setStreakDays(targetDays);
-
-        const savedData = localStorage.getItem(`arateb_goals_${student.id}`);
-        let parsed = {};
-        if (savedData) {
-          try {
-            parsed = JSON.parse(savedData);
-          } catch (e) {}
-        }
-        
-        const updatedData = {
-          ...parsed,
-          currentQeiValue: targetQei,
-          currentSuccessRate: targetSuccess,
-          currentBottleneckCount: targetBottlenecks,
-          currentStreakDays: targetDays,
-          latestQuizScore: targetSuccess
-        };
-        localStorage.setItem(`arateb_goals_${student.id}`, JSON.stringify(updatedData));
-        
-        addSystemLog("فعال‌سازی کایزن", student.name, `فرآیند بهبود کیفیت (Kaizen) برای پرونده داوطلب با موفقیت اجرا شد. تراز هدف به ${targetQei} افزایش یافت.`);
-
-        const savedTrend = localStorage.getItem(`arateb_history_${student.id}`);
-        if (savedTrend) {
-          try {
-            const parsedTrend = JSON.parse(savedTrend);
-            if (Array.isArray(parsedTrend) && parsedTrend.length > 0) {
-              const lastIdx = parsedTrend.length - 1;
-              parsedTrend[lastIdx].actualTraz = targetQei;
-              localStorage.setItem(`arateb_history_${student.id}`, JSON.stringify(parsedTrend));
-            }
-          } catch (e) {}
-        }
-
-        setIsOptimizing(false);
-        setShowCelebration(true);
-      }
-    }, 1000);
-  };
-
-  const resetQualityStatus = () => {
-    if (confirm("آیا مایلید وضعیت شاخص‌های تحصیلی را به مقادیر اولیه کایزن بازنشانی کنید؟")) {
-      const targetQei = 5575;
-      const targetSuccess = 59;
-      const targetBottlenecks = 3;
-      const targetDays = 14;
-
-      setQeiValue(targetQei);
-      setSuccessRate(targetSuccess);
-      setBottleneckCount(targetBottlenecks);
-      setStreakDays(targetDays);
-
-      const savedData = localStorage.getItem(`arateb_goals_${student.id}`);
-      let parsed = {};
-      if (savedData) {
-        try {
-          parsed = JSON.parse(savedData);
-        } catch (e) {}
-      }
-      
-      const updatedData = {
-        ...parsed,
-        currentQeiValue: targetQei,
-        currentSuccessRate: targetSuccess,
-        currentBottleneckCount: targetBottlenecks,
-        currentStreakDays: targetDays,
-        latestQuizScore: targetSuccess
-      };
-      localStorage.setItem(`arateb_goals_${student.id}`, JSON.stringify(updatedData));
-
-      const savedTrend = localStorage.getItem(`arateb_history_${student.id}`);
-      if (savedTrend) {
-        try {
-          const parsedTrend = JSON.parse(savedTrend);
-          if (Array.isArray(parsedTrend) && parsedTrend.length > 0) {
-            const lastIdx = parsedTrend.length - 1;
-            parsedTrend[lastIdx].actualTraz = targetQei;
-            localStorage.setItem(`arateb_history_${student.id}`, JSON.stringify(parsedTrend));
-          }
-        } catch (e) {}
-      }
-
-      setShowCelebration(false);
-    }
-  };
-
-  // پایش پایداری ذهنی داوطلب و خستگی روانی
+  const [streakDays, setStreakDays] = useState<number>(14);
+  const [todayTasks, setTodayTasks] = useState<DailyPlan[]>([]);
   const [machineState, setMachineState] = useState<string | null>(null);
   const [hardwareAdvice, setHardwareAdvice] = useState<string>("");
 
-  const dashboardTexts = useMemo(() => {
-    if (student.field === "riazi") {
-      return {
-        statusCritical: "🚨 وضعیت داوطلب: بحرانی (بازه خطای محاسباتی در حسابان و هندسه یازدهم/دوازدهم)",
-        statusWarning: "⚠️ وضعیت داوطلب: هشدار افت تندخوانی فرمول‌ها و راه‌حل‌های فیزیک",
-        recommendationMsg: "قبولی در رشته مهندسی کامپیوتر/برق دانشگاه شریف و تهران (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی درس حسابان، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.",
-        recommActionLine: "به صفحه مشاور فرآیند مراجعه کنید",
-        step1Title: "مرور تعاریف اولیه و تمرین کتاب هندسه",
-        step1Desc: "تست‌زنی تفننی بدون پایه فرمولی را متوقف کرده، کتاب‌های حسابان و هندسه را باز کرده و فرمول‌ها را دوباره بنویسید.",
-        step2Title: "ممانعت از پاسخ شتابزده به سوالات محاسباتی مبهم",
-        step2Desc: "از اصرار بر پاسخ‌گویی به سوالات طولانی مقاطع مخروطی یا مباحث مبهم گسسته خودداری کنید.",
-        step3Title: "اصلاح تعادل تستی دروس فیزیک تخصصی",
-        step3Desc: "ساعت مطالعه مجانب‌ها و مشتق‌پذیری را با فیزیک الکتریسیته بالانس نمایید تا مابقی موازنه خارج نشوند.",
-        lastAiAnalysis: "براساس نمودار فوق، درس «حسابان و ریاضیات تخصصی» به دلیل درصد پاسخ‌گویی پایین (۲۸٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی فصل‌های دیفرانسیل و مجانب‌ها معطوف کنید.",
-        coachingAdvice: "درس «فیزیک تخصصی» نیز در وضعیت هشدار (۴۲٪) است. حل روزانه حداقل ۲۵ تست شبیه‌ساز می‌تواند تراز شما را تا ۱۵٪ بهبود بخشد.",
-        card1Title: "۱. کورتکس و حل تله‌های تستی حسابان",
-        card1Desc: "به دلیل عدم تثبیت فرمول‌های حد و مشتق، بیشترین نمره منفی در آزمون ثبت شده که مطالعه تطبیقی این مبحث با منابع آکادمی آن را برطرف می‌کند.",
-        card2Title: "۲. مبانی مقاطع مخروطی و هندسه تحلیلی",
-        card2Desc: "برای درک بهتر هندسه، حتماً رسم شکل فرضی بیضی و دایره را با حل تست‌های محاسباتی بازخوانی نمایید.",
-        card3Title: "۳. فیزیک دوازدهم و مباحث نوسان",
-        card3Desc: "تسلط بر فرمول‌های نوسان و موج جهت موفقیت قطعی در آزمون‌های شبیه‌ساز مهندسی."
-      };
-    } else if (student.field === "ensani") {
-      return {
-        statusCritical: "🚨 وضعیت داوطلب: بحرانی (بازه خطای مهلک در ادبیات تخصصی و عربی انسانی)",
-        statusWarning: "⚠️ وضعیت داوطلب: هشدار افت حفظیات عروضی و مفاهیم کاربردی",
-        recommendationMsg: "قبولی در رشته حقوق/روانشناسی دانشگاه تهران و تراز اول (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی عروض و قافیه، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.",
-        recommActionLine: "به صفحه مشاور فرآیند مراجعه کنید",
-        step1Title: "ریست فکری و تمرین تقطیع هجایی منظم",
-        step1Desc: "تست‌زنی تفننی بدون پایه سماعی را فوراً متوقف کرده، دیوان شعرا را باز کنید و اختیارهای وزنی را دوباره استخراج کنید.",
-        step2Title: "بررسی قواعد منصوبات و قواعد اعراب عربی",
-        step2Desc: "از پاسخ‌گویی به تمارین طولانی قواعد تمییز و حال بدون مطالعه درسنامه‌های کوتاه کانون بپرهیزید.",
-        step3Title: "موازنه ساعات مطالعه جامعه‌شناسی و تاریخ",
-        step3Desc: "بهترین تعادل تستی و تشریحی دروس عمومی و تخصصی انسانی را طبق بودجه‌بندی ثابت نگه دارید.",
-        lastAiAnalysis: "براساس نمودار فوق، درس «ادبیات فارسی تخصصی» به دلیل درصد پاسخ‌گویی پایین (۲۶٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی اختیارهای وزنی و تقطیع هجایی عروض معطوف کنید.",
-        coachingAdvice: "درس «عربی تخصصی» نیز در وضعیت هشدار (۳۲٪) است. حل روزانه حداقل ۲۰ تست قواعد می‌تواند تراز شما را تا ۱۵٪ بهبود بخشد.",
-        card1Title: "۱. عروض سماعی و مهار تله‌های ادبیات تخصصی",
-        card1Desc: "به دلیل عدم تثبیت اختیارهای عروضی، بیشترین نمره منفی در آزمون سنجه ثبت شده که با منابع آکادمی برطرف می‌گردد.",
-        card2Title: "۲. قواعد منصوبات و ترجمه عربی",
-        card2Desc: "برای درک بهتر عربی تخصصی، حتماً قواعد منادا و اعراب ظاهری را با تست‌های کانون بازخوانی نمایید.",
-        card3Title: "۳. منطق و فلسفه و استدلال‌های مغالطه‌ای",
-        card3Desc: "تسلط بر شناخت انواع مغالطه جهت موفقیت قطعی در آزمون‌های علوم انسانی."
-      };
-    } else {
-      // tajrobi
-      return {
-        statusCritical: "🚨 وضعیت داوطلب: بحرانی (بازه خطای مهلک در زیست‌شناسی و شیمی کنکور)",
-        statusWarning: "⚠️ وضعیت داوطلب: هشدار افت تندخوانی مفاهیم زیست‌شناسی",
-        recommendationMsg: "قبولی در رشته پزشکی/دندان‌پزشکی دانشگاه تهران و ترازهای ممتاز (۵۰۰۰) است. برای فایق آمدن بر گزینه‌های انحرافی درس زیست، ترجیحاً فرآیند خودکار بهبود تراز را فعال نمایید.",
-        recommActionLine: "به صفحه مشاور فرآیند مراجعه کنید",
-        step1Title: "ریست فکری و مرور متن دقیق کتاب درسی",
-        step1Desc: "تست‌زنی تفننی بدون پایه مطالعاتی را فوراً متوقف کرده، کتاب‌های درسی را باز کرده و قیدهای زیست‌شناسی را دوباره بنویسید.",
-        step2Title: "بررسی زمان تلف‌شده روی پاسخ‌های اشتباه شیمی",
-        step2Desc: "از اصرار بر پاسخگویی به سوالات طولانی یا مباحث مبهم شیمی آلی خودداری کنید. گزینه‌های شک‌دار را علامت قرمزی بگذارید.",
-        step3Title: "اصلاح ساعت تعادل دروس عمومی و اختصاصی تجربی",
-        step3Desc: "ضریب تعادل دروس را با توجه به بودجه‌بندی کنکور ثابت نگه دارید تا مابقی دروس از موازنه خارج نشوند.",
-        lastAiAnalysis: "براساس نمودار فوق، درس «زیست‌شناسی» به دلیل درصد پاسخ‌گویی پایین (۲۸٪) در اولویت اول مطالعه اضطراری قرار دارد. پیشنهاد می‌شود تمرکز خود را روی فصل‌های ژنتیک و گیاهی معطوف کنید.",
-        coachingAdvice: "درس «شیمی» نیز در وضعیت هشدار (۳۵٪) است. حل روزانه حداقل ۳۰ تست از مبحث استوکیومتری می‌تواند تراز شما را تا ۱۵٪ بهبود بخشد.",
-        card1Title: "۱. کورتکس و حل تله‌های تستی زیست‌شناسی",
-        card1Desc: "به دلیل عدم تثبیت قیدهای زیست‌شناسی، بیشترین نمره منفی در آزمون ثبت شده که مطالعه تطبیقی این مبحث با منابع آکادمی آن را برطرف می‌کند.",
-        card2Title: "۲. مبانی استوکیومتری و مسائل شیمی",
-        card2Desc: "برای درک بهتر مسائل شیمی، حتماً واکنش‌های پایه را با حل تست‌های محاسباتی بازخوانی نمایید.",
-        card3Title: "۳. فیزیک دوازدهم و مباحث نوسان",
-        card3Desc: "تسلط بر فرمول‌های نوسان و موج جهت موفقیت قطعی در آزمون‌های شبیه‌ساز تجربی."
-      };
-    }
-  }, [student.field]);
-
-  const [todayTasks, setTodayTasks] = useState<DailyPlan[]>([]);
-
-  useEffect(() => {
-    if (student.field === "riazi") {
-      setTodayTasks([
-        { day: "امروز", morningPlan: "مطالعه دقیق مبحث نظریه اعداد و ترکیبیات تخصصی (شمارش و گراف منسجم)", afternoonPlan: "حل تشریحی ۴۰ تست زمان‌دار موج و نوسان فیزیک دوازدهم ریاضی", totalQuestions: 40, completed: false },
-        { day: "امروز", morningPlan: "مرور قضیه رول و نقاط بحرانی در حسابان تخصصی", afternoonPlan: "بررسی تست‌های هندسه تحلیلی مبحث بیضی و دایره کانون", totalQuestions: 25, completed: true },
-        { day: "امروز", morningPlan: "مطالعه بخش ثابت تعادل در شیمی دوازدهم و موازنه کایزن غلظت‌ها", afternoonPlan: "تحلیل آزمون شبیه‌ساز کنکور مدل کایزن ۴ ویژه رشته ریاضی", totalQuestions: 30, completed: false }
-      ]);
-    } else if (student.field === "ensani") {
-      setTodayTasks([
-        { day: "امروز", morningPlan: "تقطیع هجایی و استخراج اختیارهای وزنی در ۲۵ بیت ادبیات فارسی تخصصی", afternoonPlan: "حل تشریحی ۳۰ تست قواعد منصوبات و حال در عربی تخصصی انسانی", totalQuestions: 30, completed: false },
-        { day: "امروز", morningPlan: "مرور مبحث مغالطه‌ها و ارزیابی استدلال‌ها در منطق و فلسفه یازدهم", afternoonPlan: "مطالعه بخش عرضه و تقاضا و مسائل سود کلان از کتاب اقتصاد دهم", totalQuestions: 20, completed: true },
-        { day: "امروز", morningPlan: "مطالعه فصل دوم جامعه‌شناسی دوازدهم (خرده فرهنگ‌ها و جوامع)", afternoonPlan: "شرکت در کارگاه صعود تراز تخصصی آزمون قلم‌چی علوم انسانی", totalQuestions: 15, completed: false }
-      ]);
-    } else {
-      setTodayTasks([
-        { day: "امروز", morningPlan: "مطالعه دقیق مبحث ژنتیک زیست‌شناسی (مفاهیم پایه و مسائل مندلی)", afternoonPlan: "حل تشریحی ۵۰ تست زمان‌دار ویژه استوکیومتری شیمی دوازدهم", totalQuestions: 50, completed: false },
-        { day: "امروز", morningPlan: "مرور فرمول‌های حرکت‌شناسی فیزیک و تحلیل چند نمودار سرعت-زمان", afternoonPlan: "بررسی تست‌های قرابت معنایی و آرایه‌های ادبی ادبیات فارسی اختصاصی", totalQuestions: 25, completed: true },
-        { day: "امروز", morningPlan: "مطالعه مبحث کاربرد مشتق در ریاضیات تجربی و حل مثال‌های تشریحی", afternoonPlan: "تحلیل آزمون شبیه‌ساز کنکور سراسری مرحله ۴ و پایش تراز", totalQuestions: 40, completed: false }
-      ]);
-    }
-  }, [student.field]);
-
-  const mockWeaknesses: Weakness[] = useMemo(() => {
-    if (student.field === "riazi") {
-      return [
-        { topic: "هندسه تحلیلی و مقاطع مخروطی (بیضی و دایره)", subject: "هندسه تحلیلی و گسسته", percentage: 28, recommendation: "رسم شکل‌ها و روابط فیثاغورث در بیضی؛ حل ۳۰ تست جدید از تست‌های داخل و خارج.", questionsCount: 45, severity: "critical" },
-        { topic: "رفع ابهام دیفرانسیل و قضایای حد در بی‌نهایت", subject: "حسابان و ریاضیات تخصصی", percentage: 35, recommendation: "پاسخ به سوالات تمرینی کانون قلم‌چی؛ فهم قضایای هم‌ارزی نیوتون.", questionsCount: 30, severity: "critical" },
-        { topic: "حرکت با شتاب غیرثابت و دینامیک سطوح شیب‌دار", subject: "فیزیک تخصصی ریاضی", percentage: 42, recommendation: "استفاده از روش سطح زیر نمودار سرعت-زمان؛ یادگیری تله‌های فرمول میانگین.", questionsCount: 25, severity: "warning" },
-        { topic: "تعادل شیمیایی و ثابت غلظتی واکنش‌ها", subject: "شیمی کنکور ریاضی", percentage: 55, recommendation: "مرور سریع فرمول‌های تعادل و غلظت تعادلی در کتاب درسی شیمی.", questionsCount: 35, severity: "warning" }
-      ];
-    } else if (student.field === "ensani") {
-      return [
-        { topic: "تشخیص اختیارهای وزنی و تقطیع هجایی شعر", subject: "ادبیات فارسی تخصصی", percentage: 26, recommendation: "تقطیع هجایی منظم و تکرار روزانه وزن‌های عروضی جهت ثبت ذهنی.", questionsCount: 45, severity: "critical" },
-        { topic: "قواعد منادا و منصوبات (حال، تمییز و مفعول مطلق)", subject: "عربی تخصصی انسانی", percentage: 32, recommendation: "شناسایی قواعد تشخیص اعراب‌های ظاهری و محلی عربی.", questionsCount: 30, severity: "critical" },
-        { topic: "فرآیند تفکر منطقی و تصمیم‌گیری عاطفی", subject: "روان‌شناسی تخصصی علوم انسانی", percentage: 46, recommendation: "مرور سریع گام‌های تفکر منطقی در برابر تله‌های انحرافی.", questionsCount: 25, severity: "warning" },
-        { topic: "تاریخ ادبیات سبک‌های هندی و ادوار بازگشت ادبی", subject: "تاریخ و فلسفه انسانی", percentage: 58, recommendation: "ترسیم نمودار درختی ادوار به همراه آثار برجسته ادبی.", questionsCount: 35, severity: "warning" }
-      ];
-    } else {
-      return [
-        { topic: "ژنیتک و وراثت (ژن‌شناسی کلاسیک و مسائل مندل)", subject: "زیست‌شناسی پایه و دوازدهم (تجربی)", percentage: 28, recommendation: "بهینه‌سازی ساعات مطالعه ژنتیک همزمان با حل مسائل تستی متنوع؛ مطالعه دقیق درسنامه و حل ۵۰ تست از کنکورهای ۵ سال اخیر الزامی است.", questionsCount: 45, severity: "critical" },
-        { topic: "سینتیک شیمیایی و عوامل موثر بر سرعت واکنش", subject: "شیمی یازدهم و دوازدهم کنکور", percentage: 35, recommendation: "مرور مجدد مفاهیم غلظت و سرعت اولیه؛ تحلیل قواعد کاتالیزورها و انرژی فعال‌سازی با تست‌های استاندارد کانون قلم‌چی.", questionsCount: 30, severity: "critical" },
-        { topic: "نوسان، موج و فیزیک اتمی (فرمول‌های پایه)", subject: "فیزیک پایه و دوازدهم ریاضی/تجربی", percentage: 42, recommendation: "مرور فرمول‌های نوسان و بسامد؛ انجام ۲۵ تست شبیه‌ساز در انتهای هر مبحث تستی جهت تثبیت مفاهیم پایه فیزیک.", questionsCount: 25, severity: "warning" },
-        { topic: "حد و پیوستگی و مشتق تابع (ریاضیات پایه)", subject: "ریاضیات تجربی و حسابان ریاضی", percentage: 48, recommendation: "فهم عمیق قضایای حد و مشتق‌پذیری؛ بازخوانی دسته‌بندی توابع نمایی و لگاریتمی در کتاب‌های کمک‌آموزشی استاندارد.", questionsCount: 35, severity: "warning" }
-      ];
-    }
-  }, [student.field]);
-
-  const chartData = mockWeaknesses.map(w => {
-    let name = w.subject;
-    if (w.subject.includes("زیست")) name = "زیست‌شناسی";
-    else if (w.subject.includes("شیمی")) name = "شیمی";
-    else if (w.subject.includes("فیزیک")) name = "فیزیک";
-    else if (w.subject.includes("ریاضی")) name = "ریاضیات";
-    return {
-      name,
-      percentage: w.percentage,
-      color: w.severity === "critical" ? "#f43f5e" : "#f59e0b",
-      fullName: w.subject
-    };
-  });
-
-  const fetchWithRetry = async (url: string, options?: RequestInit, retries = 4, delay = 600): Promise<Response> => {
-    try {
-      const response = await fetch(url, options);
-      if (!response.ok && retries > 0 && [500, 502, 503, 504].includes(response.status)) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return fetchWithRetry(url, options, retries - 1, delay * 1.5);
-      }
-      return response;
-    } catch (err) {
-      if (retries > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return fetchWithRetry(url, options, retries - 1, delay * 1.5);
-      }
-      throw err;
-    }
-  };
-
-  // دریافت رهنمود مربیگری از سرور
   useEffect(() => {
     let active = true;
     async function fetchQuote() {
       try {
-        const res = await fetchWithRetry("/api/motivational");
+        const res = await fetch("/api/motivational");
         if (res.ok) {
           const data = await res.json();
           if (active && data.quote) {
@@ -381,38 +32,33 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
           }
         }
       } catch (err) {
-        console.warn("Could not fetch fresh motivational quote, using local offline fallback quote.", err);
+        console.warn("Could not fetch quote, using fallback.", err);
       } finally {
-        if (active) {
-          setLoadingQuote(false);
-        }
+        if (active) setLoadingQuote(false);
       }
     }
     fetchQuote();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  const handleMachineStateChange = (state: string) => {
-    setMachineState(state);
-    switch (state) {
-      case "normal":
-        setHardwareAdvice("🔥 سطح تمرکز داوطلب در بالاترین و پایدارترین حد ممکن قرار دارد. پیشنهاد می‌شود از این فاز طلایی برای حل تست‌های دوره‌ای سخت (مثل تست‌های جامع کنکور) استفاده نمایید.");
-        break;
-      case "warm":
-        setHardwareAdvice("🥱 ذهن داوطلب روبه خستگی خفیف است. لطفاً ساعات مطالعه را پومودورو کنید؛ یعنی ۵۰ دقیقه مطالعه عمیق و ۱۰ دقیقه استراحت متمرکز جهت ریکاوری پالس‌های فکری.");
-        break;
-      case "error_risk":
-        setHardwareAdvice("😰 ناپایداری در یادآوری مفاهیم پایه شیمی گزارش شده است! لطفاً تندخوانی نکات حفظی را فعال کنید و ۵ دور تست تحلیلی تعاملی برای تسلط مجدد بزنید.");
-        break;
-      case "optimal":
-        setHardwareAdvice("🎯 شاخص تمرکز، انگیزه و آرامش ذهنی داوطلب روی نمره کمال تحصیلی است. بسیار عالی! ثبت خلاصه تراز در دیتابیس پشتیبانی مربیگری آکادمی با موفقیت انجام شد.");
-        break;
-      default:
-        setHardwareAdvice("");
+  useEffect(() => {
+    if (student.field === "riazi") {
+      setTodayTasks([
+        { day: "امروز", morningPlan: "مطالعه دقیق مبحث نظریه اعداد و ترکیبیات", afternoonPlan: "حل تشریحی ۴۰ تست زمان‌دار فیزیک", totalQuestions: 40, completed: false },
+        { day: "امروز", morningPlan: "مرور قضیه رول در حسابان", afternoonPlan: "بررسی تست‌های هندسه تحلیلی", totalQuestions: 25, completed: true }
+      ]);
+    } else if (student.field === "ensani") {
+      setTodayTasks([
+        { day: "امروز", morningPlan: "تقطیع هجایی و استخراج اختیارهای وزنی", afternoonPlan: "حل تشریحی ۳۰ تست قواعد عربی", totalQuestions: 30, completed: false },
+        { day: "امروز", morningPlan: "مرور مبحث مغالطه‌ها در منطق", afternoonPlan: "مطالعه بخش عرضه و تقاضا اقتصاد", totalQuestions: 20, completed: true }
+      ]);
+    } else {
+      setTodayTasks([
+        { day: "امروز", morningPlan: "مطالعه دقیق مبحث ژنتیک", afternoonPlan: "حل تشریحی ۵۰ تست استوکیومتری", totalQuestions: 50, completed: false },
+        { day: "امروز", morningPlan: "مرور فرمول‌های حرکت‌شناسی", afternoonPlan: "بررسی تست‌های قرابت معنایی", totalQuestions: 25, completed: true }
+      ]);
     }
-  };
+  }, [student.field]);
 
   const toggleTask = (index: number) => {
     const updated = [...todayTasks];
@@ -420,1320 +66,165 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
     setTodayTasks(updated);
   };
 
-  const totalTasksCount = todayTasks.length;
-  const completedTasksCount = todayTasks.filter(t => t.completed).length;
-  const taskProgressPercent = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+  const completedCount = todayTasks.filter(t => t.completed).length;
 
-  const [isSectionsCollapsed, setIsSectionsCollapsed] = useState<boolean>(false);
+  const handleMachineStateChange = (state: string) => {
+    setMachineState(state);
+    switch (state) {
+      case "normal": setHardwareAdvice("شما در بهترین وضعیت تمرکز هستید. زمان خوبی برای مطالعه است."); break;
+      case "warm": setHardwareAdvice("کمی خسته شده‌اید. بعد از ۵۰ دقیقه مطالعه، استراحت کنید."); break;
+      case "error_risk": setHardwareAdvice("احتمال فراموشی مطالب پایه وجود دارد. مرور سریع مفید است."); break;
+      case "optimal": setHardwareAdvice("عالی! آمادگی و انگیزه شما در بالاترین سطح است."); break;
+      default: setHardwareAdvice("");
+    }
+  };
 
   return (
-    <div className="space-y-6" id="dashboard-view-container">
+    <div className="space-y-6 max-w-5xl mx-auto" id="dashboard-clean-view">
       
-      {/* Prime Header Dashboard Welcomer */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/40 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-50/40 rounded-full blur-2xl pointer-events-none" />
+      {/* Header Welcome Card */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-indigo-900 rounded-3xl p-8 relative overflow-hidden text-right shadow-xl shadow-indigo-900/10"
+      >
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-10 left-10 w-48 h-48 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
         
-        <div className="relative z-10 space-y-1 text-right">
-          <h1 className="text-lg md:text-2xl font-black text-slate-800 leading-tight">
-            در مسیر یادگیری همراه شما هستیم، {student.name} عزیز 👋
-          </h1>
-          <p className="text-[10px] md:text-xs text-slate-400 font-medium">
-            پشتیبانی در مسیر مطالعه، پایش گام‌به‌گام و شناخت چالش‌های درسی برای رشدی پایدار
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="font-mono text-left bg-slate-50 border border-slate-100 p-2 md:p-3 rounded-2xl flex items-center gap-3">
-            <div className="text-right">
-              <span className="text-[9px] text-slate-400 block font-sans font-bold leading-none mb-1">شماره داوطلبی</span>
-              <span className="text-xs font-black text-indigo-950">{toPersianNum(student.code)}</span>
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="space-y-4 max-w-xl text-right">
+            <h1 className="text-2xl md:text-3xl font-black text-white">
+              سلام {student.name} 👋
+            </h1>
+            <p className="text-sm text-indigo-200 font-bold leading-relaxed">
+              {loadingQuote ? "در حال دریافت پیام روز..." : `« ${quote} »`}
+            </p>
+          </div>
+          
+          {/* Quick Metrics */}
+          <div className="flex gap-4 shrink-0">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 text-center min-w-[120px]">
+              <span className="block text-[10px] text-indigo-200 font-black mb-1">روزهای پیوسته</span>
+              <span className="block text-3xl font-black text-amber-400 font-mono">{streakDays}</span>
+              <span className="block text-[10px] text-indigo-300 mt-1">استریک مطالعه 🚀</span>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Intelligent Intervention System (DIS) - سیستم مداخله گر هوشمند */}
-      <div className={isSectionsCollapsed ? "scale-95 origin-top transition-transform h-24 overflow-hidden" : ""}>
-        <IntelligentInterventionSystem student={student} />
-      </div>
-
-      {/* Coaching Focus Summary - Human Centric */}
-      {!isSectionsCollapsed ? (
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-indigo-900 text-white p-4 rounded-2xl md:rounded-3xl border border-indigo-800 shadow-xl relative overflow-hidden" id="coaching-focus-alert"
-        >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center shrink-0">
-              <Compass size={20} className="text-white" />
-            </div>
-            <div className="space-y-1 text-right">
-              <h3 className="text-[11px] md:text-xs font-black">یادداشتی از مربی همدل</h3>
-              <p className="text-[9px] md:text-[10px] text-indigo-100/80 leading-relaxed font-bold">
-                امروز تمرکز خود را بر روی تله‌های تستی درس زیست‌شناسی بگذارید. گام‌های کوچک امروز، نتایج بزرگ فردا را می‌سازند.
-              </p>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* Today's Plan */}
+        <div className="md:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+              <Calendar className="text-indigo-600" size={20} />
+              برنامه مطالعاتی امروز
+            </h2>
+            <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
+              {completedCount} از {todayTasks.length} انجام شده
+            </span>
           </div>
-        </motion.div>
-      ) : null}
 
-      {/* Visual pulsing warning indicator for qeiValue < 5200 */}
-      <AnimatePresence>
-        {qeiValue < 5200 && (() => {
-          const isSevere = qeiValue < 5000;
-          return (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              transition={{ duration: 0.3 }}
-              onClick={() => setIsTroubleshootingOpen(true)}
-              className={`p-4 md:p-5 border-2 rounded-2xl md:rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-pulse hover:scale-[1.01] hover:shadow-xl active:scale-[0.99] cursor-pointer transition-all duration-300 text-right font-sans ${
-                isSevere 
-                  ? "bg-red-50 border-red-400 text-red-950 hover:border-red-650" 
-                  : "bg-amber-50 border-amber-400 text-amber-950 hover:border-amber-650"
-              }`}
-              id="qei-critical-warning-alert-top"
-              title="جهت مشاهده راهنمای گام‌به‌گام رفع تله تستی کلیک کنید"
-            >
-              <div className="flex items-start gap-3.5">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                  isSevere ? "bg-red-150 text-red-650" : "bg-amber-150 text-amber-650"
-                }`}>
-                  <ShieldAlert size={22} className={`animate-bounce ${isSevere ? "text-red-600" : "text-amber-600"}`} />
-                </div>
-                <div className="space-y-1">
-                  <strong className={`text-xs md:text-sm font-black block ${isSevere ? "text-red-700" : "text-amber-700"}`}>
-                    {isSevere 
-                      ? "🚨 هشدار بحرانی: تراز شبیه‌ساز کنکور سراسری (QEI) به شدت کاهش یافته است!" 
-                      : "⚠️ هشدار تراز: تراز آزمایشی (QEI) در وضعیت هشدار ممیزی است!"
-                    }
-                  </strong>
-                  <p className={`text-[11px] md:text-xs leading-relaxed font-semibold ${isSevere ? "text-red-900" : "text-amber-900"}`}>
-                    {isSevere ? (
-                      <>
-                        شاخص تراز پرونده در حال حاضر روی عدد <span className="font-black font-mono bg-red-100 px-1.5 py-0.5 rounded text-red-800">{toPersianNum(qeiValue)} QEI</span> است. برای اصلاح تله‌های تستی و رفع اشتباهات، ترجیحاً فرآیند خودکار بهبود تراز (کایزن تحصیلی) را آغاز نمایید.
-                      </>
-                    ) : (
-                      <>
-                        شاخص تراز پرونده در حال حاضر روی عدد <span className="font-black font-mono bg-amber-100 px-1.5 py-0.5 rounded text-amber-850">{toPersianNum(qeiValue)} QEI</span> است. برای جلوگیری از انباشت اشتباهات و افت تراز، تفکر کایزن درسی را پایش نمایید.
-                      </>
-                    )}
-                  </p>
-                  
-                  <div className="pt-1.5">
-                    <span className={`text-[10px] font-black block ${isSevere ? "text-red-805" : "text-amber-855"}`}>💡 اقدام توصیه شده داوطلب:</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onNavigate("counselor");
-                      }}
-                      className={`text-xs font-bold underline transition-colors cursor-pointer inline-flex items-center gap-1 ${
-                        isSevere 
-                          ? "text-red-850 hover:text-red-950" 
-                          : "text-amber-855 hover:text-amber-955"
-                      }`}
-                    >
-                      جهت عارضه‌یابی تفصیلی و دریافت نقشه راه مطالعه فوری به صفحه مشاور علمی مراجعه نمایید ←
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startQualityImprovement();
-                }}
-                className={`px-5 py-2.5 text-white rounded-xl text-xs font-black tracking-tight transition cursor-pointer shrink-0 hover:scale-[1.02] active:scale-95 shadow font-semibold ${
-                  isSevere ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"
+          <div className="space-y-3">
+            {todayTasks.map((task, idx) => (
+              <div 
+                key={idx}
+                onClick={() => toggleTask(idx)}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
+                  task.completed 
+                    ? "bg-emerald-50/50 border-emerald-100 opacity-75" 
+                    : "bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md"
                 }`}
               >
-                کایزن درسی اضطراری
-              </button>
-            </motion.div>
-          );
-        })()}
-      </AnimatePresence>
-
-      {/* Troubleshooting Modal container */}
-      <AnimatePresence>
-        {isTroubleshootingOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" id="qei-troubleshooting-modal-overlay">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl overflow-hidden bg-white border border-slate-100 rounded-3xl shadow-2xl flex flex-col text-right font-sans"
-              id="qei-troubleshooting-modal"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
-                <button
-                  onClick={() => setIsTroubleshootingOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-all cursor-pointer"
-                  id="qei-troubleshooting-modal-close-btn"
-                >
-                  <X size={18} />
-                </button>
-                <div className="flex items-center gap-2.5">
-                  <span className={`p-2 rounded-xl ${qeiValue < 5000 ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}>
-                    <ShieldAlert size={18} />
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-sm font-black text-slate-800">
-                        راهنمای افزایش تراز و عیب‌یابی ممیزی {toPersianNum(qeiValue)} QEI
-                      </h3>
-                      {criticalTrapsCount > 0 && (
-                        <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1">
-                          <Target size={10} />
-                          <span>{toPersianNum(criticalTrapsCount)} تله بحرانی در حال بررسی</span>
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-bold">
-                      راهنمای جامع برنامه‌ریزی تحصیلی و برطرف‌سازی خطای تستی داوطلبان کانون
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-6 overflow-y-auto max-h-[70vh] space-y-5">
-                <div className={`p-4 rounded-2xl border ${
-                  qeiValue < 5000 
-                    ? "bg-red-50 border-red-200 text-slate-850" 
-                    : "bg-amber-50 border-amber-200 text-slate-850"
+                <div className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors ${
+                  task.completed ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 text-transparent"
                 }`}>
-                  <strong className="text-xs font-black block mb-2">
-                    {qeiValue < 5000 
-                      ? dashboardTexts.statusCritical 
-                      : dashboardTexts.statusWarning
-                    }
-                  </strong>
-                  <p className="text-xs leading-relaxed">
-                    {qeiValue < 5000 ? (
-                      <>
-                        شاخص تراز شما در حال حاضر روی عدد <span className="font-black font-mono bg-red-100 px-1.5 py-0.5 rounded text-red-800">{toPersianNum(qeiValue)} QEI</span> است که پایین‌تر از سطح رقابت امن {dashboardTexts.recommendationMsg}
-                      </>
-                    ) : (
-                      <>
-                        شاخص تراز شما در حال حاضر روی عدد <span className="font-black font-mono bg-amber-100 px-1.5 py-0.5 rounded text-amber-850">{toPersianNum(qeiValue)} QEI</span> است که در حوزه خستگی مطالعاتی یا ضعف در دروس عمومی/پایه است.
-                      </>
-                    )}
+                  <CheckSquare size={14} />
+                </div>
+                <div className="space-y-1">
+                  <p className={`text-sm font-black transition-colors ${task.completed ? "text-slate-500 line-through" : "text-slate-800"}`}>
+                    {task.morningPlan}
                   </p>
-                  
-                  <div className="pt-2 border-t border-slate-100/50 mt-2 flex flex-col gap-1.5">
-                    <span className={`text-[10px] font-black block ${qeiValue < 5000 ? "text-red-800" : "text-amber-800"}`}>💡 اقدام توصیه شده:</span>
-                    <button
-                      onClick={() => {
-                        setIsTroubleshootingOpen(false);
-                        onNavigate("counselor");
-                      }}
-                      className={`text-xs font-bold underline text-right transition-colors cursor-pointer inline-flex items-center gap-1 ${
-                        qeiValue < 5000 
-                          ? "text-red-700 hover:text-red-950" 
-                          : "text-amber-700 hover:text-amber-950"
-                      }`}
-                    >
-                      {dashboardTexts.recommActionLine} ←
-                    </button>
-                  </div>
-                </div>
-
-                {/* Step-by-step Troubleshooting Steps */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-black text-slate-700 block mb-1">گام‌های مربیگری رفع تله تستی به تفکیک تراز علمی:</h4>
-                  
-                  {qeiValue < 5000 ? (
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3.5" id="step-1">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-red-600 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۱
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">{dashboardTexts.step1Title}</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            {dashboardTexts.step1Desc}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3.5" id="step-2">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-red-600 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۲
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">{dashboardTexts.step2Title}</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            {dashboardTexts.step2Desc}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3.5" id="step-3">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-red-600 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۳
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">{dashboardTexts.step3Title}</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            {dashboardTexts.step3Desc}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3.5" id="step-4">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-red-600 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۴
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">اجرای مربیگری هوشمند کایزن درسی</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            بعد از تمهیدات فوق، دکمه زرد <strong className="font-bold">«اجرای فرآیند خودکار بهبود کیفیت (کایزن)»</strong> را فشار دهید تا آمارهای تراز در ریلم لوکال کالیبره شده و مجدد در محدوده تایید قرار گیرد.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3.5" id="step-1">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-amber-500 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۱
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">تنظیم فرکانس مرورهای هفتگی</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            خلاصه‌نویسی مباحث زیست‌شناسی و شیمی را در زمان‌های خستگی (ساعات پایانی شب) بازخوانی نمایید تا پایداری شناختی حفظ شود.
-                          </p>
-                        </div>
-                      </div>
-
-                     <div className="flex items-start gap-3.5" id="step-2">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-amber-500 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۲
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">رفع نقص حین تست‌های تالیفی</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            اشتباهات تست‌های تالیفی {BRAND_CONFIG.examProvider} را سریعاً در دفترچه پاسخ تشریحی پیگیری کنید تا در آزمون کانون تکرار نگردند.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3.5" id="step-3">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-amber-500 text-white font-black text-xs flex items-center justify-center font-mono">
-                          ۳
-                        </span>
-                        <div className="space-y-1">
-                          <strong className="text-xs font-bold text-slate-800 block">سنکرون‌سازی مطالعه با مربی ناظر</strong>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">
-                            تقویم مربیگری را با اهداف {BRAND_CONFIG.examProvider} هماهنگ کنید تا انحرافی در آمارهای پیشرفت بصری رخ ندهد.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <p className={`text-xs font-bold ${task.completed ? "text-slate-400" : "text-slate-500"}`}>
+                    {task.afternoonPlan}
+                  </p>
                 </div>
               </div>
-
-              {/* Footer */}
-              <div className="p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-                <button
-                  onClick={() => setIsTroubleshootingOpen(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  id="qei-troubleshooting-modal-cancel-btn"
-                >
-                  بستن و انصراف
-                </button>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setIsTroubleshootingOpen(false);
-                      onNavigate("counselor");
-                    }}
-                    className="px-4 py-2 bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                    id="qei-troubleshooting-modal-counselor-btn"
-                  >
-                    مراجعه به مشاور علمی (AI)
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsTroubleshootingOpen(false);
-                      startQualityImprovement();
-                    }}
-                    className={`px-4 py-2 text-white rounded-xl text-xs font-black transition-all cursor-pointer ${
-                      qeiValue < 5000 ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"
-                    }`}
-                    id="qei-troubleshooting-modal-kaizen-btn"
-                  >
-                    شروع بهبود تراز کایزن علمی
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+            ))}
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* Dynamic Motivational Quote featuring deep beautiful mesh background */}
-      <motion.div 
-         initial={{ opacity: 0, y: -10 }}
-         animate={{ opacity: 1, y: 0 }}
-         className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl border border-indigo-950/20"
-         id="motivational-banner"
-      >
-        <div className="absolute right-0 top-0 bottom-0 left-0 w-full h-full bg-[radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.15),transparent)] pointer-events-none" />
-        <div className="absolute -left-12 -bottom-12 text-white/[0.04] rotate-12 pointer-events-none">
-          <Quote size={240} />
+          
+          <button 
+            onClick={() => onNavigate("schedule")}
+            className="mt-6 w-full py-3 bg-slate-50 hover:bg-slate-100 text-indigo-600 font-black text-xs rounded-xl transition flex items-center justify-center gap-2"
+          >
+            مشاهده برنامه کامل هفته
+            <ArrowRight size={14} />
+          </button>
         </div>
-        
-        <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="space-y-3 max-w-3xl">
-            <div className="flex items-center gap-2">
-              <span className="p-1 px-2.5 bg-amber-400/10 text-amber-300 border border-amber-400/20 rounded-lg text-[9px] font-black tracking-wider flex items-center gap-1 uppercase">
-                <Sparkles size={11} className="text-amber-400 animate-spin-slow" />
-                <span>رهنمود مدیریتی و مربیگری علمی {BRAND_CONFIG.examProvider}</span>
-              </span>
-            </div>
-            
-            <h2 className="text-base md:text-lg font-bold text-slate-100 leading-relaxed font-sans first-letter:capitalize">
-              {loadingQuote ? (
-                <span className="inline-block h-4 w-48 bg-white/20 animate-pulse rounded"></span>
-              ) : (
-                `« ${quote} »`
-              )}
-            </h2>
-            
-            <p className="text-[11px] text-indigo-250">صادر شده توسط هوش تجمیعی مشاور ارشد {BRAND_CONFIG.name} (دستیار علمی آزمون‌های سراسری)</p>
-          </div>
 
-          <div className="flex-shrink-0 bg-white/5 border border-white/10 rounded-2xl p-4 w-full lg:w-85 backdrop-blur-sm space-y-3">
-            <h3 className="text-[11px] font-black text-amber-300 flex items-center gap-1.5 justify-start">
-              <HeartPulse size={12} />
-              <span>پایش ثبات ذهنی، انگیزه مطالعاتی و فرسودگی داوطلب</span>
+        {/* Mental Readiness & Quick Actions */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm text-center">
+            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 justify-center mb-4">
+              <HeartPulse size={16} className="text-rose-500" />
+              وضعیت آمادگی ذهنی
             </h3>
-            <div className="grid grid-cols-4 gap-1.5">
+            
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { id: "optimal", icon: "✨", label: "ایده‌آل" },
-                { id: "warm", icon: "🌡️", label: "خسته" },
                 { id: "normal", icon: "⚡", label: "پایدار" },
+                { id: "warm", icon: "🌡️", label: "خسته" },
                 { id: "error_risk", icon: "⚠️", label: "پریشان" }
               ].map((m) => (
                 <button
                   key={m.id}
                   onClick={() => handleMachineStateChange(m.id)}
-                  type="button"
-                  className={`py-1.5 px-1 rounded-xl text-center transition-all cursor-pointer flex flex-col items-center gap-1 border ${
+                  className={`p-3 rounded-xl transition-all border flex flex-col items-center gap-1.5 ${
                     machineState === m.id
-                      ? "bg-amber-400 border-amber-450 text-slate-950 font-black scale-105 animate-pulse"
-                      : "bg-white/5 border-white/5 hover:bg-white/10 text-slate-300"
+                      ? "bg-amber-50 border-amber-200 scale-105"
+                      : "bg-slate-50 border-transparent hover:bg-slate-100"
                   }`}
                 >
-                  <span className="text-base">{m.icon}</span>
-                  <span className="text-[9px]">{m.label}</span>
+                  <span className="text-xl">{m.icon}</span>
+                  <span className="text-[10px] font-black text-slate-600">{m.label}</span>
                 </button>
               ))}
             </div>
 
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               {machineState && (
                 <motion.div 
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  className="bg-slate-950/80 border border-indigo-400/20 p-2.5 rounded-xl text-[10px] text-indigo-100 leading-relaxed text-right"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-4"
                 >
-                  {hardwareAdvice}
+                  <p className="text-[11px] text-slate-600 leading-relaxed font-bold bg-slate-50 p-3 rounded-xl">
+                    {hardwareAdvice}
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Real Counselor & Teacher Feedback Card Grid */}
-      {(() => {
-        const cachedComment = localStorage.getItem(`taranom_advisor_comment_${student.id}`) || 
-           "داوطلب کایزن درسی مناسبی دارد؛ اما برای فائق آمدن بر تله‌های مفهومی زیست، افزایش تحلیل پاسخ تشریحی ضروری است.";
-        const cachedPrescription = localStorage.getItem(`taranom_teacher_prescription_${student.id}`) || 
-           "مطالعه مستمر درسنامه فصل سنتز پروتئین زیست‌شناسی و تمرکز بر جزئیات غشای هسته برای مهار تله‌های زمان‌بر اکیداً پیشنهاد می‌شود.";
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="counselor-teacher-student-interaction">
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-amber-50/50 border border-amber-200/50 rounded-[28px] p-6 text-right space-y-3 flex flex-col justify-between"
-              id="counselor-student-interaction-board"
-            >
-              <div className="space-y-3">
-                <div className="flex justify-between items-center pb-2 border-b border-amber-200/30">
-                  <span className="flex items-center gap-2 text-amber-900 font-black text-xs">
-                    <Users size={16} className="text-amber-600" />
-                    <span>👔 آخرین توصیه‌نامه مشاور ارشد کایزن برای داوطلب</span>
-                  </span>
-                  <span className="text-[9px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-black">فعال و همگام</span>
-                </div>
-                <p className="text-xs text-slate-700 leading-relaxed font-semibold">
-                  « {cachedComment} »
-                </p>
-              </div>
-              <div className="text-[10px] text-slate-400 font-extrabold flex gap-4 mt-2 justify-start pt-2 border-t border-amber-200/20">
-                <span>روانشناس: {BRAND_CONFIG.name} مرکزی</span>
-                <span>•</span>
-                <span>متد: پایش مانیتورینگ کارایی</span>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-teal-50/40 border border-teal-200/50 rounded-[28px] p-6 text-right space-y-3 flex flex-col justify-between"
-              id="teacher-student-interaction-board"
-            >
-              <div className="space-y-3">
-                <div className="flex justify-between items-center pb-2 border-b border-teal-200/30">
-                  <span className="flex items-center gap-2 text-teal-900 font-black text-xs">
-                    <BookOpen size={16} className="text-teal-600 animate-pulse" />
-                    <span>👨‍🏫 طرح درس صادرشده و تکالیف هفتگی طراح کنکور</span>
-                  </span>
-                  <span className="text-[9px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-black">جدید</span>
-                </div>
-                <p className="text-xs text-slate-705 leading-relaxed font-semibold">
-                  « {cachedPrescription} »
-                </p>
-              </div>
-              <div className="text-[10px] text-slate-400 font-extrabold flex gap-4 mt-2 justify-start pt-2 border-t border-teal-200/10">
-                <span>مدرس: دپارتمان تستی {BRAND_CONFIG.name}</span>
-                <span>•</span>
-                <span>پروتکل: کایزن مطالعاتی نوین</span>
-              </div>
-            </motion.div>
-          </div>
-        );
-      })()}
-
-      {/* AI Exam Predictor Widget */}
-      <AIExamPredictor student={student} />
-
-      {/* Premium Real-time High-pressure Exam Simulator */}
-      <RealTimeExamSimulator student={student} />
-
-      {/* Admission Forecast Widget */}
-      <AdmissionForecastWidget student={student} />
-
-      {/* Kaizen Quality Optimization Center */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4 text-right" id="kaizen-quality-optimization-center">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="space-y-1">
-            <h3 className="font-sans font-black text-slate-900 text-base flex items-center gap-2 justify-start">
-              <span className="p-1 px-2.5 bg-indigo-50 text-indigo-700 text-[10px] rounded-lg font-black border border-indigo-150">کایزن فعال</span>
-              <span>⚙️ پرتال تخصصی برنامه‌ریزی و بهبود علمی تراز داوطلبان کنکور</span>
-            </h3>
-            <p className="text-slate-500 text-xs">
-              بر پایه متدهای نوین بهینه‌سازی کایزن درسی، برای مهار نمره‌های منفی مباحث سخت کنکور سراسری.
-            </p>
-          </div>
           
-          {!isOptimizing && (
-            <div className="flex flex-wrap gap-2">
-              {!showCelebration ? (
-                <button
-                  onClick={startQualityImprovement}
-                  className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shrink-0"
-                  id="btn-trigger-kaizen-optimize"
-                >
-                  <Zap size={15} className="fill-slate-950 hover:animate-bounce" />
-                  <span>اجرای فرآیند خودکار بهبود تراز (کایزن درسی)</span>
-                </button>
-              ) : (
-                <button
-                  onClick={resetQualityStatus}
-                  className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-650 font-extrabold text-xs rounded-xl border border-dashed border-slate-300 cursor-pointer transition-all flex items-center gap-1 shrink-0"
-                  id="btn-reset-kaizen-optimize"
-                >
-                  <span>بازنشانی تراز به مقدار پایه</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => {
-                  const targetQei = 4850;
-                  setQeiValue(targetQei);
-                  setShowCelebration(false);
-                  
-                  const savedData = localStorage.getItem(`arateb_goals_${student.id}`);
-                  let parsed = {};
-                  if (savedData) {
-                    try {
-                      parsed = JSON.parse(savedData);
-                    } catch (e) {}
-                  }
-                  
-                  const updatedData = {
-                    ...parsed,
-                    currentQeiValue: targetQei,
-                  };
-                  localStorage.setItem(`arateb_goals_${student.id}`, JSON.stringify(updatedData));
-                }}
-                className="px-4 py-3 bg-red-50 hover:bg-red-150 text-red-700 font-extrabold text-xs rounded-xl border border-red-200 cursor-pointer transition-all flex items-center gap-1.5 shrink-0 shadow-sm font-sans"
-                id="btn-simulate-qei-drop"
-              >
-                <AlertTriangle size={13} className="animate-pulse text-red-650" />
-                <span>شبیه‌سازی افت شدید تراز (به ۴,۸۵۰ QEI)</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  const targetQei = 5100;
-                  setQeiValue(targetQei);
-                  setShowCelebration(false);
-                  
-                  const savedData = localStorage.getItem(`arateb_goals_${student.id}`);
-                  let parsed = {};
-                  if (savedData) {
-                    try {
-                      parsed = JSON.parse(savedData);
-                    } catch (e) {}
-                  }
-                  
-                  const updatedData = {
-                    ...parsed,
-                    currentQeiValue: targetQei,
-                  };
-                  localStorage.setItem(`arateb_goals_${student.id}`, JSON.stringify(updatedData));
-                }}
-                className="px-4 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-xs rounded-xl border border-amber-200 cursor-pointer transition-all flex items-center gap-1.5 shrink-0 shadow-sm font-sans"
-                id="btn-simulate-qei-warn"
-              >
-                <AlertTriangle size={13} className="animate-pulse text-amber-600" />
-                <span>شبیه‌سازی افت متوسط تراز (به ۵,۱۰۰ QEI)</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Optimizing State */}
-        {isOptimizing && (
-          <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100/50 space-y-4 animate-pulse">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-black text-indigo-950 flex items-center gap-2 select-none">
-                <RefreshCw size={14} className="animate-spin text-indigo-700" />
-                <span>فرآیند کایزن علمی در حال تحلیل پرونده مطالعاتی شماست...</span>
-              </span>
-              <span className="text-xs font-mono font-black text-indigo-700">
-                {toPersianNum(Math.round((optimizationStep / 5) * 100))}%
-              </span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full bg-slate-200/80 h-3 rounded-full overflow-hidden">
-              <div 
-                className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                style={{ width: `${(optimizationStep / 5) * 100}%` }}
-              />
-            </div>
-
-            {/* Simulated Live logs */}
-            <div className="space-y-1.5 font-mono text-[11px] text-slate-600 tracking-tight text-right bg-white p-4 rounded-xl border border-slate-100/50 max-h-32 overflow-y-auto">
-              {optimizationLogs.map((log, index) => (
-                <div key={index} className="flex items-center gap-2 text-indigo-950 justify-start">
-                  <span className="text-emerald-500 font-bold">✓</span>
-                  <span>{log}</span>
-                </div>
-              ))}
-              <div className="flex items-center gap-2 text-indigo-700 animate-pulse justify-start mt-2">
-                <span className="animate-ping block w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                <span className="font-bold">در حال پردازش گام ممیزی و محاسبات ریاضی...</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Celebration State */}
-        {showCelebration && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-emerald-50 text-emerald-950 p-5 rounded-2xl border border-emerald-200 flex flex-col md:flex-row items-center justify-between gap-6"
-          >
-            <div className="space-y-2 flex-1 text-right border-l border-emerald-100/80 pl-4 md:pl-6">
-              <div className="flex items-center gap-2 justify-start">
-                <span className="p-1 px-2.5 bg-emerald-600 text-white text-[9px] font-black rounded-full shadow-sm">
-                  رفع اشکال ۱۰۰٪ 🌟
-                </span>
-                <h4 className="font-extrabold text-sm text-emerald-900 font-sans">
-                  بهینه‌سازی کایزن با موفقیت بر برنامه درسی اعمال شد!
-                </h4>
-              </div>
-              <p className="text-xs leading-relaxed text-emerald-800 font-semibold">
-                با پایش پیوسته ساعات مطالعه و بودجه‌بندی دروس تستی و با کاهش پاسخ‌های غلط آزمون‌ها به صفر، تراز کارنامه به شکل ایده‌آلی موازنه گردید. تراز آزمایشی طلایی ۶,۸۵۰ در پرونده داوطلبی آکادمی ثبت گردید و پیش‌بینی قبولی در رشته‌های تاپ به سطح سبز ممتاز رسید.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 w-full md:w-auto text-center font-sans">
-              <div className="bg-white px-5 py-3 rounded-xl border border-emerald-100 shadow-sm min-w-[130px]">
-                <span className="text-[10px] text-slate-400 block pb-0.5 font-bold">تراز کارنامه جدید</span>
-                <span className="text-sm font-black text-emerald-600 font-mono">۶,۸۵۰ QEI</span>
-              </div>
-              <div className="bg-white px-5 py-3 rounded-xl border border-emerald-100 shadow-sm min-w-[130px]">
-                <span className="text-[10px] text-slate-400 block pb-0.5 font-bold">پاسخ‌دهی بدون اشتباه</span>
-                <span className="text-sm font-black text-emerald-600 font-mono">۸۵٪ پاسخ صحیح</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Idle Mode description of quality challenges */}
-        {!isOptimizing && !showCelebration && (
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 grid grid-cols-1 md:grid-cols-3 gap-4 text-right">
-            <div className="space-y-1">
-              <span className="text-slate-700 text-xs font-extrabold block">{dashboardTexts.card1Title}</span>
-              <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                {dashboardTexts.card1Desc}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-slate-700 text-xs font-extrabold block">{dashboardTexts.card2Title}</span>
-              <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                {dashboardTexts.card2Desc}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-slate-700 text-xs font-extrabold block">{dashboardTexts.card3Title}</span>
-              <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                {dashboardTexts.card3Desc}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Subject Performance Analysis Chart */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6 text-right" id="subject-performance-chart-section">
-        <div className="flex justify-between items-center border-b border-slate-50 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-rose-50 text-rose-600 rounded-2xl shadow-sm">
-              <TrendingUp size={22} />
-            </div>
-            <div>
-              <h3 className="text-base font-black text-slate-900">تحلیل بصری درصد پاسخ‌گویی دروس کنکور</h3>
-              <p className="text-[11px] text-slate-500 font-bold mt-0.5">شناسایی هوشمند دروسی که نیاز به مطالعه فوری و رفع اشکال دارند</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-rose-500" />
-              <span className="text-[10px] text-slate-500 font-bold">نیاز به مطالعه فوری</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-amber-500" />
-              <span className="text-[10px] text-slate-500 font-bold">هشدار سطح تراز</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="h-[300px] w-full" style={{ direction: 'ltr' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis 
-                dataKey="name" 
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }}
-                dy={10}
-              />
-              <YAxis 
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
-                domain={[0, 100]}
-                tickFormatter={(val) => `${toPersianNum(val)}٪`}
-              />
-              <Tooltip 
-                cursor={{ fill: '#f8fafc' }}
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload;
-                    return (
-                      <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-xl text-right font-sans">
-                        <p className="text-xs font-black mb-1">{data.fullName}</p>
-                        <div className="flex items-center gap-2 justify-end">
-                          <span className="text-xs font-mono font-black" style={{ color: data.color }}>{toPersianNum(data.percentage)}٪</span>
-                          <span className="text-[10px] text-slate-400">درصد پاسخ‌گویی:</span>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-white/5">
-                          <p className={`text-[9px] font-bold ${data.percentage < 35 ? 'text-rose-400' : 'text-amber-400'}`}>
-                            {data.percentage < 35 ? '⚠️ وضعیت بحرانی (نیاز به مطالعه فوری)' : '⚠️ وضعیت هشدار (نیاز به تمرین بیشتر)'}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Bar 
-                dataKey="percentage" 
-                radius={[8, 8, 0, 0]}
-                barSize={40}
-              >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
-              <Brain size={16} className="text-indigo-600" />
-            </div>
-            <div className="space-y-1">
-              <strong className="text-xs font-black text-slate-900 block">آخرین تحلیل هوش مصنوعی:</strong>
-              <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                {dashboardTexts.lastAiAnalysis}
-              </p>
-            </div>
-          </div>
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
-              <Zap size={16} className="text-amber-500" />
-            </div>
-            <div className="space-y-1">
-              <strong className="text-xs font-black text-slate-900 block">راهکار مربیگری:</strong>
-              <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                {dashboardTexts.coachingAdvice}
-              </p>
-            </div>
+          <div className="bg-indigo-50 rounded-3xl p-6 border border-indigo-100 shadow-sm flex flex-col items-center text-center space-y-3">
+             <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+               <Sparkles size={24} />
+             </div>
+             <h3 className="text-sm font-black text-indigo-900">نیاز به تحلیل دقیق‌تر؟</h3>
+             <p className="text-[11px] text-indigo-700/80 font-bold">برای مشاهده نمودار پیشرفت، اشتباهات متداول و دریافت راهکارهای هوشمند به کارنامه مراجعه کنید.</p>
+             <button 
+                onClick={() => onNavigate("report")}
+                className="w-full mt-2 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-md hover:bg-indigo-700 transition"
+             >
+               مشاهده کارنامه جامع
+             </button>
           </div>
         </div>
       </div>
-
-      {/* Metrics Cards Grid - Ultra Slick Redesigned */}
-      <div className="space-y-4" id="metrics-section-container">
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${qeiValue < 5200 ? "bg-rose-500 animate-pulse" : "bg-emerald-500"}`}></div>
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Live Performance Indices</span>
-          </div>
-          <button 
-            onClick={() => setIsMetricsCondensed(!isMetricsCondensed)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
-          >
-            {isMetricsCondensed ? <RefreshCw size={12} /> : <Layers size={12} />}
-            <span>{isMetricsCondensed ? "نمایش کامل جزییات" : "حالت فشرده (تاشو)"}</span>
-          </button>
-        </div>
-
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-500 ${isMetricsCondensed ? "opacity-95" : ""}`} id="metrics-grid">
-          
-          {/* Traz Score Metric Card */}
-          <div 
-            className={`rounded-3xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between ${
-              isMetricsCondensed ? "p-4 h-[80px]" : "p-5 h-[124px]"
-            } ${
-              qeiValue < 5000 
-                ? "bg-red-50/70 border-red-300 ring-2 ring-red-500/25 text-red-950" 
-                : qeiValue < 5200
-                  ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-500/25 text-amber-950"
-                  : "bg-white border-slate-100 text-slate-800"
-            }`} 
-            id="metric-traz"
-          >
-            {qeiValue < 5200 && (
-              <div className="absolute inset-0 bg-red-500/5 animate-pulse pointer-events-none z-0" />
-            )}
-            
-            <div className="flex items-start justify-between relative z-10">
-              <div className="space-y-1 text-right">
-                <span className={`text-[10px] font-black block pb-0.5 ${
-                  qeiValue < 5000 
-                    ? "text-red-700" 
-                    : qeiValue < 5200 
-                      ? "text-amber-700" 
-                      : "text-slate-400"
-                }`}>
-                  تراز و موقعیت رقبا
-                </span>
-                {!isMetricsCondensed && <p className="text-xs font-black">تراز تجمعی آزمون کل (QEI)</p>}
-              </div>
-              <div className={`${isMetricsCondensed ? "w-8 h-8" : "w-10 h-10"} rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
-                qeiValue < 5000 
-                  ? "bg-red-100 text-red-650" 
-                  : qeiValue < 5200 
-                    ? "bg-amber-100 text-amber-600" 
-                    : "bg-blue-50 text-blue-600"
-              }`}>
-                {qeiValue < 5200 ? <ShieldAlert size={isMetricsCondensed ? 16 : 20} className={qeiValue < 5000 ? "animate-bounce" : "animate-pulse"} /> : <TrendingUp size={isMetricsCondensed ? 16 : 20} />}
-              </div>
-            </div>
-
-            <div className={`flex items-center justify-between relative z-10 ${isMetricsCondensed ? "mt-1" : "mt-3 pt-2 border-t"} ${
-              qeiValue < 5000 
-                ? "border-red-200" 
-                : qeiValue < 5200 
-                  ? "border-amber-200" 
-                  : "border-slate-50"
-            }`}>
-              <div className="flex items-baseline gap-1.5">
-                <span className={`${isMetricsCondensed ? "text-xl" : "text-2xl"} font-black font-mono`}>{toPersianNum(qeiValue.toLocaleString())}</span>
-                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${
-                  qeiValue < 5000 
-                    ? "bg-red-600 text-white border-red-500 shadow-sm shadow-red-200"
-                    : qeiValue < 5200
-                      ? "bg-amber-500 text-white border-amber-400"
-                      : qeiValue > 5575 
-                        ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
-                        : "bg-slate-50 text-slate-400 border-slate-100"
-                }`}>
-                  {qeiValue < 5000 
-                    ? "بحرانی" 
-                    : qeiValue < 5200
-                      ? "هشدار تراز"
-                      : qeiValue > 5575 
-                        ? `▲ ${toPersianNum(qeiValue - 5575)}+` 
-                        : "تراز پایه"
-                  }
-                </span>
-              </div>
-              {!isMetricsCondensed && (
-                <span className={`text-[9px] ${
-                  qeiValue < 5000 
-                    ? "text-red-700 font-black animate-pulse" 
-                    : qeiValue < 5200
-                      ? "text-amber-700 font-black animate-pulse"
-                      : "text-slate-400"
-                }`}>
-                  {qeiValue < 5000 
-                    ? "⚠️ افت شدید تراز" 
-                    : qeiValue < 5200
-                      ? "⚠️ روند نزولی ممیزی"
-                      : `پایش برخط ${BRAND_CONFIG.name}`
-                  }
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Avg Correct Percentage Card */}
-          <div 
-            className={`bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between ${
-              isMetricsCondensed ? "p-4 h-[80px]" : "p-5 h-[124px]"
-            }`} 
-            id="metric-percentage"
-          >
-            <div className="flex items-start justify-between">
-              <div className="space-y-1 text-right">
-                <span className="text-[10px] font-bold text-slate-400 block pb-0.5">درصد پاسخگویی کانون</span>
-                {!isMetricsCondensed && <p className="text-xs font-black text-slate-600">نرخ پاسخگویی صحیح</p>}
-              </div>
-              <div className={`${isMetricsCondensed ? "w-8 h-8" : "w-10 h-10"} rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center transition-transform group-hover:scale-110`}>
-                <Target size={isMetricsCondensed ? 16 : 20} />
-              </div>
-            </div>
-            <div className={`flex items-center justify-between ${isMetricsCondensed ? "mt-1" : "mt-3 pt-2 border-t border-slate-50"}`}>
-              <div className="flex items-baseline gap-1.5">
-                <span className={`${isMetricsCondensed ? "text-xl" : "text-2xl"} font-black text-slate-800 font-mono`}>{toPersianNum(successRate)}٪</span>
-                {!isMetricsCondensed && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">هدف: ۸۵٪</span>}
-              </div>
-              {!isMetricsCondensed && (
-                <span className="text-[9px] text-slate-400 text-left">
-                  {successRate >= 85 ? "پیش‌بینی رتبه عالی" : `فاصله ${toPersianNum(85 - successRate)}٪`}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Severe Weakness Count Card */}
-          <div 
-            className={`bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between ${
-              isMetricsCondensed ? "p-4 h-[80px]" : "p-5 h-[124px]"
-            }`} 
-            id="metric-weaknesses"
-          >
-            <div className="flex items-start justify-between">
-              <div className="space-y-1 text-right">
-                <span className="text-[10px] font-bold text-slate-400 block pb-0.5">آنالیز کارنامه فنی</span>
-                {!isMetricsCondensed && <p className="text-xs font-black text-slate-655">تعداد دروس بحرانی</p>}
-              </div>
-              <div className={`${isMetricsCondensed ? "w-8 h-8" : "w-10 h-10"} rounded-xl bg-red-50 text-red-600 flex items-center justify-center transition-transform group-hover:scale-110`}>
-                <AlertTriangle size={isMetricsCondensed ? 16 : 20} className={bottleneckCount > 0 ? "animate-pulse" : ""} />
-              </div>
-            </div>
-            <div className={`flex items-center justify-between ${isMetricsCondensed ? "mt-1" : "mt-3 pt-2 border-t border-slate-50"}`}>
-              <div className="flex items-baseline gap-1">
-                <span className={`${isMetricsCondensed ? "text-xl" : "text-2xl"} font-black text-red-600 font-mono`}>{toPersianNum(bottleneckCount)}</span>
-                <span className="text-[10px] text-slate-500 font-bold">درس</span>
-              </div>
-              {!isMetricsCondensed && (
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold border ${
-                  bottleneckCount > 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"
-                }`}>
-                  {bottleneckCount > 0 ? "نیاز به تست" : "آماده کامل"}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Study Streak Card */}
-          <div 
-            className={`bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between ${
-              isMetricsCondensed ? "p-4 h-[80px]" : "p-5 h-[124px]"
-            }`} 
-            id="metric-streak"
-          >
-            <div className="flex items-start justify-between">
-              <div className="space-y-1 text-right">
-                <span className="text-[10px] font-bold text-slate-400 block pb-0.5">پیوستگی مطالعه</span>
-                {!isMetricsCondensed && <p className="text-xs font-black text-slate-600">پیوستگی (روزانه)</p>}
-              </div>
-              <div className={`${isMetricsCondensed ? "w-8 h-8" : "w-10 h-10"} rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center transition-transform group-hover:scale-110`}>
-                <Zap size={isMetricsCondensed ? 16 : 20} className="text-emerald-600 fill-emerald-100" />
-              </div>
-            </div>
-            <div className={`flex items-center justify-between ${isMetricsCondensed ? "mt-1" : "mt-3 pt-2 border-t border-slate-50"}`}>
-              <div className="flex items-baseline gap-2">
-                <span className={`${isMetricsCondensed ? "text-xl" : "text-2xl"} font-black text-emerald-800 font-mono`}>{toPersianNum(streakDays)} روز</span>
-              </div>
-              {!isMetricsCondensed && <span className="text-[9px] text-slate-400 font-bold">بدون خلاء</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Goal Tracking Core Section */}
-      <div className="relative">
-        <div className="absolute top-0 left-0 bg-blue-100/30 text-blue-900 border border-blue-200/50 py-1 px-3.5 rounded-bl-3xl rounded-tr-3xl text-[9px] font-extrabold z-10 pointer-events-none">
-          پروژه مانیتورینگ عملکرد و برنامه‌ریزی تراز داوطلبان {BRAND_CONFIG.name}
-        </div>
-        <GoalTracker 
-          key={`${student.id}_${qeiValue}_${successRate}`} 
-          student={student} 
-          currentTraz={qeiValue} 
-          currentPercentage={successRate} 
-        />
-      </div>
-
-      {/* Two Columns Bento-Grid: Tasks of today & AI weaknesses */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Today's study list */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4 flex flex-col justify-between" id="today-remedial-tasks-card">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                  <CheckSquare size={16} />
-                </span>
-                <div className="text-right">
-                  <h2 className="text-base font-black text-slate-800">برنامه مربیگری کایزن مطالعاتی امروز شما</h2>
-                  <p className="text-[10px] text-slate-400">تنظیم شده بر مبنای برطرف‌سازی نقاط بحرانی پرونده تحصیلی داوطلب</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] bg-slate-50 text-slate-600 font-bold px-2 py-1 rounded-lg border border-slate-100">
-                <Brain size={12} className="text-indigo-600" />
-                <span>شبیه‌ساز مربیگری</span>
-              </div>
-            </div>
-
-            {/* Task Progression Header */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/50 space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 font-bold">پیشرفت فیزیکی وظایف و کارهای خطوط دوره‌ای Study Progress:</span>
-                <span className="font-mono font-black text-blue-950">{completedTasksCount} از {totalTasksCount} مورد ({taskProgressPercent}٪)</span>
-              </div>
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="bg-blue-950 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${taskProgressPercent}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {todayTasks.map((task, idx) => (
-                <div 
-                  key={idx}
-                  onClick={() => toggleTask(idx)}
-                  className={`group p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex gap-4 items-start select-none ${
-                    task.completed 
-                      ? "bg-emerald-50/30 border-emerald-200/80 hover:bg-emerald-50/50" 
-                      : "bg-white border-slate-100/90 hover:border-slate-200 hover:shadow-sm"
-                  }`}
-                >
-                  <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition duration-150 mt-0.5 ${
-                    task.completed 
-                      ? "bg-emerald-600 border-emerald-600 text-white" 
-                      : "border-slate-300 group-hover:border-blue-900 bg-white"
-                  }`}>
-                    {task.completed && <Check size={11} strokeWidth={3} />}
-                  </div>
-                  <div className="flex-1 space-y-1 text-right">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className={`font-bold text-sm leading-6 ${task.completed ? "text-slate-400 line-through" : "text-slate-800"}`}>
-                        {task.morningPlan}
-                      </h3>
-                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black border ${
-                        task.completed 
-                          ? "bg-slate-100 text-slate-400 border-slate-200" 
-                          : idx === 0 
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-150" 
-                            : "bg-amber-50 text-amber-700 border-amber-150"
-                      }`}>
-                        {idx === 0 ? "⚠️ درس ضریب دار بالا" : "📦 پایش سرعت تستی"}
-                      </span>
-                    </div>
-                    <p className={`text-xs leading-relaxed ${task.completed ? "text-slate-450" : "text-slate-500"}`}>
-                      عصر: {task.afternoonPlan} <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">({task.totalQuestions} تست زمان‌دار هدف)</span>
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button 
-            onClick={() => onNavigate("schedule")}
-            className="w-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-705 py-3 rounded-2xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer mt-4 hover:text-slate-950 font-sans"
-          >
-            <span>مشاهده سیستم برنامه‌ریزی هفتگی و مربیگری ناظر {BRAND_CONFIG.name}</span>
-            <ChevronLeft size={14} />
-          </button>
-        </div>
-
-        {/* AI Identified weaknesses list */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4 flex flex-col justify-between" id="ai-weakness-recs-card">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2 text-right">
-                <span className="p-2 bg-red-50 text-red-600 rounded-xl">
-                  <AlertTriangle size={16} />
-                </span>
-                <div className="text-right">
-                  <h2 className="text-base font-black text-slate-800">نقاط ضعف تستی نیازمند مرور ویژه</h2>
-                  <p className="text-[10px] text-slate-400">مباحث دارای پاسخ‌های منفی بالا که رتبه و تراز کل را تحت تاثیر شدید قرار داده است</p>
-                </div>
-              </div>
-              <span className="text-[10px] bg-rose-50 text-rose-600 px-2.5 py-1 rounded-lg font-black border border-rose-150 animate-pulse">
-                بررسی فوری اشتباهات
-              </span>
-            </div>
-
-            {/* Custom Smart Quiz Banner CTA */}
-            <div className="bg-rose-50/40 p-4 rounded-2xl border border-rose-100 space-y-2">
-              <div className="flex items-center gap-1.5 text-rose-800">
-                <Brain size={16} className="animate-bounce" />
-                <strong className="text-xs font-black">شبیه‌ساز هوشمند نقاط ضعف (Trap Quiz)</strong>
-              </div>
-              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
-                بر اساس تحلیل ممتد مربی، شما بیشترین تله‌های تستی را در مباحث زیست‌شناسی، فیزیک و شیمی داشته‌اید. می‌توانید فوراً یک شبیه‌ساز فرضی فوق‌سخت با پاسخ‌های تفصیلی را آغاز کنید:
-              </p>
-              <button
-                onClick={() => onNavigate("quiz")}
-                className="w-full bg-rose-600 hover:bg-slate-900 text-white rounded-xl py-2 font-sans font-black text-[10px] transition flex items-center justify-center gap-1 cursor-pointer shadow-sm"
-              >
-                <span>تولید و شروع آزمون تستی سفارشی</span>
-                <ChevronLeft size={12} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 pt-2">
-              {/* Core Visual Bar Chart of the percentages */}
-              <div className="xl:col-span-5 bg-slate-50/60 p-4 rounded-2xl border border-slate-200/60 flex flex-col justify-between space-y-4">
-                <div className="text-right">
-                  <h3 className="text-xs font-black text-slate-800">تحلیل بصری و مقایسه‌ای ضعف دروس</h3>
-                  <p className="text-[9px] text-slate-400 font-bold leading-relaxed">
-                    ستون‌های کوتاه‌تر نشان‌دهنده درصد پایین‌تر در آزمون‌های شبیه‌ساز (نیاز شدید به مطالعه فوری) است.
-                  </p>
-                </div>
-
-                <div className="h-48 w-full" style={{ minHeight: "192px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 10, right: 5, left: -25, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis 
-                        dataKey="name" 
-                        tick={{ fill: '#475569', fontSize: 9, fontWeight: 900 }} 
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis 
-                        domain={[0, 100]} 
-                        tickFormatter={(v) => toPersianNum(v) + "٪"}
-                        tick={{ fill: '#475569', fontSize: 9, fontWeight: 900 }} 
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip 
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-slate-950 text-white p-3 rounded-xl text-[10px] space-y-1.5 shadow-lg border border-slate-800 text-right font-sans">
-                                <strong className="block text-slate-100">{data.fullName}</strong>
-                                <span className="block text-amber-300 font-black">درصد بازدهی تستی: {toPersianNum(data.percentage)}٪</span>
-                                <span className={`block text-[9px] font-bold ${data.percentage < 35 ? "text-rose-400 animate-pulse" : "text-amber-400"}`}>
-                                  {data.percentage < 35 ? "⚠️ نیازمند مطالعه ضربتی درسنامه" : "⚠️ اولویت دوم مرور و تست‌زنی"}
-                                </span>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Bar dataKey="percentage" radius={[6, 6, 0, 0]} barSize={26}>
-                        {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[9px] font-black text-slate-500 pt-3 border-t border-slate-200/60">
-                  <div className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 bg-rose-500 rounded-sm inline-block shrink-0" />
-                    <span>وضعیت بحرانی (&lt; ۳۵٪)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 bg-amber-500 rounded-sm inline-block shrink-0" />
-                    <span>هشدار مطالعاتی (&lt; ۵۰٪)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* List of weaknesses */}
-              <div className="xl:col-span-7 space-y-3">
-                {mockWeaknesses.map((weak, idx) => (
-                  <div key={idx} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100/95 hover:border-slate-250 hover:bg-slate-50 transition space-y-2.5 relative">
-                    <div className="flex justify-between items-start gap-4 text-right">
-                      <div className="space-y-0.5 text-right flex-1">
-                        <span className="text-[9px] font-black text-indigo-700 block">{weak.subject}</span>
-                        <strong className="text-xs font-extrabold text-slate-800 block leading-relaxed">{weak.topic}</strong>
-                      </div>
-                      <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-lg border shrink-0 ${
-                        weak.severity === "critical" 
-                          ? "bg-rose-50 text-rose-600 border-rose-100" 
-                          : "bg-amber-50 text-amber-600 border-amber-100"
-                      }`}>
-                        بازدهی: {toPersianNum(weak.percentage)}٪
-                      </span>
-                    </div>
-                    
-                    {/* Mastery Progress Bar */}
-                    <div className="space-y-1">
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-350 ${weak.severity === "critical" ? "bg-red-500" : "bg-amber-500"}`}
-                          style={{ width: `${weak.percentage}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[9px] text-slate-450 font-mono">
-                        <span>ضریب انطباق صحت علمی: {toPersianNum(weak.percentage)}٪</span>
-                        <span>تخمین بار منفی اشتباهات: ~{toPersianNum(100 - weak.percentage)}٪</span>
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-slate-600 leading-relaxed bg-white/70 p-2.5 rounded-xl border border-slate-100 text-right font-medium">
-                      <span className="font-extrabold text-indigo-800">توصیه مربی کنکور: </span>{weak.recommendation}
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row gap-2">
-                       <button
-                         onClick={() => onNavigate("schedule")}
-                         className="flex-1 py-2.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-slate-50 text-slate-600 hover:text-indigo-700 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                       >
-                          <Calendar size={13} className="text-indigo-500" />
-                          <span>ترمیم در برنامه مطالعاتی</span>
-                       </button>
-                       <button
-                         onClick={() => onNavigate("traps")}
-                         className="flex-1 py-2.5 bg-indigo-950 text-white hover:bg-slate-900 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 border border-indigo-950"
-                       >
-                          <Target size={13} className="text-amber-400" />
-                          <span>تحلیل تله‌های این مبحث</span>
-                       </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <button 
-            onClick={() => onNavigate("report")}
-            className="w-full bg-blue-950 hover:bg-slate-900 text-white py-3 rounded-2xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer mt-4 hover:scale-[1.01]"
-          >
-            <span>مشاهده ریز درصدها، کارنامه خام و تحلیل‌های تستی آکادمی</span>
-            <ChevronLeft size={14} />
-          </button>
-        </div>
-
-      </div>
-
-      {/* Gamified student medals & milestones achievements */}
-      <StudentAchievements />
-
-      {/* Visual active traps tree diagram based on legal subjects (Civil, Commercial, Criminal) */}
-      <TrapsTreeMap 
-        studentId={student.id} 
-        studentName={student.name} 
-        onRefreshStats={() => {
-          setTrapsRefreshTrigger(prev => prev + 1);
-        }} 
-      />
-
-      {/* Advanced AI Resources & Tips Panel */}
-      <div className="bg-gradient-to-l from-indigo-50/50 to-blue-50/50 rounded-3xl p-6 border border-indigo-100/40 grid grid-cols-1 md:grid-cols-3 gap-5 text-right font-sans">
-        <div className="flex gap-3.5 items-start justify-end">
-          <div className="space-y-1 text-right flex-1">
-            <h4 className="text-xs font-black text-slate-800">پشتیبانی و مربیگری ۲۴ ساعته (AI)</h4>
-            <p className="text-[10px] text-slate-500 leading-relaxed">
-              هر زمان حین خواندن مباحث ژنتیک یا مفاهیم فیزیک دچار ابهام علمی شدید، سوال خود را از چت مشاور هوشمند بپرسید.
-            </p>
-          </div>
-          <div className="p-3 bg-white text-indigo-850 rounded-2xl shadow-sm border border-slate-100 flex-shrink-0">
-            <Compass size={18} />
-          </div>
-        </div>
-
-        <div className="flex gap-3.5 items-start justify-end">
-          <div className="space-y-1 text-right flex-1">
-            <h4 className="text-xs font-black text-slate-800">دفترچه تست‌های کنکور سراسری</h4>
-            <p className="text-[10px] text-slate-500 leading-relaxed">
-              تطابق مطلق کارهای کلاسی با مفاهیم استوکیومتری و سینتیک جهت تثبیت حداکثر تراز تستی.
-            </p>
-          </div>
-          <div className="p-3 bg-white text-amber-600 rounded-2xl shadow-sm border border-slate-100 flex-shrink-0">
-            <BookOpen size={18} />
-          </div>
-        </div>
-
-        <div className="flex gap-3.5 items-start justify-end">
-          <div className="space-y-1 text-right flex-1">
-            <h4 className="text-xs font-black text-slate-800">تکنیک تندخوانی و زمان‌بندی تستی</h4>
-            <p className="text-[10px] text-slate-500 leading-relaxed">
-              برای پیشگیری از کمبود زمان در جلسه آزمون شبیه‌ساز کنکور، تکرار دوره مکرر تست‌های سنوات را در اولویت عصر بگذارید.
-            </p>
-          </div>
-          <div className="p-3 bg-white text-emerald-600 rounded-2xl shadow-sm border border-slate-100 flex-shrink-0">
-            <Clock size={18} />
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 }

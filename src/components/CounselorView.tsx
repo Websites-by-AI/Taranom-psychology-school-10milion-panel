@@ -22,10 +22,12 @@ interface CounselingSession {
 
 interface CounselorViewProps {
   student: Student;
+  role?: string;
   onNavigate?: (view: any) => void;
 }
 
-export default function CounselorView({ student, onNavigate }: CounselorViewProps) {
+export default function CounselorView({ student, role = "student", onNavigate }: CounselorViewProps) {
+  const isStaff = role === "counselor" || role === "admin" || role === "teacher";
   const [activeTab, setActiveTab] = useState<"chat" | "sessions">("chat");
 
   // --- ACTIVE API PROVIDER IDENTIFIER ---
@@ -419,11 +421,11 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:h-[72vh] min-h-[500px]"
+            className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:h-[72vh] min-h-[500px] w-full"
             id="counselor-view-container"
           >
             {/* Helper Tips Sidebar */}
-            <div className="lg:col-span-1 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4 text-right order-2 lg:order-1" id="counselor-quick-tips">
+            <div className="lg:col-span-1 min-w-0 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4 text-right order-2 lg:order-1" id="counselor-quick-tips">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100 justify-start">
                   <span className="p-1 px-1.5 bg-amber-50 text-amber-600 rounded-lg"><HelpCircle size={15} /></span>
@@ -475,7 +477,7 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
             </div>
 
             {/* Chat conversations */}
-            <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden text-right" id="counselor-live-chat-box">
+            <div className="lg:col-span-3 min-w-0 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden text-right" id="counselor-live-chat-box">
               <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="relative">
@@ -671,115 +673,117 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
             className="grid grid-cols-1 lg:grid-cols-3 gap-6"
             id="counseling-sessions-workspace"
           >
-            {/* Input Form Panel (1 Column) */}
-            <div className="lg:col-span-1 space-y-5 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm self-start text-right">
-              <div className="flex items-center gap-2 border-b border-slate-50 pb-3 justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-50 text-blue-955 rounded-lg">
-                    <ClipboardList size={16} />
+            {/* Input Form Panel (1 Column) - Only visible to counselor/admin staff */}
+            {isStaff ? (
+              <div className="lg:col-span-1 space-y-5 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm self-start text-right animate-in fade-in duration-300">
+                <div className="flex items-center gap-2 border-b border-slate-50 pb-3 justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-50 text-blue-955 rounded-lg">
+                      <ClipboardList size={16} />
+                    </div>
+                    <h3 className="font-black text-slate-800 text-sm">ثبت مصوبه جدید مشاوره</h3>
                   </div>
-                  <h3 className="font-black text-slate-800 text-sm">ثبت مصوبه جدید مشاوره</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleTriggerAiDraftGenerator}
-                  disabled={isAiGenerating}
-                  className="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-[9px] rounded-lg border border-amber-300 transition-all cursor-pointer flex items-center gap-1 shadow-sm active:scale-95 disabled:opacity-50"
-                >
-                  <Sparkles size={11} className={isAiGenerating ? "animate-spin" : ""} />
-                  <span>پیش‌نویس با AI</span>
-                </button>
-              </div>
-
-              <form onSubmit={handleCreateSessionSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 block pb-1">موضوع مصوبه مشاوره علمی:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewType("academic")}
-                      className={`py-2 px-3 rounded-xl border text-center transition cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
-                        newType === "academic" 
-                          ? "bg-indigo-50 border-indigo-200 text-indigo-900" 
-                          : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
-                      }`}
-                    >
-                      <BookOpen size={13} />
-                      <span>۱. برنامه‌ریزی علمی تستی</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setNewType("motivational")}
-                      className={`py-2 px-3 rounded-xl border text-center transition cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
-                        newType === "motivational" 
-                          ? "bg-rose-50 border-rose-200 text-rose-900" 
-                          : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
-                      }`}
-                    >
-                      <Brain size={13} />
-                      <span>۲. مشاوره روحیه و اضطراب</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTriggerAiDraftGenerator}
+                    disabled={isAiGenerating}
+                    className="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-[9px] rounded-lg border border-amber-300 transition-all cursor-pointer flex items-center gap-1 shadow-sm active:scale-95 disabled:opacity-50"
+                  >
+                    <Sparkles size={11} className={isAiGenerating ? "animate-spin" : ""} />
+                    <span>پیش‌نویس با AI</span>
+                  </button>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 block">عنوان دقیق مصوبه تحصیلی:</label>
-                  <input
-                    type="text"
-                    required
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="مثال: رفع عیوب تله‌های آیین دادرسی مدنی"
-                    className="w-full bg-slate-50 border border-slate-205 focus:bg-white focus:ring-2 focus:ring-blue-950 rounded-xl px-3 py-2 text-xs font-black text-slate-800 text-right"
-                  />
-                </div>
+                <form onSubmit={handleCreateSessionSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 block pb-1">موضوع مصوبه مشاوره علمی:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewType("academic")}
+                        className={`py-2 px-3 rounded-xl border text-center transition cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
+                          newType === "academic" 
+                            ? "bg-indigo-50 border-indigo-200 text-indigo-950" 
+                            : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
+                        }`}
+                      >
+                        <BookOpen size={13} />
+                        <span>۱. برنامه‌ریزی علمی تستی</span>
+                      </button>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1 text-right">
-                    <label className="text-[10px] font-bold text-slate-400 block text-right">مشاور مسئول:</label>
-                    <input
-                      type="text"
-                      value={newCName}
-                      onChange={(e) => setNewCName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 text-right"
-                    />
+                      <button
+                        type="button"
+                        onClick={() => setNewType("motivational")}
+                        className={`py-2 px-3 rounded-xl border text-center transition cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
+                          newType === "motivational" 
+                            ? "bg-rose-50 border-rose-200 text-rose-950" 
+                            : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
+                        }`}
+                      >
+                        <Brain size={13} />
+                        <span>۲. مشاوره روحیه و اضطراب</span>
+                      </button>
+                    </div>
                   </div>
+
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 block">تاریخ جلسه:</label>
+                    <label className="text-[10px] font-bold text-slate-400 block">عنوان دقیق مصوبه تحصیلی:</label>
                     <input
                       type="text"
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-850 font-mono text-center"
+                      required
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      placeholder="مثال: رفع عیوب تله‌های آیین دادرسی مدنی"
+                      className="w-full bg-slate-50 border border-slate-205 focus:bg-white focus:ring-2 focus:ring-blue-950 rounded-xl px-3 py-2 text-xs font-black text-slate-800 text-right"
                     />
                   </div>
-                </div>
 
-                <div className="space-y-1 text-right font-sans">
-                  <label className="text-[10px] font-bold text-slate-400 block text-right">جزئیات و مصوبات اجرایی کایزن درسی:</label>
-                  <textarea
-                    required
-                    value={newNotes}
-                    onChange={(e) => setNewNotes(e.target.value)}
-                    rows={4}
-                    placeholder="نکات تعیین شده علمی، مباحث اختصاصی مورد استناد، شیوه خلاصه نویسی زیست‌شناسی و..."
-                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-950 rounded-xl px-3 py-2.5 text-xs font-semibold leading-relaxed text-slate-700 text-right font-sans"
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1 text-right">
+                      <label className="text-[10px] font-bold text-slate-400 block text-right">مشاور مسئول:</label>
+                      <input
+                        type="text"
+                        value={newCName}
+                        onChange={(e) => setNewCName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 text-right"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 block">تاریخ جلسه:</label>
+                      <input
+                        type="text"
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-850 font-mono text-center"
+                      />
+                    </div>
+                  </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-blue-950 hover:bg-slate-900 text-white py-3 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <PlusCircle size={14} />
-                  <span>ذخیره مصوبه در برنامه درسی داوطلب</span>
-                </button>
-              </form>
-            </div>
+                  <div className="space-y-1 text-right font-sans">
+                    <label className="text-[10px] font-bold text-slate-400 block text-right">جزئیات و مصوبات اجرایی کایزن درسی:</label>
+                    <textarea
+                      required
+                      value={newNotes}
+                      onChange={(e) => setNewNotes(e.target.value)}
+                      rows={4}
+                      placeholder="نکات تعیین شده علمی، مباحث اختصاصی مورد استناد، شیوه خلاصه نویسی زیست‌شناسی و..."
+                      className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-950 rounded-xl px-3 py-2.5 text-xs font-semibold leading-relaxed text-slate-700 text-right font-sans"
+                    />
+                  </div>
 
-            {/* Archive List (2 Columns) */}
-            <div className="lg:col-span-2 space-y-5 text-right">
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-950 hover:bg-slate-900 text-white py-3 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <PlusCircle size={14} />
+                    <span>ذخیره مصوبه در برنامه درسی داوطلب</span>
+                  </button>
+                </form>
+              </div>
+            ) : null}
+
+            {/* Archive List (Fills remaining space or takes full 3 columns if form is hidden) */}
+            <div className={`${isStaff ? "lg:col-span-2" : "lg:col-span-3"} space-y-5 text-right`}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm flex items-center justify-between">
                   <div className="space-y-1 text-right">
@@ -837,12 +841,14 @@ export default function CounselorView({ student, onNavigate }: CounselorViewProp
                           مشاور مسئول: {session.counselorName}
                         </span>
                         
-                        <button
-                          onClick={() => handleDeleteSession(session.id)}
-                          className="text-slate-400 hover:text-red-600 hover:bg-slate-50 p-1.5 rounded-lg transition"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {isStaff && (
+                          <button
+                            onClick={() => handleDeleteSession(session.id)}
+                            className="text-slate-400 hover:text-red-600 hover:bg-slate-50 p-1.5 rounded-lg transition animate-in zoom-in-95 duration-200"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
 

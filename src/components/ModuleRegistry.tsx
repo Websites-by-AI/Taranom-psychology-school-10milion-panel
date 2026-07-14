@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { 
   Table, Cpu, Layout, Users, Shield, Copy, Check, Search, Filter, 
-  Terminal, Sparkles, AlertTriangle, ArrowUpRight, Code, RefreshCw, X
+  Terminal, Sparkles, AlertTriangle, ArrowUpRight, Code, RefreshCw, X,
+  Settings2, Sliders, Lock
 } from "lucide-react";
 import { addSystemLog } from "../lib/syslogs";
 
@@ -29,6 +30,114 @@ export default function ModuleRegistry() {
   const [promptFocus, setPromptFocus] = useState<"ui" | "ai" | "firebase" | "security">("ui");
   const [benchmarkStatus, setBenchmarkStatus] = useState<"idle" | "scanning" | "ready">("idle");
   const [customNotes, setCustomNotes] = useState("");
+
+  const [activePreset, setActivePreset] = useState<"lightweight" | "medium" | "full" | "custom" >(() => {
+    return (localStorage.getItem("taranom_module_preset") as any) || "full";
+  });
+
+  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem("taranom_enabled_modules");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      welcome: true,
+      dashboard: true,
+      manova: true,
+      report: true,
+      schedule: true,
+      counselor: true,
+      progress: true,
+      traps: true,
+      quiz: true,
+      psychology: true,
+      metacognition: true,
+      counseling: true,
+      "historical-db": true,
+      "study-planner": true,
+      "smart-stress-trainer": true,
+      admin: true
+    };
+  });
+
+  const studentToggleableModules = [
+    { id: "welcome", name: "صفحه اصلی و آشنایی", desc: "صفحه معرفی کلی متد کایزن، ورود و دپارتمان ترنم مهر", category: "پیشخوان اصلی", isEssential: true },
+    { id: "dashboard", name: "میز مطالعه و همراهی", desc: "پنل اصلی ردیابی زمان مطالعه و چالش‌های روزانه", category: "پیشخوان اصلی", isEssential: true },
+    { id: "study-planner", name: "میز مطالعه من", desc: "ثبت روزانه چرخه‌های یادگیری فعال و مدیریت زمان", category: "برنامه‌ریزی و آزمون", isEssential: true },
+    { id: "admin", name: "تنظیمات آکادمی", desc: "بخش مدیریت دپارتمان و تنظیمات برندینگ موسسه", category: "مدیریت سیستم", isEssential: true },
+    { id: "manova", name: "داشبورد تحلیلی مانوا", desc: "نمودارها و تحلیل مانیتورینگ چندبعدی کایزن", category: "ارزیابی و گزارش" },
+    { id: "report", name: "روند یادگیری من (کارنامه‌ها)", desc: "کارنامه‌های ادواری ممیزی و تحلیل ترازهای کنکور", category: "ارزیابی و گزارش" },
+    { id: "schedule", name: "برنامه‌ریزی و تقویم مطالعاتی", desc: "چرخه‌های مطالعاتی فعال و مربیگری علمی مکتوب", category: "برنامه‌ریزی و آزمون" },
+    { id: "counselor", name: "گفتگو و پشتیبانی (دستیار مربی)", desc: "چت تعاملی و مربیگری ضد استرس کایزن زنده", category: "پشتیبانی و مشاوره" },
+    { id: "progress", name: "پایش عملکرد و سلامت روان", desc: "نمودارهای پیشرفت ساعت مطالعه و کیفیت خواب", category: "ارزیابی و گزارش" },
+    { id: "traps", name: "شناخت چالش‌های تستی (تله‌ها)", desc: "کارگاه عارضه‌یابی و پاتک تله‌های تستی کالیبره", category: "ارزیابی و گزارش" },
+    { id: "quiz", name: "آزمون سفارشی (کوئیز ساز)", desc: "طراحی آزمون هوشمند مربیان با ضرایب کنکور", category: "برنامه‌ریزی و آزمون" },
+    { id: "psychology", name: "پایش آمادگی ذهنی (رادار اضطراب)", desc: "آزمون‌های خودارزیابی تنفس عمیق و اضطراب", category: "پشتیبانی و مشاوره" },
+    { id: "metacognition", name: "آزمایشگاه فراشناخت", desc: "مینی‌گیم‌های تمرکز حواس و ریتم پومودورو", category: "پشتیبانی و مشاوره" },
+    { id: "counseling", name: "انتخاب رشته هوشمند", desc: "سیستم تحلیل سهمیه و تخمین قبولی پیشرفته", category: "برنامه‌ریزی و آزمون" },
+    { id: "historical-db", name: "بانک تراز و قبولی کنکور", desc: "بانک جامع آماری رتبه‌ها و محل قبولی سال‌های گذشته", category: "برنامه‌ریزی و آزمون" },
+    { id: "smart-stress-trainer", name: "شبیه‌ساز آزمون کایزن", desc: "شبیه‌سازی زنده کنکور با سنسور استرس مصنوعی", category: "برنامه‌ریزی و آزمون" },
+  ];
+
+  const applyPreset = (preset: "lightweight" | "medium" | "full") => {
+    const presetModules: Record<string, boolean> = {
+      welcome: true,
+      dashboard: true,
+      manova: preset !== "lightweight",
+      report: preset !== "lightweight",
+      schedule: preset !== "lightweight",
+      counselor: preset === "full",
+      progress: preset === "full",
+      traps: preset === "full",
+      quiz: preset !== "lightweight",
+      psychology: preset === "full",
+      metacognition: preset === "full",
+      counseling: preset === "full",
+      "historical-db": preset === "full",
+      "study-planner": true,
+      "smart-stress-trainer": preset !== "lightweight",
+      admin: true
+    };
+
+    setEnabledModules(presetModules);
+    setActivePreset(preset);
+    localStorage.setItem("taranom_module_preset", preset);
+    localStorage.setItem("taranom_enabled_modules", JSON.stringify(presetModules));
+    
+    // Notify application window
+    window.dispatchEvent(new Event("taranom_modules_changed"));
+    
+    addSystemLog(
+      `تغییر پوسته ماژول‌ها به ${preset === "lightweight" ? "سبک" : preset === "medium" ? "متوسط" : "کامل"}`,
+      "تنظیمات ماژول‌ها",
+      `مدیر سیستم سطح دسترسی و نمایش ماژول‌های داوطلب را بر روی حالت پیش‌فرض "${preset}" قرار داد.`
+    );
+  };
+
+  const toggleModule = (id: string) => {
+    // Prevent disabling essential modules
+    if (id === "welcome" || id === "dashboard" || id === "admin" || id === "study-planner") return;
+
+    const updated = {
+      ...enabledModules,
+      [id]: enabledModules[id] === false ? true : false
+    };
+    
+    setEnabledModules(updated);
+    setActivePreset("custom");
+    localStorage.setItem("taranom_module_preset", "custom");
+    localStorage.setItem("taranom_enabled_modules", JSON.stringify(updated));
+    
+    window.dispatchEvent(new Event("taranom_modules_changed"));
+    
+    addSystemLog(
+      `تغییر وضعیت ماژول ${id}`,
+      "تنظیمات ماژول‌ها",
+      `وضعیت ماژول با شناسه ${id} به ${updated[id] !== false ? "فعال" : "غیرفعال"} تغییر یافت.`
+    );
+  };
 
   const modulesData: ActiveModule[] = [
     {
@@ -332,6 +441,160 @@ ${module.features.map(f => `- ${f}`).join("\n")}
           <div className="bg-indigo-950/80 border border-indigo-900 rounded-xl px-4 py-2 text-right">
             <span className="text-[10px] text-indigo-300 font-black block">مجموع کل ماژول‌های فعال</span>
             <span className="text-lg font-black text-emerald-400 font-mono leading-none">{modulesData.length} ماژول</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ⚙️ INTEGRATED MODULE CUSTOMIZATION PANEL */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-6 shadow-sm text-right">
+        <div className="flex items-center gap-3 border-b border-slate-150 pb-4">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+            <Settings2 size={20} className="text-indigo-650" />
+          </div>
+          <div>
+            <h4 className="text-sm font-black text-slate-900">کنترل پویای ماژول‌های پرتال داوطلب</h4>
+            <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+              مدیریت و فیلترینگ امکانات نمایش‌داده‌شده برای کلاینت (دانش‌آموز) بر اساس پوسته‌های پیش‌فرض یا تنظیم تکی چک‌لیست‌ها
+            </p>
+          </div>
+        </div>
+
+        {/* Preset Selection */}
+        <div className="space-y-3">
+          <span className="text-xs font-black text-slate-700 block">۱. انتخاب پوسته کلی (Presets) ماژول‌ها:</span>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            {/* Lightweight Preset */}
+            <button
+              onClick={() => applyPreset("lightweight")}
+              className={`p-4 text-right rounded-2xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+                activePreset === "lightweight"
+                  ? "bg-slate-950 text-white border-slate-950 shadow-md ring-2 ring-slate-950/25"
+                  : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100/70"
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-black">🌱 پوسته سبک (ماژول‌های پایه)</span>
+                {activePreset === "lightweight" && <Check size={14} className="text-emerald-400" />}
+              </div>
+              <span className={`text-[10px] leading-relaxed ${activePreset === "lightweight" ? "text-slate-300" : "text-slate-500"} font-bold`}>
+                فقط شامل بخش‌های حیاتی: خانه، میز مطالعه کایزن، ثبت چرخه‌های زمان مطالعاتی و تنظیمات. بسیار سریع و فوق متمرکز.
+              </span>
+            </button>
+
+            {/* Medium Preset */}
+            <button
+              onClick={() => applyPreset("medium")}
+              className={`p-4 text-right rounded-2xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+                activePreset === "medium"
+                  ? "bg-indigo-950 text-white border-indigo-950 shadow-md ring-2 ring-indigo-900/25"
+                  : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100/70"
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-black">⚡ پوسته متوسط (کاربری متداول)</span>
+                {activePreset === "medium" && <Check size={14} className="text-emerald-400" />}
+              </div>
+              <span className={`text-[10px] leading-relaxed ${activePreset === "medium" ? "text-slate-300" : "text-slate-500"} font-bold`}>
+                علاوه بر بخش‌های حیاتی، شامل داشبورد تحلیل آزمون مانوا، کارنامه‌های ممیزی، تقویم مطالعاتی و آزمون‌ساز است.
+              </span>
+            </button>
+
+            {/* Full Preset */}
+            <button
+              onClick={() => applyPreset("full")}
+              className={`p-4 text-right rounded-2xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+                activePreset === "full"
+                  ? "bg-emerald-950 text-white border-emerald-950 shadow-md ring-2 ring-emerald-900/25"
+                  : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100/70"
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-black">🚀 پوسته کامل (تمام امکانات)</span>
+                {activePreset === "full" && <Check size={14} className="text-emerald-400" />}
+              </div>
+              <span className={`text-[10px] leading-relaxed ${activePreset === "full" ? "text-slate-300" : "text-slate-500"} font-bold`}>
+                فعال‌سازی همزمان تمام ماژول‌ها نظیر مربی آنلاین، رادار استرس و اضطراب داوطلب، مینی‌گیم‌های تمرکز حواس و رتبه‌سازی.
+              </span>
+            </button>
+
+            {/* Custom Indicator */}
+            <div
+              className={`p-4 text-right rounded-2xl border flex flex-col gap-1.5 ${
+                activePreset === "custom"
+                  ? "bg-amber-50 border-amber-300 text-amber-900 shadow-sm"
+                  : "bg-slate-50/50 border-slate-100 text-slate-400 select-none"
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-black">⚙️ پوسته سفارشی (دستی)</span>
+                {activePreset === "custom" && <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">فعال</span>}
+              </div>
+              <span className="text-[10px] leading-relaxed font-bold">
+                شما چک‌باکس‌های ماژول‌ها را به طور دلخواه دستکاری کرده‌اید. تغییرات به صورت خودکار ثبت و ذخیره شده‌اند.
+              </span>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Detailed Modular Toggle Switches */}
+        <div className="space-y-3">
+          <span className="text-xs font-black text-slate-700 block">۲. چک‌لیست جزئیات ماژول‌های فعال داوطلب:</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {studentToggleableModules.map((m) => {
+              const isEssential = m.isEssential;
+              const isEnabled = enabledModules[m.id] !== false;
+              
+              return (
+                <div 
+                  key={m.id}
+                  className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                    isEssential 
+                      ? "bg-slate-50/80 border-slate-200" 
+                      : isEnabled 
+                        ? "bg-emerald-50/25 border-emerald-200/80 hover:border-emerald-300" 
+                        : "bg-slate-100/40 border-slate-150 opacity-65 hover:opacity-100"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900">{m.name}</span>
+                      <span className="text-[9px] text-slate-400 font-bold">{m.category}</span>
+                    </div>
+                    <p className="text-[9.5px] text-slate-500 leading-relaxed font-semibold">{m.desc}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 mt-1">
+                    {isEssential ? (
+                      <span className="text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md font-black flex items-center gap-1">
+                        <Lock size={10} />
+                        <span>ماژول اساسی و غیرقابل تعویض</span>
+                      </span>
+                    ) : (
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input 
+                          type="checkbox" 
+                          checked={isEnabled} 
+                          onChange={() => toggleModule(m.id)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <span className="mr-2 text-[10px] font-black text-slate-600">
+                          {isEnabled ? "فعال" : "غیرفعال"}
+                        </span>
+                      </label>
+                    )}
+
+                    <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
+                      isEnabled ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                    }`}>
+                      {isEnabled ? "Active" : "Disabled"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

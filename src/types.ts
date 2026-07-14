@@ -7,7 +7,7 @@ export interface AITestHistoryEntry {
 
 export interface AIProviderKey {
   id: string;
-  provider: "Google Gemini" | "OpenAI" | "Anthropic" | "Custom" | "OpenRouter";
+  provider: "Google Gemini" | "OpenAI" | "Anthropic" | "Custom" | "OpenRouter" | "AgentRouter";
   key: string;
   label: string;
   status: "idle" | "testing" | "success" | "error";
@@ -59,6 +59,9 @@ export interface Student {
   additionalNotes?: string; // سایر داده‌های زمینه‌ای که خانواده می‌تواند کمک کند
   paymentStatus?: "paid" | "pending" | "failed"; // وضعیت پرداخت اشتراک / ثبت‌نام
   subscriptionType?: "free" | "vip" | "premium"; // نوع اشتراک داوطلب
+  dashboardTier?: "light" | "medium" | "full"; // مدل پیچیدگی پنل داوطلب (سبک، متوسط، کامل)
+  avatar?: string;
+  mobile?: string;
 }
 
 export interface ZarinPalConfig {

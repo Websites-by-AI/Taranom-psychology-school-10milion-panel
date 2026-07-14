@@ -32,11 +32,11 @@ export const getSystemLogs = (): SystemLog[] => {
   }
 };
 
-export const addSystemLog = (action: string, username: string, detail: string) => {
+export const addSystemLog = (action: string, username: string, detail: string, isError: boolean = false) => {
   const logs = getSystemLogs();
   const newLog: SystemLog = {
     id: `LOG-${Date.now()}`,
-    action,
+    action: isError ? `[ERROR] ${action}` : action,
     username,
     timestamp: new Date().toLocaleString("fa-IR"),
     detail

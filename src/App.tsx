@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
+import { HealthDebuggerProvider } from "./context/HealthDebuggerContext";
 import { 
-  Routes, Route, useNavigate, useLocation, Navigate 
+  Routes, Route, useNavigate, useLocation, Navigate, BrowserRouter 
 } from "react-router-dom";
 import { INSTITUTIONS, BRAND_CONFIG, setBrandById } from "./constants";
 import { 
   Plus, LogOut, LayoutDashboard, FileSpreadsheet, 
   Calendar, MessageSquare, LineChart, Users, BellRing, Sparkles, Layers, Shield, Target,
-  Palette, Building2, Menu, X, ChevronLeft, Pipette, GraduationCap
+  Palette, Building2, Menu, X, ChevronLeft, Pipette, GraduationCap, BookOpen, Zap
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "./types";
@@ -23,9 +24,27 @@ import { ApiHealthMonitor } from "./components/ApiHealthMonitor";
 import TourGuide from "./components/TourGuide";
 import { getProfileMetadata, getHydratedStudent } from "./lib/userProfiles";
 
-export default function App() {
+function AppWithNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  return <AppContent navigate={navigate} location={location} />;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <HealthDebuggerProvider>
+        <AppWithNavigation />
+      </HealthDebuggerProvider>
+    </BrowserRouter>
+  );
+}
+
+function AppContent({ navigate, location }: { navigate: any; location: any }) {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const mockStudents: Student[] = [
     { id: "1", name: "مریم حسینی (رشته علوم تجربی - هدف پزشکی تهران)", code: "9812405", field: "tajrobi", grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰" }
@@ -54,12 +73,17 @@ export default function App() {
     return "student";
   });
   const [theme, setTheme] = useState<string>(() => {
-    return localStorage.getItem("taranom_app_theme") || BRAND_CONFIG.theme || "classic";
+    return localStorage.getItem("taranom_app_theme") || "amber";
+  });
+  const [previewTheme, setPreviewTheme] = useState<string | null>(null);
+
+  const [lang, setLang] = useState<"fa" | "en">(() => {
+    return (localStorage.getItem("taranom_app_lang") as "fa" | "en") || "fa";
   });
 
   useEffect(() => {
     const handleThemeEvent = () => {
-      setTheme(localStorage.getItem("taranom_app_theme") || "classic");
+      setTheme(localStorage.getItem("taranom_app_theme") || "amber");
     };
     window.addEventListener("taranom_theme_changed", handleThemeEvent);
     return () => window.removeEventListener("taranom_theme_changed", handleThemeEvent);
@@ -69,8 +93,8 @@ export default function App() {
   const switchBrand = (id: string) => {
     setBrandById(id);
     setActiveBrandId(id);
-    setTheme(BRAND_CONFIG.theme || "classic");
-    localStorage.setItem("taranom_app_theme", BRAND_CONFIG.theme || "classic");
+    setTheme("amber");
+    localStorage.setItem("taranom_app_theme", "amber");
     // Force a small refresh of states if needed, but since BRAND_CONFIG is mutated 
     // and we trigger state update for activeBrandId, components using BRAND_CONFIG 
     // will see the new values on next render.
@@ -80,74 +104,166 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isFocusChallengeOpen, setIsFocusChallengeOpen] = useState(false);
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
-  const [hideRestrictedModules, setHideRestrictedModules] = useState(false);
+  const [hideRestrictedModules, setHideRestrictedModules] = useState(true);
+
+  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem("taranom_enabled_modules");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      welcome: true,
+      dashboard: true,
+      manova: true,
+      report: true,
+      schedule: true,
+      counselor: true,
+      progress: true,
+      traps: true,
+      quiz: true,
+      psychology: true,
+      metacognition: true,
+      counseling: true,
+      "historical-db": true,
+      "study-planner": true,
+      "smart-stress-trainer": true,
+      admin: true
+    };
+  });
+
+  useEffect(() => {
+    const handleModulesChanged = () => {
+      const saved = localStorage.getItem("taranom_enabled_modules");
+      if (saved) {
+        try {
+          setEnabledModules(JSON.parse(saved));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("taranom_modules_changed", handleModulesChanged);
+    return () => window.removeEventListener("taranom_modules_changed", handleModulesChanged);
+  }, []);
+
+  const isModuleEnabled = (id: string) => {
+    if (role !== "student") return true;
+    if (id === "welcome" || id === "dashboard" || id === "admin" || id === "study-planner") return true;
+    return enabledModules[id] !== false;
+  };
+
+  const translateLabel = (id: string, currentLabel: string) => {
+    if (lang === "fa") return currentLabel;
+    const englishLabels: Record<string, string> = {
+      welcome: "Onboarding & Hub",
+      dashboard: "Kaizen Study Desk",
+      manova: "Manova Analytics Hub",
+      report: "My Learning Progress",
+      schedule: "Weekly Study Calendar",
+      counselor: "Live Support Messaging",
+      progress: "Performance & Health Radar",
+      traps: "Calibrated Test Traps",
+      quiz: "Custom Challenge Generator",
+      psychology: "Psych Readiness Tracker",
+      metacognition: "Metacognition Lab",
+      counseling: "AI Smart Sizing",
+      "historical-db": "Historical Records Bank",
+      admin: "SaaS Brand Administration",
+      parents: "Parent Supervision Desk",
+      "counselor-dashboard": "Monitor Desk for Counselors",
+      "counselor-chat": "Strategy Recommendation Chat",
+      "teacher-dashboard": "Teacher Monitoring Site",
+    };
+    return englishLabels[id] || currentLabel;
+  };
+
+  const translateGroupTitle = (title: string) => {
+    if (lang === "fa") return title;
+    const trans: Record<string, string> = {
+      "پیشخوان اصلی": "Primary Dashboard",
+      "ارزیابی و تحلیل": "Evaluations & Analytics",
+      "برنامه‌ریزی و آزمون": "Planning & Simulated Tests",
+      "مدیریت": "SaaS Platform Management",
+      "نظارت": "Supervision",
+      "گزارشات فرزند": "Student Progress Reports",
+      "تنظیمات": "SaaS Settings",
+      "مدیریت داوطلبان": "Student Management",
+      "تحلیل حرفه‌ای": "Strategic Advisory Hub",
+      "تحلیل و تله‌ها": "Analysis & Traps",
+    };
+    return trans[title] || title;
+  };
 
   const navigationItems = {
     student: [
-      { id: "welcome", label: "صفحه اصلی و آشنایی", icon: Home, highlight: true },
-      { id: "dashboard", label: "میز مطالعه و همراهی", icon: LayoutDashboard },
-      { id: "manova", label: "داشبورد تحلیلی مانوا", icon: Sparkles },
-      { id: "report", label: "روند یادگیری من", icon: FileSpreadsheet },
-      { id: "schedule", label: "برنامه‌ریزی و تقویم", icon: Calendar },
-      { id: "counselor", label: "گفتگو و پشتیبانی", icon: MessageSquare },
-      { id: "progress", label: "پایش عملکرد و سلامت", icon: LineChart },
-      { id: "traps", label: "شناخت چالش‌های تستی", icon: Target },
-      { id: "quiz", label: "آزمون سفارشی", icon: Brain },
-      { id: "psychology", label: "پایش آمادگی ذهنی", icon: Brain },
-      { id: "metacognition", label: "آزمایشگاه فراشناخت", icon: Sparkles },
-      { id: "counseling", label: "انتخاب رشته هوشمند", icon: GraduationCap },
-      { id: "historical-db", label: "بانک تراز و قبولی", icon: Database },
-      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
+      { id: "welcome", label: "صفحه اصلی", icon: Home, highlight: true },
+      { id: "dashboard", label: "میز کار من", icon: LayoutDashboard },
+      { id: "manova", label: "داشبورد پیشرفته", icon: Sparkles },
+      { id: "report", label: "کارنامه و گزارش", icon: FileSpreadsheet },
+      { id: "schedule", label: "برنامه مطالعاتی", icon: Calendar },
+      { id: "counselor", label: "ارتباط با مشاور", icon: MessageSquare },
+      { id: "progress", label: "نمودار پیشرفت", icon: LineChart },
+      { id: "traps", label: "اشتباهات متداول", icon: Target },
+      { id: "quiz", label: "آزمون‌ساز", icon: Brain },
+      { id: "psychology", label: "آمادگی ذهنی", icon: Brain },
+      { id: "metacognition", label: "تحلیل یادگیری", icon: Sparkles },
+      { id: "counseling", label: "انتخاب رشته", icon: GraduationCap },
+      { id: "historical-db", label: "بانک اطلاعات کنکور", icon: Database },
+      { id: "admin", label: "تنظیمات", icon: Shield },
+      { id: "study-planner", label: "میز مطالعه", icon: BookOpen },
+      { id: "smart-stress-trainer", label: "شبیه‌ساز آزمون", icon: Zap },
     ],
     parent: [
-      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
-      { id: "parents", label: "نظارت آنلاین والدین", icon: Users },
-      { id: "manova", label: "داشبورد هوشمند والدین", icon: Sparkles },
-      { id: "report", label: "کارنامه‌ها و گزارش‌ها", icon: FileSpreadsheet },
-      { id: "psychology", label: "پایش عملکرد ذهنی داوطلب", icon: Brain },
-      { id: "counseling", label: "تخمین قبولی فرزند", icon: GraduationCap },
-      { id: "historical-db", label: "بانک نتایج کنکور", icon: Database },
-      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
+      { id: "welcome", label: "صفحه اصلی", icon: Home, highlight: true },
+      { id: "parents", label: "وضعیت فرزند", icon: Users },
+      { id: "manova", label: "داشبورد پیشرفته", icon: Sparkles },
+      { id: "report", label: "کارنامه و گزارش‌ها", icon: FileSpreadsheet },
+      { id: "psychology", label: "وضعیت روحی", icon: Brain },
+      { id: "counseling", label: "تخمین رتبه", icon: GraduationCap },
+      { id: "historical-db", label: "اطلاعات کنکور", icon: Database },
+      { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     counselor: [
-      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
-      { id: "counselor-dashboard", label: "میزکار مانیتورینگ مشاور", icon: Users },
-      { id: "manova", label: "پورتال آکادمیک کایزن مانوا", icon: Sparkles },
-      { id: "report", label: "کارنامه و درصدهای ممیزی", icon: FileSpreadsheet },
-      { id: "psychology", label: "رادار اضطراب و بهداشت روان", icon: Brain },
-      { id: "counselor-chat", label: "جلسه مشاوره و توصیه‌نامه", icon: MessageSquare },
-      { id: "traps", label: "تله‌های کالیبره زیست", icon: Target },
-      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
+      { id: "welcome", label: "صفحه اصلی", icon: Home, highlight: true },
+      { id: "counselor-dashboard", label: "داشبورد مشاور", icon: Users },
+      { id: "manova", label: "داشبورد پیشرفته", icon: Sparkles },
+      { id: "report", label: "کارنامه‌ها", icon: FileSpreadsheet },
+      { id: "psychology", label: "وضعیت دانش‌آموزان", icon: Brain },
+      { id: "counselor-chat", label: "پیام‌ها", icon: MessageSquare },
+      { id: "traps", label: "تحلیل اشتباهات", icon: Target },
+      { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     teacher: [
-      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
-      { id: "teacher-dashboard", label: "میزکار مانیتورینگ دبیر", icon: Users },
-      { id: "report", label: "کارنامه‌های دانش‌آموزان", icon: FileSpreadsheet },
-      { id: "traps", label: "تله‌های کالیبره زیست", icon: Target },
-      { id: "admin", label: "تنظیمات آکادمی و مدیریت برند", icon: Shield },
+      { id: "welcome", label: "صفحه اصلی", icon: Home, highlight: true },
+      { id: "teacher-dashboard", label: "داشبورد دبیر", icon: Users },
+      { id: "report", label: "نمرات دانش‌آموزان", icon: FileSpreadsheet },
+      { id: "traps", label: "اشتباهات پرتکرار", icon: Target },
+      { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     admin: [
-      { id: "welcome", label: "صفحه اصلی و معرفی کایزن", icon: Home, highlight: true },
-      { id: "admin", label: "نقشه راه SaaS", icon: Users },
-      { id: "manova", label: "داشبورد مدیریتی مانوا", icon: Sparkles },
+      { id: "welcome", label: "صفحه اصلی", icon: Home, highlight: true },
+      { id: "admin", label: "مدیریت سیستم", icon: Users },
+      { id: "manova", label: "داشبورد کلان", icon: Sparkles },
     ]
   };
 
   const navigationGroups: Record<RoleType, { title: string; items: string[] }[]> = {
     student: [
-      { title: "پیشخوان اصلی", items: ["welcome", "dashboard", "manova"] },
-      { title: "ارزیابی و تحلیل", items: ["report", "progress", "traps", "psychology", "metacognition"] },
-      { title: "برنامه‌ریزی و آزمون", items: ["schedule", "quiz", "counseling", "historical-db"] },
-      { title: "مدیریت", items: ["admin"] }
+      { title: "🏠 خانه", items: ["dashboard", "welcome", "study-planner"] },
+      { title: "📅 برنامه‌ریزی", items: ["schedule", "counseling"] },
+      { title: "✍️ تمرین و آزمون", items: ["quiz", "traps", "smart-stress-trainer"] },
+      { title: "📊 کارنامه‌ام", items: ["report", "progress", "psychology"] },
+      { title: "💬 مربی هوشمند", items: ["counselor"] },
+      { title: "⋯ بیشتر", items: ["manova", "metacognition", "historical-db", "admin"] }
     ],
     parent: [
-      { title: "نظارت", items: ["welcome", "parents", "manova"] },
-      { title: "گزارشات فرزند", items: ["report", "psychology", "counseling", "historical-db"] },
+      { title: "پیشخوان", items: ["welcome", "parents", "manova"] },
+      { title: "گزارش‌های فرزند", items: ["report", "psychology", "counseling", "historical-db"] },
       { title: "تنظیمات", items: ["admin"] }
     ],
     counselor: [
-      { title: "مدیریت داوطلبان", items: ["welcome", "counselor-dashboard", "manova"] },
-      { title: "تحلیل حرفه‌ای", items: ["report", "psychology", "traps", "counselor-chat"] },
+      { title: "پیشخوان مشاور", items: ["welcome", "counselor-dashboard", "manova"] },
+      { title: "تحلیل‌ها", items: ["report", "psychology", "traps", "counselor-chat"] },
       { title: "تنظیمات", items: ["admin"] }
     ],
     teacher: [
@@ -160,6 +276,7 @@ export default function App() {
   };
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [sidebarExpandedGroup, setSidebarExpandedGroup] = useState<string | null>(null);
 
   const getNavigationItemById = (id: string) => {
     // Search in all roles to find the unique item configuration
@@ -211,20 +328,6 @@ export default function App() {
             --color-indigo-100: #ffe4e6 !important;
           }
         `;
-      case "amber":
-        return `
-          :root {
-            --color-blue-900: #78350f !important;
-            --color-blue-950: #451a03 !important;
-            --color-indigo-900: #b45309 !important;
-            --color-indigo-950: #92400e !important;
-            --color-blue-50: #fffbeb !important;
-            --color-blue-100: #fef3c7 !important;
-            --color-amber-400: #d97706 !important;
-            --color-indigo-50: #fffbeb !important;
-            --color-indigo-100: #fef3c7 !important;
-          }
-        `;
       case "obsidian":
         return `
           :root {
@@ -253,19 +356,20 @@ export default function App() {
             --color-indigo-100: #d2e3fc !important;
           }
         `;
+      case "amber":
       case "classic":
       default:
         return `
           :root {
-            --color-blue-900: #4f46e5 !important; /* Vibrant Violet-Indigo */
-            --color-blue-950: #1e1b4b !important; /* Deep Indigo Velvet */
-            --color-indigo-900: #ec4899 !important; /* Cheerful Hot-Pink / Sunset Rose */
-            --color-indigo-950: #831843 !important; /* Rich Rose-Wine */
-            --color-blue-50: #f5f3ff !important; /* Airy Soft Lavender-Mint Highlight */
-            --color-blue-100: #e0e7ff !important; /* Soft Indigo Sky Tint */
-            --color-amber-400: #f59e0b !important; /* Sun-Warm Golden Amber Accent */
-            --color-indigo-50: #fdf2f8 !important; /* Cotton Candy Soft Rose Highlight */
-            --color-indigo-100: #fce7f3 !important; /* Smooth Baby Pink */
+            --color-blue-900: #854d0e !important; /* Elegant deep saffron/gold for text contrast */
+            --color-blue-950: #451a03 !important; /* Cozy deep dark saffron border/bg */
+            --color-indigo-900: #ca8a04 !important; /* Golden orange accent */
+            --color-indigo-950: #713f12 !important; /* Warm gold core-amber tint */
+            --color-blue-50: #fffbeb !important; /* Smooth soft yellow backdrop */
+            --color-blue-100: #fef2c5 !important; /* Saffron gold sky highlight tint */
+            --color-amber-400: #eab308 !important; /* Saffron amber active components */
+            --color-indigo-50: #fefdf0 !important; /* Pastel lemon subtle background layer */
+            --color-indigo-100: #fef2c5 !important; /* Saffron creamy gold backdrop text frame */
           }
         `;
     }
@@ -305,7 +409,7 @@ export default function App() {
   if (view === "welcome") {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900" id="public-homepage-root">
-        <style dangerouslySetInnerHTML={{ __html: getThemeCSS(theme) }} />
+        <style dangerouslySetInnerHTML={{ __html: getThemeCSS(previewTheme || theme) }} />
         <WelcomeTourPortal 
           currentRole={role || "student"} 
           onNavigate={(target) => {
@@ -325,7 +429,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-between" id="app-auth-wrapper">
         {/* Parallel Font Loading Layer - Optimized via index.html Preconnect/Preload */}
-        <style dangerouslySetInnerHTML={{ __html: getThemeCSS(theme) }} />
+        <style dangerouslySetInnerHTML={{ __html: getThemeCSS(previewTheme || theme) }} />
         <main className="flex-grow flex items-center justify-center py-10">
           <LoginView onLogin={handleLogin} onBackToHome={() => navigate("/welcome")} />
         </main>
@@ -335,30 +439,299 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col justify-between" id="app-dashboard-wrapper">
-      <style dangerouslySetInnerHTML={{ __html: getThemeCSS(theme) }} />
-      {/* SaaS Status Bar */}
-      <div className="bg-slate-900 text-white py-1 px-4 text-[9px] font-black flex justify-between items-center select-none">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${role === 'admin' ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-400'} `} />
-            <span>{role === 'admin' ? `سامانه ابری و میکروسرویسی ${BRAND_CONFIG.name} فعال است` : `سیستم هوشمند ${BRAND_CONFIG.name} متصل است`}</span>
-          </span>
-          {role === 'admin' && (
-            <>
-              <span className="hidden sm:inline text-slate-500">|</span>
-              <span className="hidden sm:inline bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/10">پروتکل امنیتی ادمین متصل است</span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          <ApiHealthMonitor role={role} />
-          {role === 'admin' && <span className="font-mono text-amber-300">CLOUD_INGRESS_STABLE_3000</span>}
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50/50 flex flex-col lg:flex-row" id="app-dashboard-wrapper" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+      <style dangerouslySetInnerHTML={{ __html: getThemeCSS(previewTheme || theme) }} />
 
-      {/* Prime Navigation Header */}
-      <header className="bg-white border-b border-slate-100 sticky top-0 z-50 shadow-sm" id="app-master-header">
+      {/* Right-Side Persistent Sidebar on Desktop for Farsi RTL users (Left side on English) */}
+      <aside className={`hidden lg:flex flex-col w-80 bg-white ${lang === 'fa' ? 'border-l border-slate-150 text-right' : 'border-r border-slate-150 text-left'} h-screen sticky top-0 z-40 overflow-y-auto shrink-0 select-none`} id="desktop-right-sidebar">
+        {/* Logo and Brand Info */}
+        <div className="p-6 border-b border-slate-100 flex flex-col items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-tr from-blue-900 via-slate-900 to-indigo-950 text-white rounded-2xl shadow-lg flex items-center justify-center">
+            <Layers size={28} className="text-amber-400" />
+          </div>
+          <div className="text-center">
+            <span className="font-black text-slate-850 text-base block leading-none text-blue-950">{BRAND_CONFIG.name}</span>
+            <span className="text-[10px] text-emerald-600 font-black block mt-2 flex items-center gap-0.5 justify-center">
+              <Sparkles size={8} />
+              <span>{lang === "fa" ? BRAND_CONFIG.slogan : "Kaizen Continuous Academic Optimization"}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* User Context Info Card */}
+        <div className="p-4 mx-4 my-2 bg-gradient-to-br from-blue-50 to-indigo-50/30 rounded-2xl border border-blue-100/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-900 text-white rounded-xl flex items-center justify-center font-black shrink-0">
+              {student?.name ? (lang === "fa" ? student.name.charAt(0) : "S") : "U"}
+            </div>
+            <div className="flex-grow min-w-0">
+              <span className="font-bold text-slate-850 text-xs block truncate" title={student?.name}>
+                {role === "counselor" || role === "teacher" 
+                  ? getProfileMetadata(role).name 
+                  : role === "admin" 
+                    ? (lang === "fa" ? "مدیر کل آکادمی" : "Academy Chief Director") 
+                    : (lang === "fa" ? student.name : "Active Candidate")}
+              </span>
+              <span className="text-[9px] text-slate-500 font-bold block mt-0.5 truncate">
+                {role === "student" && (lang === "fa" ? "داوطلب کنکور سراسری" : "Entrance Exam Candidate")}
+                {role === "parent" && (lang === "fa" ? "سیستم نظارتی والدین" : "Parent Supervision Module")}
+                {role === "counselor" && (lang === "fa" ? "👔 مربی و مشاور ارشد" : "👔 Senior Coach & Advisor")}
+                {role === "teacher" && (lang === "fa" ? "👨‍🏫 دبیر طراح و معلم" : "👨‍🏫 Curriculum designer")}
+                {role === "admin" && (lang === "fa" ? "مدیر کل آکادمی" : "System Administrator")}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar Nav Items */}
+        <div className="flex-grow px-4 py-3 space-y-2 overflow-y-auto">
+          {role && navigationGroups[role].map((group, groupIdx) => {
+            const isGroupActive = group.items.includes(view);
+            const isExpanded = sidebarExpandedGroup === group.title || isGroupActive;
+
+            return (
+            <div key={groupIdx} className="space-y-1.5">
+              <button 
+                onClick={() => {
+                  if (group.items.length === 1) {
+                    navigate("/" + group.items[0]);
+                  } else {
+                    setSidebarExpandedGroup(sidebarExpandedGroup === group.title ? null : group.title);
+                  }
+                }}
+                className={`w-full flex items-center justify-between px-3 py-3 rounded-xl transition cursor-pointer ${isGroupActive ? "bg-indigo-50/50 text-indigo-900 border border-indigo-100/50 shadow-sm" : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`flex -space-x-1.5 rtl:space-x-reverse ${isGroupActive ? 'opacity-100' : 'opacity-60 grayscale'}`}>
+                    {group.items.slice(0, 2).map(id => {
+                      const item = getNavigationItemById(id);
+                      const Icon = item?.icon || Sparkles;
+                      return <Icon key={id} size={14} className="bg-white rounded-full p-0.5" />;
+                    })}
+                  </div>
+                  <span className="text-[11.5px] font-black tracking-wide">{translateGroupTitle(group.title)}</span>
+                </div>
+                {group.items.length > 1 && (
+                  <ChevronLeft size={14} className={`transition-transform duration-300 text-slate-400 ${isExpanded ? "rotate-[-270deg]" : "rotate-[-90deg]"}`} />
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {isExpanded && group.items.length > 1 && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pr-5 border-r border-indigo-100/60 mr-4 space-y-1 py-1">
+                      {group.items.map(id => {
+                        const item = getNavigationItemById(id);
+                        if (!item) return null;
+
+                        const isAllowed = ALLOWED_VIEWS_BY_ROLE[role as RoleType]?.includes(id);
+                        if (!isAllowed && hideRestrictedModules) return null;
+                        if (!isModuleEnabled(id)) return null;
+
+                        const Icon = item.icon;
+                        const isActive = view === id;
+                        const dynamicLabel = id === "traps" 
+                          ? (student?.field === "riazi" ? (lang === 'fa' ? "تله‌های کالیبره ریاضی/فیزیک" : "Calibrated Math/Physics Traps") : student?.field === "ensani" ? (lang === 'fa' ? "تله‌های کالیبره ادبیات/عربی" : "Calibrated Literature/Arabic") : (lang === 'fa' ? "تله‌های کالیبره زیست/شیمی" : "Calibrated Bio/Chem Traps"))
+                          : translateLabel(id, item.label);
+
+                        return (
+                          <button
+                            key={id}
+                            disabled={!isAllowed}
+                            onClick={() => isAllowed && navigate("/" + id)}
+                            className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+                              !isAllowed 
+                                ? "opacity-40 grayscale pointer-events-none" 
+                                : isActive 
+                                  ? "bg-blue-900 text-white shadow-md font-bold" 
+                                  : "hover:bg-slate-50 text-slate-650 hover:text-slate-900"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`p-1.5 rounded-lg ${isActive ? "bg-white/20 text-amber-300" : "bg-slate-50 text-slate-500 hover:text-slate-800"}`}>
+                                <Icon size={14} />
+                              </div>
+                              <span className="text-[10px] font-black">{dynamicLabel}</span>
+                            </div>
+                            {isActive && <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                            {!isAllowed && <Lock size={10} className="text-rose-400" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )})}
+        </div>
+
+        {/* Dynamic Theme Adjuster and Language Toggle Buttons inside the Sidebar bottom for additional convenience */}
+        <div className="p-4 mx-4 mb-4 border border-slate-100 bg-slate-50/50 rounded-2xl flex flex-col gap-2 shrink-0">
+          <div className="text-[11px] font-black text-slate-500 flex justify-between items-center px-1">
+            <span>{lang === "fa" ? "🎨 انتخاب پوسته و تم" : "🎨 Theme Palette"}</span>
+            <Palette size={13} className="text-amber-500 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+            {[
+              { id: "amber", name: lang === "fa" ? "کهربایی" : "Amber", color: "bg-amber-400" },
+              { id: "classic", name: lang === "fa" ? "بنفش اصیل" : "Indigo", color: "bg-indigo-600" }
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => handleThemeChange(t.id)}
+                onMouseEnter={() => setPreviewTheme(t.id)}
+                onMouseLeave={() => setPreviewTheme(null)}
+                className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition cursor-pointer text-center hover:bg-white ${
+                  theme === t.id ? "border-amber-400 bg-white ring-2 ring-amber-400/20 shadow-xs" : "border-slate-200 bg-transparent"
+                }`}
+              >
+                <span className={`w-3 h-3 rounded-full ${t.color} border border-white shadow-xs mb-1`} />
+                <span className="text-[9px] font-black text-slate-600 truncate">{t.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer actions of Desktop Sidebar */}
+        <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex gap-1.5">
+            {role === "student" && (
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 transition rounded-xl border border-slate-100 cursor-pointer"
+                title={lang === "fa" ? "تنظیمات پروفایل کاربری" : "User Profile Settings"}
+              >
+                <Settings size={16} />
+              </button>
+            )}
+            <button
+              onClick={() => setHideRestrictedModules(!hideRestrictedModules)}
+              className={`p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 transition rounded-xl border border-slate-100 cursor-pointer ${
+                hideRestrictedModules ? "ring-2 ring-indigo-500/50 bg-indigo-50/20" : ""
+              }`}
+              title={lang === "fa" ? "تغییر پنهان‌سازی بخش‌های غیرمجوز" : "Toggle restricted views"}
+            >
+              <Lock size={16} className={hideRestrictedModules ? "text-slate-400" : "text-emerald-500 animate-pulse"} />
+            </button>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-600 px-3 py-1.5 rounded-xl border border-rose-100 text-[10px] font-black transition cursor-pointer"
+          >
+            <LogOut size={13} />
+            <span>{lang === "fa" ? "خروج" : "Logout"}</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area next to Sidebar */}
+      <div className="flex-grow flex flex-col min-h-screen justify-between min-w-0" id="desktop-main-wrapper">
+        {/* SaaS Status Bar */}
+        <div className="bg-slate-900 text-white py-1 px-4 text-[9px] font-black flex justify-between items-center select-none w-full">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${role === 'admin' ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-400'} `} />
+              <span>{role === 'admin' ? `سامانه ابری و میکروسرویسی ${BRAND_CONFIG.name} فعال است` : `سیستم هوشمند ${BRAND_CONFIG.name} متصل است`}</span>
+            </span>
+            {role === 'admin' && (
+              <>
+                <span className="hidden sm:inline text-slate-500">|</span>
+                <span className="hidden sm:inline bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/10">پروتکل امنیتی ادمین متصل است</span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <ApiHealthMonitor role={role} />
+            {role === 'admin' && <span className="font-mono text-amber-300">CLOUD_INGRESS_STABLE_3000</span>}
+          </div>
+        </div>
+
+        {/* Desktop Header Utility Controls (Left Side Theme Adjustments & Language Swapper) */}
+        <div className="hidden lg:flex items-center justify-between bg-white border-b border-slate-100 py-3 px-6 select-none shadow-xs shrink-0" id="desktop-control-header">
+          {/* LEFT SIDE (Theme customizer and language chooser) - Satisfies "دکمه تنظیم تم رو سمت چپ بگذار" */}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-xl border border-slate-200 cursor-pointer transition text-[11px] font-black shadow-xs active:scale-95"
+                id="desktop-theme-switcher"
+              >
+                <Palette size={14} className="text-amber-500 animate-pulse" />
+                <span>{lang === "fa" ? "تنظیم تم رنگی" : "System Palette"}</span>
+              </button>
+              
+              {showThemeMenu && (
+                <div className={`absolute ${lang === 'fa' ? 'left-0' : 'right-0'} mt-2.5 w-64 bg-white rounded-2xl border border-slate-150 shadow-xl z-50 p-4 space-y-2`} style={{ direction: lang === 'fa' ? 'rtl' : 'ltr' }}>
+                  <div className="text-[10px] text-slate-400 font-black border-b border-slate-100 pb-1.5 mb-1.5 flex justify-between items-center">
+                    <span>{lang === "fa" ? "رنگ‌آمیزی هوشمند" : "Customize System Accent"}</span>
+                    <Palette size={12} className="text-slate-400" />
+                  </div>
+                  <div className="space-y-1">
+                    {[
+                      { id: "amber", name: lang === "fa" ? "زعفرانی کهربایی (پیش‌فرض)" : "Warm Saffron Amber (Default)", color: "bg-amber-400" },
+                      { id: "classic", name: lang === "fa" ? "بنفش متمایز سلطنتی" : "Classic Royal Purple", color: "bg-indigo-600" },
+                      { id: "emerald", name: lang === "fa" ? "سبز کانون یادگیری" : "Kaizen Emerald Green", color: "bg-emerald-600" },
+                      { id: "ruby", name: lang === "fa" ? "یاقوت سرخ" : "Glowing Ruby Red", color: "bg-rose-600" },
+                      { id: "obsidian", name: lang === "fa" ? "فولاد دودی" : "Modern Obsidian Steel", color: "bg-slate-500" },
+                      { id: "chromebook", name: lang === "fa" ? "گوگل کروم متریال" : "Material Chromebook Blue", color: "bg-blue-600" }
+                    ].map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          handleThemeChange(t.id);
+                          setShowThemeMenu(false);
+                        }}
+                        onMouseEnter={() => setPreviewTheme(t.id)}
+                        onMouseLeave={() => setPreviewTheme(null)}
+                        className={`w-full p-2.5 rounded-xl text-[10px] font-black flex items-center justify-between hover:bg-slate-50 transition cursor-pointer ${theme === t.id ? "bg-amber-500/10 text-amber-700" : ""}`}
+                        style={{ textAlign: lang === 'fa' ? 'right' : 'left' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-3 h-3 rounded-full ${t.color}`} />
+                          <span>{t.name}</span>
+                        </div>
+                        {theme === t.id && <span className="text-[8px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded-md">Active</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Dynamic Bilingual Language Switcher */}
+            <button
+              onClick={() => {
+                const newLang = lang === "fa" ? "en" : "fa";
+                localStorage.setItem("taranom_app_lang", newLang);
+                setLang(newLang);
+              }}
+              className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-xl border border-slate-200 cursor-pointer transition text-[11px] font-black shadow-xs active:scale-95"
+            >
+              <span className="text-sm">{lang === "fa" ? "🇬🇧" : "🇮🇷"}</span>
+              <span>{lang === "fa" ? "English" : "فارسی"}</span>
+            </button>
+          </div>
+
+          {/* RIGHT SIDE (Quick AI system state status) */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 py-1.5 px-3 rounded-xl shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] text-slate-600 font-bold">
+                {lang === "fa" ? `پروتکل بهینه‌سازی کایزن مانیتورینگ متصل است` : `Kaizen Academic Monitoring Protocol Active`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Prime Navigation Header (Mobile/Tablet Only) */}
+        <header className="lg:hidden bg-white border-b border-slate-100 sticky top-0 z-50 shadow-sm" id="app-master-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             {/* Left side: Logo & Branding */}
@@ -433,6 +806,7 @@ export default function App() {
                               
                               const isAllowed = ALLOWED_VIEWS_BY_ROLE[role as RoleType]?.includes(id);
                               if (!isAllowed && hideRestrictedModules) return null;
+                              if (!isModuleEnabled(id)) return null;
                               
                               const Icon = item.icon;
                               const isActive = view === id;
@@ -651,7 +1025,7 @@ export default function App() {
 
                   {/* Navigation Links */}
                   <div className="flex-grow p-5 space-y-1.5">
-                    {/* Section Separator with Blur Effect */}
+                     {/* Section Separator with Blur Effect */}
                     <div className="relative py-6 px-2">
                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
                          <div className="w-full h-px bg-gradient-to-r from-transparent via-indigo-500/15 to-transparent"></div>
@@ -667,87 +1041,105 @@ export default function App() {
                        </div>
                     </div>
 
-                     {role && navigationItems[role].map((item) => {
-                      const isAllowed = ALLOWED_VIEWS_BY_ROLE[role as RoleType]?.includes(item.id);
-                      
-                      // If restricted and hideRestrictedModules is true, completely hide it
-                      if (!isAllowed && hideRestrictedModules) {
-                        return null;
-                      }
+                    <div className="space-y-3">
+                      {role && navigationGroups[role].map((group, groupIdx) => {
+                        const isGroupActive = group.items.includes(view);
+                        const isExpanded = sidebarExpandedGroup === group.title || isGroupActive;
 
-                      const Icon = item.icon;
-                      const isActive = view === item.id;
-                      const dynamicLabel = item.id === "traps" 
-                        ? (student?.field === "riazi" ? "تله‌های کالیبره ریاضی/فیزیک" : student?.field === "ensani" ? "تله‌های کالیبره ادبیات/عربی" : "تله‌های کالیبره زیست/شیمی")
-                        : item.label;
-                        
-                      return (
-                        <button
-                          key={item.id}
-                          disabled={!isAllowed}
-                          onClick={() => {
-                            if (isAllowed) {
-                              navigate(`/${item.id}`);
-                              setIsMenuOpen(false);
-                            }
-                          }}
-                          className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group relative overflow-hidden ${
-                            !isAllowed
-                              ? "opacity-40 bg-white/5 cursor-not-allowed select-none text-slate-500"
-                              : isActive 
-                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 cursor-pointer" 
-                                : "text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 relative z-10 text-right">
-                            <div className={`p-2 rounded-xl transition-all duration-300 ${
-                              !isAllowed
-                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                                : isActive 
-                                  ? "bg-white/20 text-white" 
-                                  : "bg-white/5 text-slate-500 group-hover:bg-indigo-500/20 group-hover:text-indigo-400"
-                            }`}>
-                              {!isAllowed ? (
-                                <Lock size={18} className="text-rose-400" />
-                              ) : (
-                                <Icon size={18} className={item.highlight ? "text-amber-400 animate-pulse" : ""} />
+                        return (
+                          <div key={groupIdx} className="space-y-1.5">
+                            <button 
+                              onClick={() => {
+                                if (group.items.length === 1) {
+                                  navigate("/" + group.items[0]);
+                                  setIsMenuOpen(false);
+                                } else {
+                                  setSidebarExpandedGroup(sidebarExpandedGroup === group.title ? null : group.title);
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition cursor-pointer border ${
+                                isGroupActive 
+                                  ? "bg-indigo-600/10 text-indigo-300 border-indigo-500/20" 
+                                  : "text-slate-400 hover:text-white hover:bg-white/5 border-transparent"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`flex -space-x-2 rtl:space-x-reverse ${isGroupActive ? 'opacity-100' : 'opacity-60'}`}>
+                                  {group.items.slice(0, 2).map(id => {
+                                    const item = getNavigationItemById(id);
+                                    const Icon = item?.icon || Sparkles;
+                                    return <Icon key={id} size={16} className="bg-slate-900 rounded-full p-0.5 border border-white/10" />;
+                                  })}
+                                </div>
+                                <span className={`text-xs font-black tracking-wide ${isGroupActive ? "text-white" : ""}`}>
+                                  {translateGroupTitle(group.title)}
+                                </span>
+                              </div>
+                              {group.items.length > 1 && (
+                                <ChevronLeft size={16} className={`transition-transform duration-300 ${isExpanded ? "rotate-[-270deg]" : "rotate-[-90deg]"}`} />
                               )}
-                            </div>
-                            <div className="flex flex-col items-start text-right">
-                              <span className={`text-xs font-black transition-colors ${
-                                !isAllowed
-                                  ? "text-slate-500 line-through"
-                                  : isActive 
-                                    ? "text-white" 
-                                    : "text-slate-300"
-                              }`}>
-                                {dynamicLabel}
-                              </span>
-                              {!isAllowed && (
-                                <span className="text-[8px] font-black text-rose-400 block mt-0.5">غیرمجاز و محدود به رول مدیریت</span>
+                            </button>
+                            
+                            <AnimatePresence>
+                              {isExpanded && group.items.length > 1 && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="pr-6 border-r border-indigo-500/20 mr-6 space-y-1 py-1">
+                                    {group.items.map(id => {
+                                      const item = getNavigationItemById(id);
+                                      if (!item) return null;
+
+                                      const isAllowed = ALLOWED_VIEWS_BY_ROLE[role as RoleType]?.includes(id);
+                                      if (!isAllowed && hideRestrictedModules) return null;
+                                      if (!isModuleEnabled(id)) return null;
+
+                                      const Icon = item.icon;
+                                      const isActive = view === id;
+                                      const dynamicLabel = id === "traps" 
+                                        ? (student?.field === "riazi" ? (lang === 'fa' ? "تله‌های ریاضی" : "Math Traps") : student?.field === "ensani" ? (lang === 'fa' ? "تله‌های ادبیات" : "Literature Traps") : (lang === 'fa' ? "تله‌های زیست" : "Bio Traps"))
+                                        : translateLabel(id, item.label);
+
+                                      return (
+                                        <button
+                                          key={id}
+                                          disabled={!isAllowed}
+                                          onClick={() => {
+                                            if (isAllowed) {
+                                              navigate(`/${id}`);
+                                              setIsMenuOpen(false);
+                                            }
+                                          }}
+                                          className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+                                            !isAllowed 
+                                              ? "opacity-40 grayscale pointer-events-none text-slate-500" 
+                                              : isActive 
+                                                ? "bg-indigo-600 text-white shadow-md font-bold" 
+                                                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2.5">
+                                            <div className={`p-1.5 rounded-lg ${isActive ? "bg-white/20 text-white" : "bg-white/5 text-slate-500"}`}>
+                                              <Icon size={14} />
+                                            </div>
+                                            <span className="text-[11px] font-black">{dynamicLabel}</span>
+                                          </div>
+                                          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                          {!isAllowed && <Lock size={10} className="text-rose-400" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </motion.div>
                               )}
-                            </div>
+                            </AnimatePresence>
                           </div>
-                          
-                          {isActive && (
-                            <motion.div 
-                              layoutId="active-mobile-indicator"
-                              className="absolute left-0 top-0 bottom-0 w-1 bg-white"
-                            />
-                          )}
-                          
-                          {isAllowed ? (
-                            isActive ? (
-                              <ChevronLeft size={16} className="text-white relative z-10" />
-                            ) : (
-                              <div className="w-1 h-1 rounded-full bg-slate-700 group-hover:bg-indigo-400 transition-colors relative z-10" />
-                            )
-                          ) : (
-                            <Lock size={12} className="text-rose-400/50" />
-                          )}
-                        </button>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Drawer Footer with Personal Context */}
@@ -877,6 +1269,7 @@ export default function App() {
 
       {/* Persistent Footer */}
       <MainFooter />
+      </div>
     </div>
   );
 }

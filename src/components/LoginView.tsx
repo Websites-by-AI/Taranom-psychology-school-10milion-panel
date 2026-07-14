@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, Activity, Wallet, CreditCard, Home } from "lucide-react";
+import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, Activity, Wallet, CreditCard, Home, Play, CheckCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
+import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 interface LoginViewProps {
   onLogin: (student: Student, role: "student" | "parent" | "admin" | "counselor" | "teacher") => void;
@@ -12,9 +14,12 @@ interface LoginViewProps {
 export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const [activeTab, setActiveTab] = useState<"student" | "parent" | "admin" | "counselor" | "teacher">("student");
   const [mobileNumber, setMobileNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [kanoonCode, setKanoonCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<"otp" | "password" | "simple">("otp");
   const [loading, setLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [regName, setRegName] = useState("");
@@ -28,6 +33,12 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const [regCurrentMockTraz, setRegCurrentMockTraz] = useState("");
   const [regStudyHours, setRegStudyHours] = useState("");
   const [regStress, setRegStress] = useState("متوسط");
+  const [parentMobile, setParentMobile] = useState("");
+  const [parentName, setParentName] = useState("");
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentSuccessData, setPaymentSuccessData] = useState<any>(null);
+  const [formError, setFormError] = useState("");
 
   // Helper helper function to retrieve custom local registrations
   const getLocalRegistrations = (): Student[] => {
@@ -41,6 +52,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
 
   // داوطلبان و لاین‌های فعال در ترنم مهر
   const mockStudents: Student[] = [
+    { id: "demo", name: "کاربر دمو (آموزش استفاده از سایت)", code: "0000000", field: "tajrobi", grade: "آشنایی با امکانات ترنم مهر" },
     { id: "1", name: "مریم حسینی (رشته علوم تجربی - هدف پزشکی تهران)", code: "9812405", field: "tajrobi", grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰" },
     { id: "2", name: "علیرضا رضایی (رشته ریاضی فیزیک - هدف مهندسی کامپیوتر شریف)", code: "9786431", field: "riazi", grade: "رتبه فرضی ۲۴ کشوری - تراز ۱۰/۱۲۰" },
     { id: "3", name: "امیرمحمد اکبری (رشته علوم انسانی - هدف حقوق دانشگاه تهران)", code: "9921477", field: "ensani", grade: "رتبه فرضی ۱۲ کشوری - تراز ۹/۹۵۰" }
@@ -60,85 +72,63 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
 
   const handlePaymentAndRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     if (!mobileNumber.startsWith("09") || mobileNumber.length !== 11) {
-      alert("لطفاً شماره موبایل معتبر ۱۱ رقمی وارد کنید.");
+      setFormError("لطفاً شماره موبایل معتبر ۱۱ رقمی وارد کنید.");
       return;
     }
     if (!regName.trim()) {
-      alert("لطفاً نام خود را وارد کنید.");
+      setFormError("لطفاً نام خود را وارد کنید.");
       return;
     }
     setLoading(true);
-    
-    const amount = isOrg ? 10000000 : 450000;
-    const description = isOrg 
-      ? `درخواست پنل اختصاصی برای موسسه ${regName}` 
-      : `ثبت‌نام داوطلب ${regName} در سیستم هوشمند ${BRAND_CONFIG.name}`;
 
+    // Direct registration as requested
+    await confirmPaymentSimulation();
+  };
+
+  const confirmPaymentSimulation = async () => {
+    setShowPaymentModal(false);
+    setLoading(true);
+    
+    // Success simulation
+    const studentCode = "NEW_" + Math.floor(Math.random() * 100000 + 10000);
+    const newStudentObj: Student = {
+      id: Date.now().toString(),
+      name: regName,
+      code: studentCode,
+      field: regField,
+      grade: `پایه دوازدهم - هدف: ${regTargetMajor}`,
+      city: regCity || "تهران",
+      age: Number(regAge) || 18,
+      paymentStatus: "paid",
+      subscriptionType: "free"
+    };
+
+    // Save to Firestore with password
     try {
-      const response = await fetch("/api/payment/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount, 
-          description,
-          mobile: mobileNumber
-        })
+      const userEmail = email || (mobileNumber + "@arateb.test");
+      await setDoc(doc(db, "users", newStudentObj.id), {
+        uid: newStudentObj.id,
+        email: userEmail,
+        mobile: mobileNumber,
+        displayName: newStudentObj.name,
+        password: password || "123456", // Default password if not provided
+        role: "student",
+        parentName: parentName || null,
+        parentMobile: parentMobile || null,
+        paymentStatus: "paid",
+        subscriptionType: "free",
+        createdAt: new Date().toISOString()
       });
       
-      const data = await response.json();
-      if (data.url) {
-        // In a real app, we would redirect. In this preview, we'll simulate the successful return.
-        if (confirm(`درخواست پرداخت به زرین‌پال ارسال شد.\n\nنام: ${regName}\nشهر: ${regCity || 'تهران'}\nسن: ${regAge || '۱۸'}\nساعت مطالعه روزانه: ${regStudyHours || '۱۰'}\nرشته هدف: ${regTargetMajor || 'مهندسی شریف'}\nتراز فعلی: ${regCurrentMockTraz || '۷۲۰۰'}\nوضعیت روانی: ${regStress}\n\nآیا می‌خواهید تراکنش شبیه‌سازی شده موفق و ثبت‌نام را تکمیل کنید؟`)) {
-          // Success simulation
-          const studentCode = "NEW_" + Math.floor(Math.random() * 100000 + 10000);
-          const newStudentObj: Student = {
-            id: Date.now().toString(),
-            name: regName,
-            code: studentCode,
-            field: regField,
-            grade: `پایه دوازدهم - هدف: ${regTargetMajor} (${regField === 'riazi' ? 'ریاضی' : regField === 'tajrobi' ? 'تجربی' : 'انسانی'})`,
-            city: regCity || "تهران",
-            age: Number(regAge) || 18,
-            parentalContext: {
-              fatherAlive: true,
-              motherAlive: true,
-              childrenCount: 2,
-              fatherEducation: "کارشناسی ارشد",
-              motherEducation: "کارشناسی",
-              householdIncome: "high",
-              familySupportLevel: "high"
-            },
-            academicProfile: {
-              studyHoursPerDay: Number(regStudyHours) || 9,
-              educationLevel: "پایه دوازدهم",
-              currentGpa: 19.4,
-              targetGpa: 19.9,
-              currentTraz: Number(regCurrentMockTraz) || 7200,
-              targetTraz: 8300
-            },
-            goals: {
-              studentVision: regTargetMajor,
-              familyExpectation: `موفقیت در رشته ${regTargetMajor}`
-            },
-            familyContext: `سطح آمادگی و استرس: ${regStress}`,
-            paymentStatus: "paid",
-            subscriptionType: "vip"
-          };
-
-          // Save to localStorage of the application so AdminView and login can retrieve it
-          const localRegs = getLocalRegistrations();
-          localRegs.push(newStudentObj);
-          localStorage.setItem("arateb_new_registrations", JSON.stringify(localRegs));
-
-          alert(`ثبت‌نام شما با موفقیت انجام شد!\n\nکد داوطلبی اختصاصی شما برای ورودهای بعدی: ${studentCode}\n\nلطفاً این کد را یادداشت کنید تا در بخش "کد داوطلبی" از آن استفاده کنید.`);
-
-          onLogin(newStudentObj, "student");
-        }
-      }
-    } catch (error) {
-      console.error("Payment error:", error);
-      alert("خطا در برقراری ارتباط با درگاه پرداخت.");
+      setPaymentSuccessData({
+        ...newStudentObj,
+        email: userEmail
+      });
+    } catch (e) {
+      console.error("Firestore Save Error:", e);
+      setFormError("خطا در ثبت اطلاعات در دیتابیس.");
     } finally {
       setLoading(false);
     }
@@ -157,7 +147,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
     }, 700);
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode !== "1234" && otpCode !== "12345") {
       alert("کد تایید نادرست است. (جهت ارزیابی از '1234' استفاده کنید)");
@@ -165,36 +155,110 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      if (activeTab === "student") {
-        const localRegs = getLocalRegistrations();
-        const matched = mockStudents.find(s => s.code === kanoonCode) || 
-                        localRegs.find(s => s.code === kanoonCode) || 
-                        mockStudents[0];
-        onLogin(matched, "student");
-      } else if (activeTab === "parent") {
-        const localRegs = getLocalRegistrations();
-        const matched = mockStudents.find(s => s.code === kanoonCode) || 
-                        localRegs.find(s => s.code === kanoonCode) || 
-                        mockStudents[0];
-        onLogin(matched, "parent");
-      } else if (activeTab === "counselor") {
-        const localRegs = getLocalRegistrations();
-        const matched = mockStudents.find(s => s.code === kanoonCode) || 
-                        localRegs.find(s => s.code === kanoonCode) || 
-                        mockStudents[0];
-        onLogin(matched, "counselor");
-      } else if (activeTab === "teacher") {
-        const localRegs = getLocalRegistrations();
-        const matched = mockStudents.find(s => s.code === kanoonCode) || 
-                        localRegs.find(s => s.code === kanoonCode) || 
-                        mockStudents[0];
-        onLogin(matched, "teacher");
+    try {
+      const q = query(collection(db, "users"), where("mobile", "==", mobileNumber));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        const student: Student = {
+          id: userData.uid,
+          name: userData.displayName,
+          code: userData.uid.substring(0, 7),
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.displayName}`,
+          grade: "کاربر ثبت‌نام شده",
+          field: userData.field || "tajrobi",
+          city: userData.city || "نامشخص",
+          age: userData.age || 18,
+          paymentStatus: userData.paymentStatus || "paid",
+          subscriptionType: userData.subscriptionType || "vip"
+        };
+        onLogin(student, activeTab);
       } else {
-        onLogin(mockStudents[0], "admin");
+        // Fallback to mock for demo
+        const localRegs = getLocalRegistrations();
+        const matched = mockStudents.find(s => s.id === mobileNumber) || 
+                        localRegs.find(s => s.mobile === mobileNumber) || 
+                        mockStudents[0];
+        onLogin(matched, activeTab);
       }
-    }, 900);
+    } catch (err) {
+      console.error("Login Error:", err);
+      onLogin(mockStudents[0], activeTab);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Try by email or mobile
+      const qEmail = query(collection(db, "users"), where("email", "==", email), where("password", "==", password));
+      const qMobile = query(collection(db, "users"), where("mobile", "==", email), where("password", "==", password));
+      
+      let querySnapshot = await getDocs(qEmail);
+      if (querySnapshot.empty) {
+        querySnapshot = await getDocs(qMobile);
+      }
+
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        const student: Student = {
+          id: userData.uid,
+          name: userData.displayName,
+          code: userData.uid.substring(0, 7),
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.displayName}`,
+          grade: "کاربر فعال",
+          field: userData.field || "tajrobi",
+          city: userData.city || "نامشخص",
+          age: userData.age || 18,
+          paymentStatus: userData.paymentStatus || "paid",
+          subscriptionType: userData.subscriptionType || "vip"
+        };
+        onLogin(student, activeTab);
+      } else {
+        alert("نام کاربری یا رمز عبور اشتباه است.");
+      }
+    } catch (err) {
+      console.error("Password Login Error:", err);
+      alert("خطا در ورود. لطفا دوباره تلاش کنید.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSimpleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const q = query(collection(db, "users"), where("email", "==", email));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        const student: Student = {
+          id: userData.uid,
+          name: userData.displayName,
+          code: userData.uid.substring(0, 7),
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.displayName}`,
+          grade: "ورود تستی",
+          field: userData.field || "tajrobi",
+          city: userData.city || "نامشخص",
+          age: userData.age || 18,
+          paymentStatus: userData.paymentStatus || "paid",
+          subscriptionType: userData.subscriptionType || "vip"
+        };
+        onLogin(student, activeTab);
+      } else {
+        onLogin(mockStudents[1], activeTab);
+      }
+    } catch (err) {
+      onLogin(mockStudents[1], activeTab);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -273,7 +337,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
               onClick={() => setIsRegistering(false)}
               className={`flex-1 py-2.5 text-[11px] font-black rounded-xl transition-all ${!isRegistering ? 'bg-white text-blue-900 shadow-sm border border-slate-100' : 'text-slate-400'}`}
             >
-              ورود داوطلبان قبلی
+              ورود اعضای قبلی
             </button>
             <button 
               onClick={() => setIsRegistering(true)}
@@ -291,99 +355,115 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
               </div>
 
               <div className="space-y-4">
-                {/* Student Plan */}
-                <div className="p-5 bg-white border border-slate-200 rounded-3xl shadow-sm hover:border-indigo-400 transition-all group">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                      <BookOpen size={20} />
-                    </div>
-                    <div className="text-left">
-                      <span className="text-[10px] font-black text-slate-400 block">پکیج پایه</span>
-                      <span className="text-sm font-black text-slate-900">ویژه داوطلب</span>
-                    </div>
-                  </div>
-                  <p className="text-[9px] text-slate-500 leading-relaxed text-right mb-4">دسترسی کامل به ماژول پومودورو، تحلیل تراز AI و بانک تله‌های تستی. مناسب برای مطالعه خودمحور.</p>
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-                    <div className="text-right">
-                      <span className="text-xs font-black text-indigo-700">۴۵۰,۰۰۰ تومان</span>
-                      <span className="text-[8px] text-slate-400 block">اشتراک سالیانه</span>
-                    </div>
-                    <button 
-                      onClick={() => setRegName("داوطلب پایه")} 
-                      className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black rounded-xl hover:bg-indigo-700 transition"
-                    >
-                      انتخاب و ثبت‌نام
-                    </button>
-                  </div>
-                </div>
+                {(activeTab === "student" || activeTab === "parent") && (
+                  <>
+                    {/* Free Trial Student Plan */}
+                    {activeTab === "student" && (
+                      <div className="p-5 bg-white border border-slate-200 rounded-3xl shadow-sm hover:border-emerald-400 transition-all group">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                            <BookOpen size={20} />
+                          </div>
+                          <div className="text-left">
+                            <span className="text-[10px] font-black text-emerald-500 block">شروع سریع و بدون ریسک</span>
+                            <span className="text-sm font-black text-slate-900">تست رایگان ۱ هفته</span>
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-slate-500 leading-relaxed text-right mb-4">ثبت‌نام سریع برای مشاهده محیط هوشمند ترنم مهر. برخی امکانات پیشرفته (پومودورو، تحلیل تراز AI) پس از ارتقاء به پکیج VIP فعال خواهند شد.</p>
+                        <div className="flex justify-between items-center pt-3 border-t border-slate-50">
+                          <div className="text-right">
+                            <span className="text-xs font-black text-emerald-600">رایگان</span>
+                            <span className="text-[8px] text-slate-400 block">بدون نیاز به کارت بانکی</span>
+                          </div>
+                          <button 
+                            onClick={() => setRegName("ثبت‌نام رایگان داوطلب (تست ۱ هفته)")} 
+                            className="px-4 py-2 bg-emerald-600 text-white text-[10px] font-black rounded-xl hover:bg-emerald-700 transition"
+                          >
+                            ثبت‌نام رایگان داوطلب
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Parent + Student Plan */}
-                <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-3xl shadow-sm relative overflow-hidden group">
-                  <div className="absolute -top-2 -left-2 bg-amber-400 text-white text-[8px] font-black px-4 py-2 rotate-[-12deg] shadow-sm z-10">پیشنهادی</div>
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="p-2 bg-white text-indigo-600 rounded-xl shadow-sm">
-                      <UserCheck size={20} />
-                    </div>
-                    <div className="text-left">
-                      <span className="text-[10px] font-black text-indigo-400 block">پکیج مربیگری</span>
-                      <span className="text-sm font-black text-indigo-900">داوطلب + والدین</span>
-                    </div>
-                  </div>
-                  <p className="text-[9px] text-indigo-700 leading-relaxed text-right mb-4">شامل اپلیکیشن اختصاصی والدین برای مانیتورینگ لحظه‌ای، گزارش‌های هفتگی پیامکی و تحلیل مقایسه‌ای عملکرد.</p>
-                  <div className="flex justify-between items-center pt-3 border-t border-indigo-100">
-                    <div className="text-right">
-                      <span className="text-xs font-black text-indigo-900">۸۵۰,۰۰۰ تومان</span>
-                      <span className="text-[8px] text-indigo-400 block">شامل ۲ دسترسی مجزا</span>
-                    </div>
-                    <button 
-                      onClick={() => setRegName("اشتراک خانوادگی")} 
-                      className="px-4 py-2 bg-indigo-900 text-white text-[10px] font-black rounded-xl hover:bg-slate-900 transition shadow-lg shadow-indigo-900/20"
-                    >
-                      انتخاب و فعال‌سازی
-                    </button>
-                  </div>
-                </div>
+                    {/* Parent + Student Plan */}
+                    {activeTab === "parent" && (
+                      <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-3xl shadow-sm relative overflow-hidden group">
+                        <div className="absolute -top-2 -left-2 bg-amber-400 text-white text-[8px] font-black px-4 py-2 rotate-[-12deg] shadow-sm z-10">پیشنهادی</div>
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="p-2 bg-white text-indigo-600 rounded-xl shadow-sm">
+                            <UserCheck size={20} />
+                          </div>
+                          <div className="text-left">
+                            <span className="text-[10px] font-black text-indigo-400 block">پکیج مربیگری</span>
+                            <span className="text-sm font-black text-indigo-900">داوطلب + والدین</span>
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-indigo-700 leading-relaxed text-right mb-4">شامل اپلیکیشن اختصاصی والدین برای مانیتورینگ لحظه‌ای، گزارش‌های هفتگی پیامکی و تحلیل مقایسه‌ای عملکرد.</p>
+                        <div className="flex justify-between items-center pt-3 border-t border-indigo-100">
+                          <div className="text-right">
+                            <span className="text-xs font-black text-indigo-900">۸۵۰,۰۰۰ تومان</span>
+                            <span className="text-[8px] text-indigo-400 block">شامل ۲ دسترسی مجزا</span>
+                          </div>
+                          <button 
+                            onClick={() => setRegName("اشتراک خانوادگی")} 
+                            className="px-4 py-2 bg-indigo-900 text-white text-[10px] font-black rounded-xl hover:bg-slate-900 transition shadow-lg shadow-indigo-900/20"
+                          >
+                            انتخاب و فعال‌سازی
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
 
-                {/* Institutional Plan */}
-                <div className="p-5 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl group">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="p-2 bg-slate-800 text-amber-400 rounded-xl">
-                      <Layers size={20} />
-                    </div>
-                    <div className="text-left">
-                      <span className="text-[10px] font-black text-slate-500 block">SaaS سازمان</span>
-                      <span className="text-sm font-black text-white">پکیج موسسات و مدارس</span>
-                    </div>
-                  </div>
-                  <p className="text-[9px] text-slate-400 leading-relaxed text-right mb-4">پنل مدیریت یکپارچه برای مشاوران و مدارس، دیتابیس اختصاصی و برندینگ سفارشی برای مجموعه شما.</p>
-                  
-                  <div className="space-y-2 mb-4">
-                    <span className="text-[8px] font-black text-slate-500 block text-right mb-1">مشاهده نمونه دمو موسسات همکار:</span>
-                    <div className="flex gap-2">
-                       <button onClick={() => { setRegName("آکادمی نخبگان البرز"); setIsOrg(true); }} className="flex-1 py-1.5 px-2 bg-slate-800 rounded-lg text-[8px] font-black text-slate-300 hover:bg-slate-700 border border-slate-700 transition">آکادمی نخبگان</button>
-                       <button onClick={() => { setRegName("دبیرستان هوشمند آتیه"); setIsOrg(true); }} className="flex-1 py-1.5 px-2 bg-slate-800 rounded-lg text-[8px] font-black text-slate-300 hover:bg-slate-700 border border-slate-700 transition">دبیرستان آتیه</button>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-800">
-                    <div className="text-right">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-black text-amber-400">۱۰,۰۰۰,۰۰۰</span>
-                        <span className="text-[8px] text-slate-500">تومان</span>
+                {(activeTab === "counselor" || activeTab === "teacher" || activeTab === "admin") && (
+                  <>
+                    {/* Institutional Plan */}
+                    <div className="p-5 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl group">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="p-2 bg-slate-800 text-amber-400 rounded-xl">
+                          <Layers size={20} />
+                        </div>
+                        <div className="text-left">
+                          <span className="text-[10px] font-black text-slate-500 block">SaaS سازمان</span>
+                          <span className="text-sm font-black text-white">پکیج موسسات و مدارس</span>
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-slate-400 leading-relaxed text-right mb-4">پنل مدیریت یکپارچه برای مشاوران و مدارس، دیتابیس اختصاصی و برندینگ سفارشی برای مجموعه شما.</p>
+                      
+                      <div className="space-y-2 mb-4">
+                        <span className="text-[8px] font-black text-slate-500 block text-right mb-1">مشاهده نمونه دمو موسسات همکار:</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setRegName("آکادمی نخبگان البرز"); setIsOrg(true); }} className="flex-1 py-1.5 px-2 bg-slate-800 rounded-lg text-[8px] font-black text-slate-300 hover:bg-slate-700 border border-slate-700 transition">آکادمی نخبگان</button>
+                          <button onClick={() => { setRegName("دبیرستان هوشمند آتیه"); setIsOrg(true); }} className="flex-1 py-1.5 px-2 bg-slate-800 rounded-lg text-[8px] font-black text-slate-300 hover:bg-slate-700 border border-slate-700 transition">دبیرستان آتیه</button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center pt-3 border-t border-slate-800">
+                        <div className="text-right">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-black text-amber-400">۱۰,۰۰۰,۰۰۰</span>
+                            <span className="text-[8px] text-slate-500">تومان</span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => { setRegName("ثبت‌نام موسسه جدید"); setIsOrg(true); }} 
+                          className="px-4 py-2 bg-amber-500 text-slate-900 text-[10px] font-black rounded-xl hover:bg-amber-400 transition"
+                        >
+                          درخواست پنل اختصاصی
+                        </button>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => { setRegName("ثبت‌نام موسسه جدید"); setIsOrg(true); }} 
-                      className="px-4 py-2 bg-amber-500 text-slate-900 text-[10px] font-black rounded-xl hover:bg-amber-400 transition"
-                    >
-                      درخواست پنل اختصاصی
-                    </button>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
 
               {regName && (
                 <form onSubmit={handlePaymentAndRegister} className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-bottom-2">
+                  {formError && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold p-3 rounded-xl mb-4 text-center animate-fade-in">
+                      {formError}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mb-2 p-3 bg-slate-50 rounded-2xl border border-slate-150">
                     <Activity size={16} className="text-indigo-600" />
                     <span className="text-[10px] font-black text-slate-700">{isOrg ? "نام موسسه/سازمان:" : "درحال ثبت‌نام برای:"} <span className="text-indigo-900 underline">{regName}</span></span>
@@ -432,16 +512,44 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                         </button>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1.5">نام و نام خانوادگی داوطلب <span className="text-rose-500">*</span></label>
-                        <input
-                          type="text"
-                          required
-                          value={regName}
-                          placeholder="مثال: امیررضا صادقی"
-                          onChange={(e) => setRegName(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white text-xs font-extrabold transition duration-150"
-                        />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2">
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">نام و نام خانوادگی داوطلب <span className="text-rose-500">*</span></label>
+                          <input
+                            type="text"
+                            required
+                            value={regName}
+                            placeholder="مثال: امیررضا صادقی"
+                            onChange={(e) => setRegName(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white text-xs font-extrabold transition duration-150"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">ایمیل (اختیاری)</label>
+                          <input
+                            type="email"
+                            value={email}
+                            placeholder="example@gmail.com"
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white text-xs font-extrabold transition duration-150"
+                            dir="ltr"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">رمز عبور ورود <span className="text-rose-500">*</span></label>
+                          <input
+                            type="password"
+                            required
+                            value={password}
+                            placeholder="حداقل ۶ کاراکتر"
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white text-xs font-extrabold transition duration-150"
+                            dir="ltr"
+                          />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -532,7 +640,9 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                   )}
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">شماره همراه مسئول/رابط</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">
+                      {isOrg ? "شماره همراه مسئول/رابط" : "شماره موبایل داوطلب"} <span className="text-rose-500">*</span>
+                    </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
                         <Phone size={18} />
@@ -544,9 +654,215 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                         placeholder="09..."
                         value={mobileNumber}
                         onChange={(e) => setMobileNumber(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white font-mono tracking-widest text-slate-800 text-sm transition duration-150"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Parent info fields (optional) */}
+                  {!isOrg && (activeTab === "parent" || regName.includes("خانوادگی") || regName.includes("والدین")) && (
+                    <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-3 mt-4">
+                      <h4 className="text-[10px] font-black text-indigo-800 flex items-center gap-1.5">
+                        <UserCheck size={14} /> اطلاعات والدین (اختیاری)
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 mb-1">نام و نام خانوادگی والد</label>
+                          <input
+                            type="text"
+                            value={parentName}
+                            onChange={(e) => setParentName(e.target.value)}
+                            placeholder="مثال: پدر امیررضا"
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-indigo-600 text-xs transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 mb-1">شماره موبایل والدین</label>
+                          <input
+                            type="tel"
+                            maxLength={11}
+                            value={parentMobile}
+                            onChange={(e) => setParentMobile(e.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="09..."
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-indigo-600 font-mono tracking-widest text-slate-800 text-xs transition"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  >
+                    {loading ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <CheckCircle size={18} />
+                        <span>تایید نهایی و ورود به پنل کاربری</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-5 animate-fade-in">
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-4 gap-1">
+                <button 
+                  onClick={() => setLoginMethod("otp")}
+                  className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all ${loginMethod === "otp" ? "bg-white text-blue-900 shadow-sm" : "text-slate-400"}`}
+                >
+                  ورود با پیامک
+                </button>
+                <button 
+                  onClick={() => setLoginMethod("password")}
+                  className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all ${loginMethod === "password" ? "bg-white text-blue-900 shadow-sm" : "text-slate-400"}`}
+                >
+                  ورود با رمز عبور
+                </button>
+                <button 
+                  onClick={() => setLoginMethod("simple")}
+                  className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all ${loginMethod === "simple" ? "bg-white text-blue-900 shadow-sm" : "text-slate-400"}`}
+                >
+                  ورود سریع (ایمیل)
+                </button>
+              </div>
+
+              {!otpSent && loginMethod === "otp" && (
+                <form onSubmit={handleSendOtp} className="space-y-5" id="send-otp-form">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">شماره تلفن همراه پرسنلی</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                        <Phone size={18} />
+                      </div>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={11}
+                        placeholder="مثال: 09123456789"
+                        value={mobileNumber}
+                        onChange={(e) => setMobileNumber(e.target.value.replace(/[^0-9]/g, ""))}
                         className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-sm transition duration-150"
                       />
                     </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">رمز تایید یکبار مصرف امنیتی برای ورود به پرتال سازمانی ارسال خواهد شد.</p>
+                  </div>
+
+                  {activeTab !== "admin" && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2">
+                        {activeTab === "student" && `کد داوطلب / شناسه کارنامه ${BRAND_CONFIG.name} (اختیاری)`}
+                        {activeTab === "parent" && `کد داوطلب / شناسه کارنامه فرزند (اختیاری)`}
+                        {activeTab === "counselor" && `کد داوطلب مورد نظر جهت بازسازی و مانیتورینگ (اختیاری)`}
+                        {activeTab === "teacher" && `کد داوطلب کلاس جهت مانیتورینگ تراز (اختیاری)`}
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                          <Hash size={18} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="مانند: 9812405 یا کد ثبت‌نامی جدید"
+                          value={kanoonCode}
+                          onChange={(e) => setKanoonCode(e.target.value)}
+                          className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-sm transition duration-150"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-blue-950 text-white py-3.5 rounded-xl font-bold hover:bg-slate-900 transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
+                    id="btn-send-otp"
+                  >
+                    {loading ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <ShieldCheck size={18} />
+                        <span>ارسال پین امنیتی ورود</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {otpSent && loginMethod === "otp" && (
+                <form onSubmit={handleVerifyOtp} className="space-y-5" id="verify-otp-form">
+                  <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-3">
+                    <ShieldCheck className="text-blue-600 flex-shrink-0" size={20} />
+                    <div className="text-xs text-blue-950 leading-relaxed">
+                      کد ورود یکبار مصرف به شماره موبایل پرسنلی <strong className="font-mono">{mobileNumber}</strong> تلگراف شد.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">کد یکبار مصرف امنیتی</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                        <Lock size={18} />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        maxLength={5}
+                        placeholder="کد ۴ یا ۵ رقمی"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-lg transition duration-150"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-blue-950 text-white py-3.5 rounded-xl font-bold hover:bg-slate-900 transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
+                    id="btn-verify-login"
+                  >
+                    {loading ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <UserCheck size={18} />
+                        <span>تأیید پین و ورود به سیستم</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {loginMethod === "password" && (
+                <form onSubmit={handlePasswordLogin} className="space-y-5" id="password-login-form">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">شماره موبایل یا ایمیل</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="09... یا example@mail.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white text-slate-800 text-sm transition duration-150"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">رمز عبور</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="******"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white text-slate-800 text-sm transition duration-150"
+                      dir="ltr"
+                    />
                   </div>
                   <button
                     type="submit"
@@ -557,149 +873,47 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                     ) : (
                       <>
-                        <Wallet size={18} />
-                        <span>تایید و هدایت به درگاه پرداخت</span>
+                        <Lock size={18} />
+                        <span>ورود با رمز عبور</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {loginMethod === "simple" && (
+                <form onSubmit={handleSimpleLogin} className="space-y-5" id="simple-login-form">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">ایمیل جهت ورود تستی</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="test@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white text-slate-800 text-sm transition duration-150"
+                      dir="ltr"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  >
+                    {loading ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <UserCheck size={18} />
+                        <span>ورود مستقیم و تایید (تست)</span>
                       </>
                     )}
                   </button>
                 </form>
               )}
             </div>
-          ) : !otpSent ? (
-            <form onSubmit={handleSendOtp} className="space-y-5" id="send-otp-form">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">شماره تلفن همراه پرسنلی</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <Phone size={18} />
-                  </div>
-                  <input
-                    type="tel"
-                    required
-                    maxLength={11}
-                    placeholder="مثال: 09123456789"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value.replace(/[^0-9]/g, ""))}
-                    className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-sm transition duration-150"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">رمز تایید یکبار مصرف امنیتی برای ورود به پرتال سازمانی ارسال خواهد شد.</p>
-              </div>
-
-              {activeTab !== "admin" && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    {activeTab === "student" && `کد داوطلب / شناسه کارنامه ${BRAND_CONFIG.name} (اختیاری)`}
-                    {activeTab === "parent" && `کد داوطلب / شناسه کارنامه فرزند (اختیاری)`}
-                    {activeTab === "counselor" && `کد داوطلب مورد نظر جهت بازسازی و مانیتورینگ (اختیاری)`}
-                    {activeTab === "teacher" && `کد داوطلب کلاس جهت مانیتورینگ تراز (اختیاری)`}
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                      <Hash size={18} />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="مانند: 9812405 یا کد ثبت‌نامی جدید"
-                      value={kanoonCode}
-                      onChange={(e) => setKanoonCode(e.target.value)}
-                      className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-sm transition duration-150"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed font-mono">
-                    مثال‌ها: 9812405 (مریم حسینی | تجربی)، 9786431 (علیرضا رضایی | ریاضی)، 9921477 (امیرمحمد اکبری | انسانی)
-                  </p>
-                  
-                  {getLocalRegistrations().length > 0 && (
-                    <div className="mt-3 p-3 bg-indigo-50/70 border border-indigo-150 rounded-2xl">
-                      <span className="text-[10px] font-black text-indigo-950 block mb-1">🔑 شناسه‌های ثبت‌نامی تستی جدید شما:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {getLocalRegistrations().map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setKanoonCode(s.code)}
-                            className="bg-white hover:bg-slate-50 border border-slate-300 font-mono text-[9px] font-black text-indigo-700 px-2 py-1 rounded-lg transition"
-                          >
-                            {s.name.split(" ")[0]}: {s.code}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-950 text-white py-3.5 rounded-xl font-bold hover:bg-slate-900 transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
-                id="btn-send-otp"
-              >
-                {loading ? (
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                ) : (
-                  <>
-                    <ShieldCheck size={18} />
-                    <span>ارسال پین امنیتی ورود</span>
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-5" id="verify-otp-form">
-              <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-3">
-                <ShieldCheck className="text-blue-600 flex-shrink-0" size={20} />
-                <div className="text-xs text-blue-950 leading-relaxed">
-                  کد ورود یکبار مصرف به شماره موبایل پرسنلی <strong className="font-mono">{mobileNumber}</strong> تلگراف شد.
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">کد یکبار مصرف امنیتی</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <Lock size={18} />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    maxLength={5}
-                    placeholder="کد ۴ یا ۵ رقمی"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
-                    className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-lg transition duration-150"
-                  />
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-xs text-slate-400">رمز شبیه‌ساز تست: 1234</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setOtpSent(false)} 
-                    className="text-xs font-bold text-blue-800 hover:text-blue-900 cursor-pointer"
-                  >
-                    تغییر شماره همراه
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-950 text-white py-3.5 rounded-xl font-bold hover:bg-slate-900 transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
-                id="btn-verify-login"
-              >
-                {loading ? (
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                ) : (
-                  <>
-                    <UserCheck size={18} />
-                    <span>تأیید پین و ورود به سیستم</span>
-                  </>
-                )}
-              </button>
-            </form>
           )}
+
 
           {/* Direct Sandbox Buttons for easy evaluation */}
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
@@ -707,42 +921,53 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
             <div className="flex flex-wrap justify-center gap-2">
               <button 
                 type="button"
-                onClick={() => onLogin(mockStudents[0], "student")}
+                onClick={() => {
+                  localStorage.removeItem('manova_has_seen_tour');
+                  onLogin(mockStudents[0], "student");
+                }}
+                className="px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 font-black text-xs rounded-lg transition border border-violet-200 shadow-sm cursor-pointer w-full mb-2 flex items-center justify-center gap-2"
+              >
+                <Play size={14} />
+                ورود دمو (آموزش استفاده از سایت)
+              </button>
+              <button 
+                type="button"
+                onClick={() => onLogin(mockStudents[1], "student")}
                 className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-lg transition border border-indigo-100 cursor-pointer"
               >
                  داوطلب ۱ (تجربی / پزشکی)
               </button>
               <button 
                 type="button"
-                onClick={() => onLogin(mockStudents[1], "student")}
+                onClick={() => onLogin(mockStudents[2], "student")}
                 className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg transition border border-blue-100 cursor-pointer"
               >
                  داوطلب ۲ (ریاضی / مهندسی)
               </button>
               <button 
                 type="button"
-                onClick={() => onLogin(mockStudents[0], "parent")}
+                onClick={() => onLogin(mockStudents[1], "parent")}
                 className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-lg transition border border-amber-100 cursor-pointer"
               >
                 پورتال نظارتی والدین {BRAND_CONFIG.name}
               </button>
               <button 
                 type="button"
-                onClick={() => onLogin(mockStudents[0], "counselor")}
+                onClick={() => onLogin(mockStudents[1], "counselor")}
                 className="px-3 py-1.5 bg-rose-50 hover:bg-rose-150 text-rose-700 font-bold text-xs rounded-lg transition border border-rose-100 cursor-pointer"
               >
                 👔 پورتال مشاور ارشد کایزن
               </button>
               <button 
                 type="button"
-                onClick={() => onLogin(mockStudents[0], "teacher")}
+                onClick={() => onLogin(mockStudents[1], "teacher")}
                 className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-150 text-indigo-700 font-bold text-xs rounded-lg transition border border-indigo-105 cursor-pointer"
               >
                 👨‍🏫 پورتال اختصاصی معلمین کنکور
               </button>
               <button 
                 type="button"
-                onClick={() => onLogin(mockStudents[0], "admin")}
+                onClick={() => onLogin(mockStudents[1], "admin")}
                 className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg transition border border-emerald-100 cursor-pointer"
               >
                 پورتال ادمین / معماری SaaS
@@ -751,6 +976,92 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
           </div>
         </div>
       </motion.div>
+
+      {/* Payment Simulation Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden"
+          >
+            <div className="bg-indigo-600 p-6 text-center text-white">
+              <ShieldCheck size={40} className="mx-auto mb-3 opacity-90" />
+              <h3 className="text-lg font-black">درگاه پرداخت شبیه‌سازی شده</h3>
+              <p className="text-xs text-indigo-200 mt-1">آزمایش امن ثبت‌نام</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-2 text-xs font-bold text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100 text-right">
+                <div className="flex justify-between"><span>نام ثبت‌نامی:</span> <span className="text-slate-900">{regName}</span></div>
+                <div className="flex justify-between"><span>موبایل:</span> <span className="text-slate-900 font-mono" dir="ltr">{mobileNumber}</span></div>
+                <div className="flex justify-between"><span>مبلغ پرداخت:</span> <span className="text-indigo-600">{isOrg ? '۱۰,۰۰۰,۰۰۰' : (regName === 'اشتراک خانوادگی' || regName === 'پکیج مربیگری داوطلب + والدین' ? '۸۵۰,۰۰۰' : '۴۵۰,۰۰۰')} تومان</span></div>
+                <div className="flex justify-between"><span>بسته:</span> <span className="text-slate-900">{isOrg ? 'پنل موسسات' : (regName === 'اشتراک خانوادگی' || regName === 'پکیج مربیگری داوطلب + والدین' ? 'اشتراک مربیگری داوطلب+والدین' : 'اشتراک سالیانه VIP')}</span></div>
+              </div>
+              
+              <button 
+                onClick={confirmPaymentSimulation}
+                disabled={loading}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 px-4 rounded-xl transition flex items-center justify-center gap-2"
+              >
+                {loading ? <Activity size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                تکمیل پرداخت و ثبت‌نام
+              </button>
+              
+              <button 
+                onClick={() => setShowPaymentModal(false)}
+                className="w-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 font-bold py-3 px-4 rounded-xl transition text-xs"
+              >
+                انصراف
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Payment Success Modal */}
+      {paymentSuccessData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden text-center p-8"
+          >
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle size={40} />
+            </div>
+            <h3 className="text-xl font-black text-slate-800 mb-2">
+              ثبت‌نام با موفقیت انجام شد!
+            </h3>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              خوش آمدید <strong className="text-slate-900">{paymentSuccessData.name}</strong> عزیز.
+              <br />
+              حساب کاربری شما با ایمیل <span className="font-mono text-indigo-600">{paymentSuccessData.email}</span> فعال گردید.
+            </p>
+            
+            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-8">
+              <p className="text-xs text-indigo-800 font-bold mb-2">شناسه اختصاصی شما:</p>
+              <div className="text-3xl font-black text-indigo-600 tracking-widest font-mono select-all">
+                {paymentSuccessData.id.substring(0, 8)}
+              </div>
+              <p className="text-[9px] text-indigo-400 mt-2 font-medium">این شناسه و ایمیل شما برای ورودهای بعدی استفاده خواهد شد.</p>
+            </div>
+
+            <button 
+              onClick={() => {
+                const student: Student = {
+                  ...paymentSuccessData,
+                  paymentStatus: "paid",
+                  subscriptionType: "free"
+                };
+                onLogin(student, activeTab);
+              }}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-4 rounded-xl transition text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 cursor-pointer"
+            >
+              ورود به داشبورد هوشمند
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -180,7 +180,7 @@ export function getHydratedStudent(brief: Partial<Student> | null): Student {
     grade = brief.grade || "رتبه فرضی ۱۲ کشوری - تراز ۹/۹۵۰";
     city = brief.city || "تبریز";
     age = brief.age || 19;
-  } else if (brief.id && (brief.id.startsWith("NEW_") || brief.id.length > 5) || (brief.academicProfile && brief.academicProfile.currentTraz)) {
+  } else if ((brief.id && typeof brief.id === "string" && (brief.id.startsWith("NEW_") || brief.id.length > 5)) || (brief.academicProfile && brief.academicProfile.currentTraz)) {
     // If it already has profile details, use those!
     currentTraz = brief.academicProfile?.currentTraz || 7200;
     targetTraz = brief.academicProfile?.targetTraz || 8500;
