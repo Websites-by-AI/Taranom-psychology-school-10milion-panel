@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 import { Zap } from 'lucide-react';
 
 export default function DbConnectivityTest() {
@@ -36,6 +36,7 @@ export default function DbConnectivityTest() {
     } catch (error: any) {
       console.error(error);
       setStatus("❌ خطای اتصال: " + error.message);
+      handleFirestoreError(error, OperationType.WRITE, "system_tests/connection_status");
     }
   };
 

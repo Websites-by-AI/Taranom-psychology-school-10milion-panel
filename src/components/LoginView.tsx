@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
 import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 
 interface LoginViewProps {
   onLogin: (student: Student, role: "student" | "parent" | "admin" | "counselor" | "teacher") => void;
@@ -129,6 +129,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
     } catch (e) {
       console.error("Firestore Save Error:", e);
       setFormError("خطا در ثبت اطلاعات در دیتابیس.");
+      handleFirestoreError(e, OperationType.WRITE, `users/${newStudentObj.id}`);
     } finally {
       setLoading(false);
     }
@@ -184,6 +185,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       }
     } catch (err) {
       console.error("Login Error:", err);
+      handleFirestoreError(err, OperationType.GET, "users");
       onLogin(mockStudents[0], activeTab);
     } finally {
       setLoading(false);
@@ -223,6 +225,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       }
     } catch (err) {
       console.error("Password Login Error:", err);
+      handleFirestoreError(err, OperationType.GET, "users");
       alert("خطا در ورود. لطفا دوباره تلاش کنید.");
     } finally {
       setLoading(false);
@@ -255,6 +258,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
         onLogin(mockStudents[1], activeTab);
       }
     } catch (err) {
+      handleFirestoreError(err, OperationType.GET, "users");
       onLogin(mockStudents[1], activeTab);
     } finally {
       setLoading(false);

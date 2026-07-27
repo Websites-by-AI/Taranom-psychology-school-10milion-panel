@@ -8,7 +8,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend 
 } from "recharts";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 
 interface LatencyPing {
   time: string;
@@ -178,6 +178,11 @@ export default function SystemConnectivityWidget() {
       if (supabaseLatency < 5) supabaseLatency = 18;
       supabaseStatus = "online";
       supabaseErr = err.message || "پایگاه داده آفلاین پیش‌فرض";
+      try {
+        handleFirestoreError(err, OperationType.GET, "system_tests/connection_status");
+      } catch(e) {
+        // Ignored for widget visual display continuation
+      }
     }
 
     // 2. AI Connections via backend endpoints or adaptation
