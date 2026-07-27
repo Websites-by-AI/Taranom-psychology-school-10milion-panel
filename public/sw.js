@@ -1,56 +1,69 @@
-const CACHE_NAME = "arateb-app-cache-v1";
-const urlsToCache = [
-  "/",
-  "/index.html",
-];
+// Taranom Mehr Service Worker — improved caching strategy.
+// - Hashed asset files (/assets/*) are cached long-term (they're immutable).
+// - The app shell (index.html) is network-first so new deploys appear instantly.
+// - API requests are NEVER cached (always go to the network).
+
+const CACHE_VERSION = "taranom-v2"; // bump this to force a cache refresh on deploy
+const APP_SHELL = ["/", "/index.html"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("Opened cache");
-      return cache.addAll(urlsToCache);
-    })
+    caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)).catch(() => {})
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  // Delete ALL old caches from previous versions.
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then((names) =>
+      Promise.all(names.filter((n) => n !== CACHE_VERSION).map((n) => caches.delete(n)))
+    )
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  // Ignore API requests and non-GET requests
-  if (event.request.method !== "GET" || event.request.url.includes("/api/")) {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+
+  // Never intercept same-origin API calls — they must always hit the network.
+  if (url.pathname.startsWith("/api/")) return;
+
+  // Same-origin only (don't touch cross-origin fonts/images/CDNs).
+  if (url.origin !== self.location.origin) return;
+
+  // Hashed build assets are immutable → cache-first (instant loads, offline).
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      caches.match(request).then((cached) =>
+        cached || fetch(request).then((resp) => {
+          if (resp && resp.status === 200) {
+            const copy = resp.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(request, copy));
+          }
+          return resp;
+        }).catch(() => cached)
+      )
+    );
     return;
   }
 
-  // Stale-while-revalidate strategy for other requests
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== "basic") {
-          return networkResponse;
-        }
-        
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        
-        return networkResponse;
-      }).catch(() => {
-        // Fallback for offline mode if failed
-        return cachedResponse;
-      });
-
-      return cachedResponse || fetchPromise;
-    })
-  );
+  // App shell (HTML pages) → network-first, fall back to cache when offline.
+  if (request.mode === "navigate" || url.pathname.endsWith(".html")) {
+    event.respondWith(
+      fetch(request)
+        .then((resp) => {
+          if (resp && resp.status === 200) {
+            const copy = resp.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(request, copy));
+          }
+          return resp;
+        })
+        .catch(() => caches.match(request).then((c) => c || caches.match("/index.html")))
+    );
+    return;
+  }
 });

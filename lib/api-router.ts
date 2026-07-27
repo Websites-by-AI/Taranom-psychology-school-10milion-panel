@@ -1,0 +1,1641 @@
+/**
+ * Cloudflare Pages Function — catch-all API router.
+ *
+ * This replaces the Express `server.ts` so the API actually runs on
+ * Cloudflare Pages (which is static-only and cannot run a Node/Express server).
+ *
+ * It reproduces every /api/* route from the original server.ts using the
+ * Workers runtime (fetch-based), reading secrets from the `env` binding and
+ * custom keys from request headers. Gemini calls use the REST API directly
+ * (the @google/genai SDK is Node-oriented) with a model fallback chain so AI
+ * keeps working across model deprecations.
+ *
+ * Routes:
+ *   GET  /api/health
+ *   GET  /api/ai-status
+ *   GET  /api/motivational
+ *   POST /api/chat
+ *   POST /api/goal-insight
+ *   POST /api/analyze-exam
+ *   POST /api/psychology-analysis
+ *   POST /api/payment/request
+ *   GET  /api/payment/verify
+ *   POST /api/test-ai-connection
+ *   POST /api/sandbox
+ *   POST /api/test-provider
+ *   POST /api/generate-quiz-question
+ */
+
+/* ----------------------------------------------------------------------------
+ * Types & small helpers
+ * ------------------------------------------------------------------------- */
+
+export interface Env {
+  GEMINI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  ZARINPAL_MERCHANT_ID?: string;
+  ZARINPAL_CALLBACK_URL?: string;
+  APP_URL?: string;
+  /** Cloudflare D1 database binding (set in wrangler.json). */
+  DB?: any;
+}
+
+interface Ctx {
+  request: Request;
+  env: Env;
+  params: Record<string, string | string[]>;
+}
+
+type Json = Record<string, any>;
+
+function json(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type, x-gemini-key, x-openrouter-key, x-ai-provider-keys",
+      "Access-Control-Expose-Headers": "x-ai-resolved-provider, x-ai-fallback",
+      ...extraHeaders,
+    },
+  });
+}
+
+/** Mutable bag the AI layer writes provider telemetry headers into. */
+class RespMeta {
+  headers: Record<string, string> = {};
+  set(k: string, v: string) {
+    this.headers[k] = v;
+  }
+}
+
+function getSafeHeader(req: Request, name: string): string {
+  const val = req.headers.get(name);
+  if (!val) return "";
+  try {
+    if (val.includes("%")) return decodeURIComponent(val);
+  } catch (_) {}
+  return val;
+}
+
+/** Collect every candidate API key (header > body > query > env), de-duped. */
+function getRequestKeys(req: Request, body: any, env: Env): string[] {
+  let fallbackKeys: string[] = [];
+  try {
+    const rawAll = getSafeHeader(req, "x-ai-provider-keys");
+    if (rawAll) {
+      const parsed = JSON.parse(rawAll);
+      if (Array.isArray(parsed)) {
+        fallbackKeys = parsed.map((k: any) => k.key).filter(Boolean);
+      } else if (typeof parsed === "string") {
+        try {
+          const inner = JSON.parse(parsed);
+          if (Array.isArray(inner)) fallbackKeys = inner.map((k: any) => k.key).filter(Boolean);
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  const url = new URL(req.url);
+  const k1 = getSafeHeader(req, "x-gemini-key");
+  const k2 = getSafeHeader(req, "x-openrouter-key");
+  const k3 = body?.geminiKey as string;
+  const k4 = body?.openRouterKey as string;
+  const k5 = url.searchParams.get("geminiKey") as string;
+  const k6 = url.searchParams.get("openRouterKey") as string;
+
+  const all = [
+    ...fallbackKeys,
+    k1, k2, k3, k4, k5, k6,
+    env.OPENROUTER_API_KEY,
+    env.GEMINI_API_KEY,
+  ].filter(
+    (k): k is string =>
+      !!k && typeof k === "string" && k.trim() !== "" && k !== "undefined" && k !== "null" &&
+      !k.includes("YOUR_API_KEY") && k.length > 10
+  );
+
+  return [...new Set(all)];
+}
+
+function getProviderNameForKey(key: string, req: Request): string {
+  try {
+    const rawAll = getSafeHeader(req, "x-ai-provider-keys");
+    if (rawAll) {
+      const parsed = JSON.parse(rawAll);
+      if (Array.isArray(parsed)) {
+        const found = parsed.find((k: any) => k.key === key);
+        if (found) return found.provider;
+      }
+    }
+  } catch (_) {}
+  if (key.startsWith("sk-or-")) return "OpenRouter";
+  if (key.startsWith("sk-")) return "OpenAI/Anthropic";
+  return "Google Gemini";
+}
+
+/* ----------------------------------------------------------------------------
+ * AI layer (fetch-based, works on the Workers runtime)
+ * ------------------------------------------------------------------------- */
+
+// Model fallback chain so AI survives model deprecations.
+const GEMINI_MODEL_CHAIN = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
+
+function pickGeminiModels(requested?: string): string[] {
+  const chain = [...GEMINI_MODEL_CHAIN];
+  if (requested && requested.startsWith("gemini-") && !chain.includes(requested)) {
+    chain.unshift(requested);
+  }
+  return chain;
+}
+
+/** Low-level call to one Gemini model via the REST API. */
+async function geminiRawGenerate(apiKey: string, model: string, params: any): Promise<{ text: string; raw: any }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  let contents: any[] = [];
+  if (typeof params.contents === "string") {
+    contents = [{ role: "user", parts: [{ text: params.contents }] }];
+  } else if (Array.isArray(params.contents)) {
+    contents = params.contents;
+  } else if (params.contents) {
+    contents = [params.contents];
+  }
+
+  const body: any = { contents };
+
+  const cfg = params.config || {};
+  if (cfg.systemInstruction) {
+    const si = cfg.systemInstruction;
+    body.systemInstruction = typeof si === "string" ? { parts: [{ text: si }] } : si;
+  }
+
+  const generationConfig: any = {};
+  if (cfg.responseMimeType) generationConfig.responseMimeType = cfg.responseMimeType;
+  if (cfg.maxOutputTokens) generationConfig.maxOutputTokens = cfg.maxOutputTokens;
+  if (cfg.temperature != null) generationConfig.temperature = cfg.temperature;
+  if (Object.keys(generationConfig).length) body.generationConfig = generationConfig;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "taranom-pages-fn" },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const t = await resp.text();
+    const e: any = new Error(`Gemini error ${resp.status}: ${t}`);
+    e.status = resp.status;
+    throw e;
+  }
+
+  const data: any = await resp.json();
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const text = parts.map((p: any) => p.text || "").join("");
+  return { text, raw: data };
+}
+
+/** Try the model fallback chain; skip model-not-found errors, propagate others. */
+async function geminiGenerate(apiKey: string, params: any): Promise<{ text: string }> {
+  const models = pickGeminiModels(params.model);
+  let lastErr: any;
+  for (const model of models) {
+    try {
+      return await geminiRawGenerate(apiKey, model, params);
+    } catch (e: any) {
+      lastErr = e;
+      const status = e.status;
+      const msg = (e.message || "").toLowerCase();
+      const modelIssue =
+        status === 404 ||
+        status === 400 ||
+        msg.includes("not found") ||
+        msg.includes("not_supported") ||
+        msg.includes("does not support") ||
+        msg.includes("not found") ||
+        msg.includes("model");
+      if (modelIssue) continue;
+      throw e; // quota / auth / network → let the route's fallback handle it
+    }
+  }
+  throw lastErr;
+}
+
+/** Convert Gemini-style contents to OpenRouter messages and call it. */
+async function openRouterGenerate(apiKey: string, params: any): Promise<{ text: string }> {
+  const messages: any[] = [];
+
+  if (typeof params.contents === "string") {
+    messages.push({ role: "user", content: params.contents });
+  } else if (Array.isArray(params.contents)) {
+    for (const content of params.contents) {
+      let text = "";
+      if (content.parts) {
+        for (const p of content.parts) {
+          if (p.text) text += p.text + "\n";
+        }
+      }
+      const role = content.role === "model" ? "assistant" : "user";
+      messages.push({ role, content: text.trim() });
+    }
+  }
+
+  const cfg = params.config || {};
+  if (cfg.systemInstruction) {
+    const si = typeof cfg.systemInstruction === "string"
+      ? cfg.systemInstruction
+      : (cfg.systemInstruction?.parts?.map((p: any) => p.text).join("\n") || "");
+    if (si) messages.unshift({ role: "system", content: si });
+  }
+
+  const requested: string = params.model || "";
+  const openrouterModel =
+    requested.includes("/") ? requested
+      : requested.includes("gemini-2.5") ? "google/gemini-2.5-flash"
+      : requested.includes("gemini-3") ? "google/gemini-3.5-flash"
+      : "openrouter/auto";
+
+  const reqBody: any = {
+    model: openrouterModel,
+    messages,
+    max_tokens: cfg.maxOutputTokens || 2048,
+  };
+  if (cfg.responseMimeType === "application/json") reqBody.response_format = { type: "json_object" };
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://hamdeltar.ir",
+      "X-Title": "TaranomAcademy",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(reqBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const e: any = new Error(`OpenRouter error: ${errorText}`);
+    e.status = response.status;
+    throw e;
+  }
+  const data: any = await response.json();
+  return { text: data.choices?.[0]?.message?.content || "" };
+}
+
+/** Adapter exposing the same .models / .chats surface the handlers expect. */
+class AIAdapter {
+  apiKey: string;
+  isOpenRouter: boolean;
+  constructor(apiKey: string) {
+    this.apiKey = apiKey.trim();
+    this.isOpenRouter = this.apiKey.startsWith("sk-or-");
+  }
+
+  get models() {
+    return {
+      generateContent: async (params: any) => {
+        if (this.isOpenRouter) return openRouterGenerate(this.apiKey, params);
+        return geminiGenerate(this.apiKey, params);
+      },
+    };
+  }
+
+  get chats() {
+    return {
+      create: (params: any) => {
+        const history: any[] = params.history ? [...params.history] : [];
+        return {
+          sendMessage: async (msgParams: any) => {
+            const userMessage =
+              typeof msgParams === "string" ? msgParams : (msgParams?.message ?? "");
+            const contents = [...history, { role: "user", parts: [{ text: userMessage }] }];
+            const paramsForCall: any = {
+              model: params.model,
+              contents,
+            };
+            if (params.config?.systemInstruction) {
+              paramsForCall.config = { systemInstruction: params.config.systemInstruction };
+            }
+            if (this.isOpenRouter) return openRouterGenerate(this.apiKey, paramsForCall);
+            return geminiGenerate(this.apiKey, paramsForCall);
+          },
+        };
+      },
+    };
+  }
+}
+
+/**
+ * Wraps a list of keys and falls back across them, mirroring the original
+ * AIFallbackWrapper. Forces a current Gemini model (the old 1.5/2.5 names are
+ * deprecated). Writes resolved-provider telemetry into `meta`.
+ */
+class AIFallbackWrapper {
+  private keys: string[];
+  private req: Request;
+  private meta: RespMeta;
+  constructor(keys: string[], req: Request, meta: RespMeta) {
+    this.keys = keys;
+    this.req = req;
+    this.meta = meta;
+  }
+
+  get models() {
+    return {
+      generateContent: async (params: any) => {
+        let lastError: any = null;
+        for (let i = 0; i < this.keys.length; i++) {
+          const key = this.keys[i];
+          try {
+            const effectiveParams = { ...params, model: "gemini-3.5-flash" };
+            const ai = new AIAdapter(key);
+            const result = await ai.models.generateContent(effectiveParams);
+            const providerName = getProviderNameForKey(key, this.req);
+            this.meta.set("x-ai-resolved-provider", encodeURIComponent(providerName));
+            if (i > 0) this.meta.set("x-ai-fallback", `Provider_Index_${i}`);
+            return result;
+          } catch (e: any) {
+            lastError = e;
+          }
+        }
+        throw lastError;
+      },
+    };
+  }
+
+  get chats() {
+    return {
+      create: (params: any) => ({
+        sendMessage: async (msgParams: any) => {
+          let lastError: any = null;
+          for (let i = 0; i < this.keys.length; i++) {
+            const key = this.keys[i];
+            try {
+              const paramsClone = {
+                ...params,
+                model: "gemini-3.5-flash",
+                history: params.history ? [...params.history] : [],
+              };
+              const ai = new AIAdapter(key);
+              const chat = ai.chats.create(paramsClone);
+              const result = await chat.sendMessage(msgParams);
+              const providerName = getProviderNameForKey(key, this.req);
+              this.meta.set("x-ai-resolved-provider", encodeURIComponent(providerName));
+              if (i > 0) this.meta.set("x-ai-fallback", `Provider_Index_${i}`);
+              return result;
+            } catch (e: any) {
+              lastError = e;
+            }
+          }
+          throw lastError;
+        },
+      }),
+    };
+  }
+}
+
+function getAI(req: Request, body: any, env: Env, meta: RespMeta): AIFallbackWrapper | null {
+  try {
+    const keys = getRequestKeys(req, body, env);
+    if (keys.length === 0) return null;
+    return new AIFallbackWrapper(keys, req, meta);
+  } catch (_) {
+    return null;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Offline / simulation fallbacks (verbatim from server.ts)
+ * ------------------------------------------------------------------------- */
+
+function toPersianNum(num: number | string): string {
+  const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+  return num.toString().replace(/\d/g, (x) => persianDigits[parseInt(x)]);
+}
+
+function getOfflineChatReply(message: string): string {
+  const lowerMessage = (message || "").toString().toLowerCase().trim();
+
+  if (lowerMessage === "سلام" || lowerMessage === "hi" || lowerMessage === "hello" || lowerMessage === "سلام علیکم" || lowerMessage === "درود" || lowerMessage === "how are you") {
+    return "سلام مریم عزیز! 🌸 من دکتر رادان، همراه و مشاور تحصیلی شما در آکادمی ترنم همدلی هستم.\n\nمن مشتاقانه آماده‌ام تا در مسیر یادگیری، کنترل استرس و تحلیل دقیق چالش‌های درسی در کنار شما باشم. چطور می‌توانم امروز به آرامش و پیشرفت تحصیلی شما کمک کنم؟\n\n📌 *یادداشت مدیر پورتال: به دلیل تغییرات فنی در سرویس‌های هوش مصنوعی، سیستم به صورت پایدار و همدلانه روی «شبیه‌ساز تحصیلی» فعالیت می‌کند. برای ارتباط زنده و دریافت پاسخ‌های عمیق‌تر، می‌توانید کلید اختصاصی خود را در بخش تنظیمات فنی ثبت کنید.*";
+  }
+
+  if (lowerMessage.includes("تجربی") || lowerMessage.includes("زیست") || lowerMessage.includes("پزشکی")) {
+    return "سلام کنکوری پرتلاش تجربی! برای قبولی در رشته‌های تاپ تجربی (پزشکی، دندان‌پزشکی و داروسازی)، زیست‌شناسی و شیمی کلیدی‌ترین دروس شما هستند. توصیه کایزن درسی ما این است که روزانه حداقل ۳ پارت مطالعه عمیق کتاب درسی به همراه تحلیل دقیق تصاویر زیست و تمرین ۵۰ تست زمان‌دار شیمی را در اولویت قرار دهید. این شیوه می‌تواند تراز شما را به بالای ۹۰۰۰ برساند. مایلید برنامه درسی خود را با هم بهینه‌سازی کنیم؟";
+  } else if (lowerMessage.includes("ریاضی") || lowerMessage.includes("حسابان") || lowerMessage.includes("شریف")) {
+    return "سلام مهندس آینده! در رشته ریاضی، درس حسابان، دیفرانسیل و هندسه پایه‌های حیاتی تراز شما هستند. تسلط روی فرمول‌ها و به حداقل رساندن اشتباهات محاسباتی تله‌های تستی به طور مستقیم تراز حسابان شما را رشد می‌دهد. تست‌زنی موضوعی به خصوص در دروس فیزیک و مباحث مغناطیس و حرکت بسیار کارساز است. چه کمکی در برنامه‌ریزی از من ساخته است؟";
+  } else if (lowerMessage.includes("انسانی") || lowerMessage.includes("ادبیات") || lowerMessage.includes("فلسفه")) {
+    return "سلام داوطلب گرانقدر رشته انسانی! در کنکور انسانی، عربی تخصصی، ادبیات تخصصی (فنون ادبی) و فلسفه و منطق دروس تعیین‌کننده موازنه تراز هستند. مربیان ترنم مهر پیشنهاد می‌کنند خلاصه تله‌های تستی فلسفه را همگام با مطالعه کتاب درسی دوره کنید و روی تست‌های قرابت ادبی تسلط یابید. بیایید با هم اهداف مطالعاتی شما را تنظیم کنیم.";
+  } else if (lowerMessage.includes("کایزن") || lowerMessage.includes("برنامه") || lowerMessage.includes("مطالعه")) {
+    return "سلام همکار گرامی و تلاشگر. برنامه‌ریزی هوشمند مطالاتی ترنم مهر با ادغام پومودوروهای درسی، شیفت صبح (مرور خلاصه مباحث مفهومی و کتاب) و شیفت عصر (تست‌زنی جامع موازی آزمون آزمایشی) فرموله شده است. این چرخه مداوم تضمین‌کننده رفع تدریجی تله‌های تستی بدون فرسودگی ذهنی است. آیا برنامه امروز را شروع کرده‌اید؟";
+  } else if (lowerMessage.includes("تنبلی") || lowerMessage.includes("خستگی") || lowerMessage.includes("انگیزه")) {
+    return "سلام و درود. خستگی ذهنی در فرآیند آمادگی برای ماراتن دشوار کنکور سراسری امری بسیار طبیعی است. ترنم مهر پیشنهاد می‌کند از تکنیک پومودورو درسی (۵۰ دقیقه مطالعه متمرکز و ۱۰ دقیقه استراحت دور از گوشی) استفاده کنید. تلاش مستمر شما سنگ‌بنای پزشک، مهندس یا رتبه برتر شدنتان خواهد بود.";
+  } else if (lowerMessage.includes("تراز") || lowerMessage.includes("مانیتورینگ") || lowerMessage.includes("شبیه‌ساز") || lowerMessage.includes("آزمون") || lowerMessage.includes("تراز مانیتورینگ")) {
+    return "سلام قهرمان پرتلاش! افزایش تراز مانیتورینگ و آزمون‌های شبیه‌ساز یکی از دغدغه‌های اصلی رتبه‌های برتر است. برای دستیابی به ترازهای درخشان در آزمون‌های بعدی آکادمی، من ۳ تکنیک طلایی کایزن درمانی را برایت تجویز می‌کنم:\n\n۱. **تحلیل موشکافانه تله‌های تستی**: بلافاصله پس از هر آزمون، سوالات غلط و نزده را کالبدشکافی کن. اشتباهاتت از جنس بی‌دقتی محاسباتی، عدم تمرکز یا کمبود وقت بوده؟ نوشتن یک دفترچه اختصاصی تحلیل تراز، از تکرار مجدد این اشتباهات بیهوده در شبیه‌سازهای بعدی جلوگیری می‌کند.\n\n۲. **مهندسی مدیریت زمان (تکنیک ضربدر منها)**: زمانِ پاسخ‌گویی به درس‌ها را با توجه به ضریب کنکوری آن‌ها موازنه کن. هرگز روی یک تست پیچیده و وقت‌گیر قفل نشو. تست‌های ساده‌تر را در اولویت اول مهار کن تا روحیه تهاجمی‌ات برای بقیه آزمون حفظ شود.\n\n۳. **پایداری پارت‌های پومودورو موازی**: روزهای پایانی منتهی به شبیه‌ساز بعدی را به شبیه‌سازی تست‌های جامع نیمه زمان‌دار اختصاص بده. ذهن انسان مانند عضله است؛ هر چقدر بیشتر در محیط شبیه‌ساز با استرس تمرین کند، در آزمون اصلی بهره‌وری تراز مانیتورینگ او بالاتر خواهد رفت.\n\nتلاش مستمر تو قطعاً ترازت را در آزمون پیش‌رو متحول خواهد کرد! 🎯🚀";
+  } else {
+    return "داوطلب فرزانه ترنم مهر، با تشکر از ارتباط شما با مشاور هوشمند هوش مصنوعی. برای تحلیل بهتر روند پیشرفت، تراز آخرین آزمون آزمایشی خود، رشته تحصیلی‌تان (تجربی، ریاضی یا انسانی) و درصد دروس آسیب‌دیده را ذکر کنید تا رهنمودهای مربی‌گری تخصصی خدمت شما صادر گردد.";
+  }
+}
+
+function getOfflineGoalInsight(student: any, currentTraz: any, currentPercentage: any, targetTraz: any, targetGrowth: any, latestQuizScore: any) {
+  const trazDiff = (targetTraz || 8500) - (currentTraz || 6500);
+  let baseLikelihood = 80;
+  if (trazDiff > 0) {
+    baseLikelihood -= Math.min(60, Math.round(trazDiff / 30));
+  }
+  const targetPercentage = (currentPercentage || 59) + (targetGrowth || 10);
+  const quizDiff = (latestQuizScore || 63) - targetPercentage;
+  baseLikelihood += Math.min(20, Math.max(-30, Math.round(quizDiff * 1.5)));
+  const likelihood = Math.min(96, Math.max(12, baseLikelihood));
+
+  let text = "";
+  let recommendations: string[] = [];
+
+  if (likelihood >= 80) {
+    text = `سیگنال‌های درخشان و بسیار مثبتی در روند تست‌زنی و ترازهای آزمون خود ثبت کرده‌اید! برآورد بازدهی آخرین تلاش مطالعاتی شما (${latestQuizScore}٪) رشد برجسته‌ای را نسبت به وضعیت پایه (${currentPercentage}٪) نشان می‌دهد. دستیابی به تراز هدف ${targetTraz || 8500} با این مداومت کاملا هموار است؛ مشروط بر اینکه تحلیل تله‌های تستی و حل تست‌های سراسری سال‌های گذشته را به طور روزانه در فرآیند کایزن پیش ببرید.`;
+    recommendations = [
+      "بهینه‌سازی زمان‌بندی مرور خلاصه نویسی‌ها در مباحث زیست‌شناسی و شیمی.",
+      "تثبیت درصد پاسخ‌دهی مبحث مشتق یا هندسه با حل ۳۰ تست زمان‌دار موازی.",
+      "حفظ پیوستگی استریک مطالعاتی روزانه بدون افت ریتم پومودورویی.",
+    ];
+  } else if (likelihood >= 50) {
+    text = `مسیر آماده‌سازی شما برای کنکور سراسری امیدبخش است اما برای قبولی قطعی در دانشگاه‌های تراز اول کشور و صعود به تراز مطلوب ${targetTraz || 8500}، ارتقای سرعت پاسخ‌گویی به تست‌های سخت مفهومی و زمان‌بر ضروری است. درصد فعلی تسلط شما (${currentPercentage}٪) نیازمند رشد است. بازدهی آزمون‌های اخیر شما (${latestQuizScore}٪) گواه ظرفیت ارتقاء شماست.`;
+    recommendations = [
+      "رفع نقایص مباحث شیمی آلی یا سرعت واکنش با درسنامه‌های صریح و مفهومی ترنم مهر.",
+      "حضور فعال در کارگاه مربی‌گری هوشمند و وبینارهای رفع اشکال کارنامه.",
+      "کاهش نمره منفی آزمون با دوری از زدن پاسخ‌های مردد و تست‌های ۵۰-۵0.",
+    ];
+  } else {
+    text = `اراده مستحکم شما برای کسب رتبه برتر کشوری و تراز ممتاز (${targetTraz || 8500}) قابل تحسین است؛ اما آمارهای تحلیلی نشان می‌دهد که سطح فعلی کوییزها (${latestQuizScore}٪) با هدف‌گذاری نهایی (${targetPercentage}٪) فاصله دارد. مشاور ترنم مهر پیشنهاد می‌کند هدف خود را در فاز اول روی تراز میانی ۷۵۰۰ بگذارید تا پله‌پله و با ثبات بیشتری صعود کنید.`;
+    recommendations = [
+      "تمرکز بسیار جدی بر مطالعه مباحث بنیادین و فرمول‌های پرتکرار فیزیک و ریاضی.",
+      "استفاده از کتاب‌های مفهومی و درسنامه‌های طلایی کنکور.",
+      "افزایش ساعات مطالعه هفتگی به ۴۸ ساعت کامل و ثبت دقیق در دفتر برنامه‌ریزی.",
+    ];
+  }
+
+  return {
+    likelihood,
+    text,
+    recommendations,
+    detailedMetrics: [
+      { label: "تسلط بر مفاهیم", value: `${toPersianNum(currentPercentage)}٪`, status: currentPercentage < 50 ? "warning" : "success" },
+      { label: "بازدهی آزمون اخیر", value: `${toPersianNum(latestQuizScore)}٪`, status: latestQuizScore < 60 ? "warning" : "success" },
+      { label: "پایداری پومودورو", value: `${toPersianNum(75 + Math.floor(Math.random() * 15))}٪`, status: "success" },
+    ],
+  };
+}
+
+function getOfflineExamAnalysis(lessons: any[], field: string) {
+  const analyzedWeaknesses: any[] = [];
+  const subjects = lessons || [];
+  const weakSubjects = [...subjects].sort((a: any, b: any) => a.percentage - b.percentage).slice(0, 3);
+
+  for (const sub of weakSubjects) {
+    let topic = "";
+    let rec = "";
+    let questions = 40;
+    let severity: "critical" | "warning" | "mild" = "warning";
+    const name = sub.lessonName || "";
+
+    if (name.includes("زیست") || name.includes("زیست‌شناسی")) {
+      topic = "زیست‌شناسی (مباحث ژنتیک، گیاهی یا غشای سلولی)";
+      rec = "مطالعه خط‌به‌خط کتاب درسی زیست‌شناسی; بررسی تصاویر کنکوری سال‌های گذشته و حل بسته ۵۰ تست زمان‌دار تله‌های تستی تجربی ترنم مهر.";
+      questions = 50;
+      severity = sub.percentage < 35 ? "critical" : "warning";
+    } else if (name.includes("حسابان") || name.includes("ریاضی")) {
+      topic = "ریاضیات تخصصی (مباحث تابع، مشتق و کاربرد آن)";
+      rec = "رفع اشکال اشتباهات محاسباتی تدرسی؛ حل تمرین‌های تشریحی کتاب درسی حسابان و زدن ۳۵ تست تمرکزی فاقد پاسخ نامطمئن.";
+      questions = 45;
+      severity = sub.percentage < 35 ? "critical" : "warning";
+    } else if (name.includes("شیمی")) {
+      topic = "شیمی تخصصی (مسائل استوکیومتری و سنتز مواد)";
+      rec = "مرور خلاصه واکنش‌های آلی و تمرین محاسبات سریع فاقد چک‌نویس طولانی؛ تحلیل تله‌های زمان‌بر در کارگاه بهینه‌سازی کایزن درسی.";
+      questions = 40;
+      severity = "warning";
+    } else if (name.includes("فیزیک")) {
+      topic = "فیزیک پیشرفته (نوسان و امواج یا حرکت‌شناسی)";
+      rec = "مرور دقیق نمودارهای مکان-زمان و سرعت-زمان فیزیک کنکور؛ زدن ۳۰ تست موازی با هدف افزایش سرعت تحلیل سوال.";
+      questions = 30;
+      severity = "mild";
+    } else {
+      topic = "مباحث مفهومی و حفظی درس تخصصی آسیب‌دیده";
+      rec = "خلاصه‌نویسی نموداری و مرورهای ۳ روزه؛ پرهیز از تله‌های نفی در نفی طراحان کنکور و شرکت در سنجش هوشمند ترنم مهر.";
+      questions = 35;
+      severity = "warning";
+    }
+
+    analyzedWeaknesses.push({ topic, subject: name, percentage: sub.percentage, recommendation: rec, questionsCount: questions, severity });
+  }
+
+  const nextTraz = Math.min(12000, Math.max(4000, Math.floor((subjects.reduce((acc: number, cur: any) => acc + cur.percentage, 0) / (subjects.length || 1)) * 60 + 4500)));
+
+  const totalWrong = subjects.reduce((sum: number, s: any) => sum + (s.wrong || 0), 0);
+  const totalCorrect = subjects.reduce((sum: number, s: any) => sum + (s.correct || 0), 0);
+  const totalEmpty = subjects.reduce((sum: number, s: any) => sum + (s.empty || 0), 0);
+  const totalQuestions = totalWrong + totalCorrect + totalEmpty || 1;
+
+  const wrongRatio = totalWrong / totalQuestions;
+  const emptyRatio = totalEmpty / totalQuestions;
+  const simulatedStressLevel = Math.min(95, Math.max(15, Math.floor((wrongRatio * 0.75 + emptyRatio * 0.25) * 100 + 10)));
+
+  let simulatedStressLabel: "بحرانی" | "متوسط" | "سالم" | "خفیف" = "سالم";
+  let simulatedTechnicalDetail = "";
+  if (simulatedStressLevel > 70) {
+    simulatedStressLabel = "بحرانی";
+    simulatedTechnicalDetail = "ریسک بالای استرس جلسه آزمون آزمایشی و کوفتگی شناختی ناشی از تست‌های پرمغز طراح؛ موازنه زمان از دست رفته روی سوالات تله‌دار مشهود است.";
+  } else if (simulatedStressLevel > 45) {
+    simulatedStressLabel = "متوسط";
+    simulatedTechnicalDetail = "نوسان تمرکز در دقایق انتهایی آزمون به دلیل خستگی چشم و افت قند خون؛ داوطلب زمان مدیدی را روی چند تست خاص تلف کرده است.";
+  } else if (simulatedStressLevel > 25) {
+    simulatedStressLabel = "خفیف";
+    simulatedTechnicalDetail = "تمرکز نسبتاً مطلوب و آرامش ذهنی پایدار؛ چند بی‌دقتی کوچک محاسباتی در محاسبات استوکیومتری یا فیزیک رصد شد.";
+  } else {
+    simulatedStressLabel = "سالم";
+    simulatedTechnicalDetail = "بهره‌وری کامل و توازن عالی در ریتم پاسخ‌دهی؛ داوطلب بدون فرسودگی ذهنی و کمال‌گرایی منفی ماراتن آزمون را به پایان رسانده است.";
+  }
+
+  const simAvgResponseTimeWrong = Math.round(55 + wrongRatio * 40);
+  const simAvgResponseTimeCorrect = Math.round(40 + (1 - wrongRatio) * 10);
+  const simConsecutiveErrors = Math.min(10, Math.floor(wrongRatio * 15 + 1));
+
+  return {
+    weaknesses: analyzedWeaknesses,
+    psychological: {
+      pattern: simulatedStressLevel > 60 ? "فرسودگی توجه در دور آخر آزمون ناشی از عجله و وسواس تایید منفی" : "آرامش گذرا در ریتم مطالعه و ثبات ذهنی کافی",
+      description: `داوطلب محترم با میانگین رشد تراز تحصیلی پیش می‌رود اما تنش فرسایش ذهنی آزمون شبیه‌ساز معادل ${simulatedStressLevel}٪ بازدهی حل سوال‌ها را متاثر نموده است.`,
+      correctToWrongRate: Math.max(12, Math.round(wrongRatio * 100)),
+      suggestion: simulatedStressLevel > 60
+        ? "پیشنهاد مربیان: پیاده‌سازی تکنیک ضربدر منها در مدیریت فواصل آزمون؛ استراحت ۵ دقیقه‌ای متمرکز و ریلکسیشن غشای حسی مغز مابین پارت‌های دشوار."
+        : "تثبیت ریتم مطالعاتی روزانه به همراه مانیتور تمرین‌های تستی فاقد نمره منفی.",
+      cardColor: simulatedStressLevel > 70 ? "red" : simulatedStressLevel > 45 ? "orange" : simulatedStressLevel > 25 ? "amber" : "blue",
+      stressLevel: simulatedStressLevel,
+      stressAnalysis: {
+        avgResponseTimeWrong: simAvgResponseTimeWrong,
+        avgResponseTimeCorrect: simAvgResponseTimeCorrect,
+        consecutiveErrorsCount: simConsecutiveErrors,
+        stressLabel: simulatedStressLabel,
+        technicalDetail: simulatedTechnicalDetail,
+      },
+    },
+    remedialPlan: [
+      { day: "شنبه", morningPlan: "مطالعه مفهومی کتاب درسی و تصاویر زیست‌شناسی تجربی / فرمول قرابت ریاضی", afternoonPlan: "حل ۳۵ تست شبیه‌ساز کنکور سراسری و بررسی تشریحی مباحث خطاکار", totalQuestions: 35 },
+      { day: "یکشنبه", morningPlan: "مرور ساختارمند مباحث شیمی آلی یا مسائل تابع حسابان", afternoonPlan: "عارضه‌یابی اشتباهات محاسباتی آزمون قبل با کمک مربی هوشمند (۳۰ تست)", totalQuestions: 30 },
+      { day: "دوشنبه", morningPlan: "مطالعه مبحث فیزیک حرکت‌شناسی و مدارهای موازی جریان", afternoonPlan: "تست‌زنی موضوعی برای هماهنگی چشم و مغز در مهار تله‌ها (۲۵ تست)", totalQuestions: 25 },
+      { day: "سه‌شنبه", morningPlan: "مرور عربی تخصصی یا آرایه‌های ادبی و واژه‌شناسی", afternoonPlan: "شبیه‌ساز کوچک موازی دروس پرضریب کنکور (۴۰ تست)", totalQuestions: 40 },
+      { day: "چهارشنبه", morningPlan: "تحلیل الگوهای فرسودگی تمرکز ذهن و روش‌های تندخوانی", afternoonPlan: "حل پکیج تستی جامع و زمان‌دار تجربی/ریاضی/انسانی (۴۵ تست)", totalQuestions: 45 },
+      { day: "پنجشنبه", morningPlan: "مرور خلاصه‌نویسی‌های طلایی و یادداشت‌برداری‌های تله‌شناسی", afternoonPlan: "ثبت آمارهای روزهای گذشته در کارتابل ترنم مهر جهت تطبیق مربی ناظر (۲۰ تست)", totalQuestions: 20 },
+      { day: "جمعه", morningPlan: "پیش‌آزمون آزمایشی، پایش تراز فرضی و هماهنگی روانشناسی با درگاه والدین", afternoonPlan: "ریکاوری روحی، پیاده‌روی دور از استرس و خودآموزی کایزن مطالعاتی (۱۰ تست)", totalQuestions: 10 },
+    ],
+    estimatedNextTraz: nextTraz + 250,
+  };
+}
+
+function getOfflinePsychologyAnalysis(qAnxiety: number, qFocus: number, qPerfectionism: number, qSleep: number, qStamina: number, context?: any) {
+  const focusIndex = Math.min(100, Math.max(10, qFocus * 10));
+  const resilience = Math.min(100, Math.max(10, Math.round((10 - qAnxiety) * 5 + qStamina * 5)));
+  const academicDrive = 85;
+  const stamina = Math.min(100, Math.max(10, qStamina * 10));
+  const anxietyManagement = Math.min(100, Math.max(10, Math.round((10 - qAnxiety) * 10)));
+  const sleepEfficacy = Math.min(100, Math.max(10, qSleep * 10));
+  const stressLevel = Math.min(98, Math.max(10, Math.round(qAnxiety * 4 + qPerfectionism * 3 + (10 - qSleep) * 3)));
+
+  const city = context?.city || "شهر فعلی";
+  const goal = context?.mainGoal || "موفقیت در کنکور";
+
+  return {
+    cognitiveProfile: { focusIndex, resilience, academicDrive, stamina, anxietyManagement, sleepEfficacy },
+    stressLevel,
+    diagnosis: `داستان پایداری شما از ${city} آغاز می‌شود. با وجود چالش‌های خانوادگی و رویای ${goal}، شما در حصار کمال‌گرایی تستی گرفتار شده‌اید. تنش ${stressLevel}٪ شما نشان از یک مبارزه خاموش برای تغییر سرنوشت مالی و اجتماعی است. 🦋`,
+    cognitiveTrap: qFocus < 5 ? "🧠 تله فروپاشی تمرکز در هیاهوی دغدغه‌های شخصی" : "⚖️ تله سنگینی بار مسئولیت و اضطراب آینده",
+    remedies: [
+      `🏰 قلعه تمرکز: ایجاد یک حریم ایزوله در محیط خانه برای مهار تنش‌های محیطی و خانوادگی.`,
+      `💎 استراتژی ثروت ذهنی: مدیریت دقیق قوای روانی برای دروس پرتراکم و دوری از حواشی مالی.`,
+      `📈 گام‌های کایزن: پیشرفت پله‌پله بدون غرق شدن در عظمت هدف نهایی.`,
+    ],
+    meditationAdvice: "🌌 تمرین تجسم پیروزی: تصور لحظه اعلام نتایج و لبخند رضایت شما در حالی که تمام محدودیت‌ها را شکسته‌اید.",
+    breathingPaceSec: 4,
+  };
+}
+
+/* ----------------------------------------------------------------------------
+ * Route handlers
+ * ------------------------------------------------------------------------- */
+
+function health(): Response {
+  return json({ status: "ok", industry: "High School Education & Konkur Prep", brand: "ترنم همدلی", time: new Date().toISOString() });
+}
+
+function aiStatus(env: Env): Response {
+  return json({
+    status: "online",
+    models: ["gemini-3.5-flash", "gemini-3.1-pro-preview"],
+    hasServerGeminiKey: !!(env.GEMINI_API_KEY && env.GEMINI_API_KEY.includes("AIzaSy") && env.GEMINI_API_KEY.length > 10),
+    hasServerOpenRouterKey: !!(env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY.startsWith("sk-") && env.OPENROUTER_API_KEY.length > 10),
+  });
+}
+
+async function motivational(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const quotes = [
+    "اعتبار ترنم همدلی در طول سالیان، حاصل ممارست فرزندان شایسته‌ای است که امروز رتبه‌های برتر دانشگاه‌های تهران، شریف و بهشتی کشور هستند. به پالس‌های تلاش روزانه خود وفادار بمانید!",
+    "تلاش متعهدانه ثمر خواهد داد. خواندن خط‌به‌خط تصویر زیست یا دست‌ورزی مسئله فیزیک، پله‌ای برای پزشک، مهندس یا رتبه برتر شدن است.",
+    "هر کارنامه آزمایشی در سامانه ترنم همدلی، یک نقشه دقیق مربی‌گری کایزن برای غلبه تدریجی بر تله‌های طراحان ماهر کنکور است. شجاعانه ادامه دهید!",
+    "تراز کمال علمی حاصل تصادف و بخت نیست؛ بلکه فرآیند مداوم بهسازی عادات، مهار نمره‌های منفی و انگیزه درخشیدن شماست. پرانرژی ماراتن را مهار کنید!",
+    "شما مجهز به برترین تکنولوژی مربی‌گری و روانشناسی تحصیلی هستید. از هر پومودوروی مطالعاتی برای پیشی گرفتن از رقبای خسته خود استفاده کنید.",
+  ];
+
+  try {
+    const body = await readJson(ctx.request);
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) {
+      return json({ quote: quotes[Math.floor(Math.random() * quotes.length)] }, 200, meta.headers);
+    }
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ role: "user", parts: [{ text: "یک جمله انگیزشی صمیمی، همدلانه، خلاقانه، عاطفی، علمی و روان‌شناختی مناسب داوطلبان کنکور سراسری ایران (تجربی، ریاضی، انسانی) برای نصب در بالای پرتال آموزشی 'ترنم مهر' بنویس. شیوه کایزن، تعهد به پیشرفت تدریجی و با هم بودن تا هدف نهایی را تداعی کند. لحن صمیمی و عمیق فارسی داشته باشد، بدون پیشوند و پسوند." }] }],
+    });
+    return json({ quote: response.text?.trim() || quotes[Math.floor(Math.random() * quotes.length)] }, 200, meta.headers);
+  } catch (_) {
+    return json({ quote: quotes[Math.floor(Math.random() * quotes.length)] });
+  }
+}
+
+async function chat(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  if (body?.testPing) return json({ status: "ok" });
+
+  const { message, history } = body;
+  if (!message) return json({ error: "MESSAGE_REQUIRED", reply: "پیامی دریافت نشد." }, 400);
+
+  try {
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) {
+      return json({ reply: getOfflineChatReply(message) }, 200, meta.headers);
+    }
+
+    const formattedHistory = (history || []).map((msg: any) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
+
+    const systemInstruction = `شما 'دکتر رادان'، همراه همدل و مشاور برنامه‌ریزی تحصیلی در موسسه 'ترنم همدلی' هستید.
+تخصص شما: کنکور سراسری ایران، تحلیل روند یادگیری، عارضه‌یابی اشتباهات تسی، و روانشناسی یادگیری.
+ویژگی‌های شخصیتی: همدل، صبور، بسیار خوش‌صحبت به زبان فارسی، حامی واقعی، و در عین حال دقیق و راهنما.
+هدف: داوطلب را برای رشدی پایدار و رسیدن به اهداف تحصیلی‌اش با آرامش هدایت کنید.
+قوانین پاسخ‌دهی:
+۱. پاسخ‌ها باید عمیق، دلسوزانه و به شدت کاربردی باشند.
+۲. بصورت کاملاً هوشمند و واکنشی به پیام کاربر پاسخ دهید. اگر کاربر شوخی کرد یا پیام نامفهومی فرستاد، صمیمانه و مثل یک همراه واقعی واکنش نشان دهید.
+۳. از اصطلاحات فنی کنکور در جای مناسب و با لحنی آرام‌بخش استفاده کنید.
+۴. حداکثر در ۳ پاراگراف پاسخ دهید.
+۵. از ایموجی‌های مناسب (📚, 🌱, ✨, 💡) استفاده کنید.`;
+
+    const chatSession = ai.chats.create({ model: "gemini-3.5-flash", history: formattedHistory, config: { systemInstruction } });
+    const result = await chatSession.sendMessage({ message });
+    const reply = result.text?.trim();
+    if (!reply) throw new Error("Empty reply from Gemini");
+    return json({ reply }, 200, meta.headers);
+  } catch (error: any) {
+    const errStr = (error?.message || error?.toString() || "").toLowerCase();
+    const rawErrorMsg = error?.message || error?.toString() || "Unknown server-side Gemini API or network error";
+
+    let fallbackReply = "";
+    if (errStr.includes("resource_exhausted") || errStr.includes("quota") || errStr.includes("429")) {
+      fallbackReply = "⚠️ همکار/کاربر ارجمند، سقف مجاز استفاده از کلید هوش مصنوعی (Quota Exceeded) در این لحظه به پایان رسیده است.\n\nاز آنجایی که کلید وارد شده احتمالاً از نوع رایگان (Free Tier) است، با محدودیت‌های تعدادی درخواست از سمت گوگل مواجه شده است. شبکه برای جلوگیری از اختلال در کارنامه شما، به صورت خودکار به موتور آفلاین کایزن منتقل شده است.\n\nبرای ارتباط زنده، لطفاً دقایقی بعد تلاش کنید یا یک کلید رایگان جدید در بخش ادمین ثبت نمایید. ❤️";
+    } else if (errStr.includes("leaked") || errStr.includes("403") || errStr.includes("401") || errStr.includes("unauthenticated") || errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended") || errStr.includes("compromised") || errStr.includes("invalid authentication")) {
+      fallbackReply = "⚠️ همراه گرامی، کلید دسترسی (API Key) پیش‌فرض سرور یا مرورگر شما با محدودیت مواجه شده است.\n\nمن دکتر رادان هستم. نگران نباشید! برای فعال‌سازی کامل و برقراری ارتباط زنده با مدل‌های هوشمند Gemini، می‌توانید یک کلید رایگان از Google AI Studio دریافت کرده و در بخش تنظیمات فنی ثبت کنید.\n\nسیستم در حال حاضر با استفاده از شبیه‌سازهای حرفه‌ای و همدلانه فعال است تا هیچ وقفه‌ای در مسیر یادگیری شما ایجاد نشود. ❤️";
+    } else {
+      fallbackReply = getOfflineChatReply(message);
+    }
+    return json({ reply: fallbackReply, isOfflineFallback: true, error: rawErrorMsg }, 200, meta.headers);
+  }
+}
+
+async function goalInsight(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  if (body?.testPing) return json({ status: "ok" });
+  const { student, currentTraz, currentPercentage, targetTraz, targetGrowth, latestQuizScore } = body;
+
+  try {
+    const fieldName = student?.field === "tajrobi" ? "علوم تجربی" : student?.field === "riazi" ? "ریاضی فیزیک" : "علوم انسانی";
+    const targetPercentage = (currentPercentage || 59) + (targetGrowth || 10);
+
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) {
+      return json(getOfflineGoalInsight(student, currentTraz, currentPercentage, targetTraz, targetGrowth, latestQuizScore), 200, meta.headers);
+    }
+
+    const prompt = `شما یک مشاور ارشد تحصیلی، ارزیاب ترازهای علمی و طراح کایزن درگاه آموزشی عالی موسسه "ترنم همدلی" (سامانه هوشمند پایش اهداف داوطلبان کنکور سراسری ایران) هستید.
+امکانات و اهداف تحصیلی دانش‌آموز به شرح زیر است:
+- نام و دوره هدف: ${student?.name || "داوطلب فرضی"} - هدف ${student?.grade || ""} رشته تخصصی کنکور ${fieldName}
+- سرفصل‌های اولویت‌دار و مباحث درسی ضعیف (اعلام شده توسط داوطلب): ${student?.priorityTopics || "موردی ثبت نشده است"}
+- تراز آزمون تستی فعلی داوطلب در ترنم همدلی: ${currentTraz || 6500}
+- تراز هدف‌گذاری شده دانشگاه اول کشور: ${targetTraz || 8500}
+- درصد محصولات تستی پاسخ صحیح فعلی: ${currentPercentage || 59}٪
+- راندمان تست‌زنی هدف نهایی: ${targetPercentage}٪ (شامل بازدهی قبلی به همراه بهبود مربی‌گری)
+- نمره آخرین کوییز شبیه‌ساز او: ${latestQuizScore || 63}٪
+
+شما باید تراز و پیشرفت او را بسنجید و یک تحلیل آماری و علمی و روانشناختی آماده کنید. نقاط قوت و مباحث دروس تخصصی را پوشش دهید.
+
+پاسخ را دقیقاً در قالب فرمت JSON زیر بدون تگ‌های خارجی تحویل دهید:
+{
+  "likelihood": 72,
+  "detailedMetrics": [
+    { "label": "تسلط بر مفاهیم", "value": "۵۹٪", "status": "warning" },
+    { "label": "بازدهی آزمون اخیر", "value": "۶۳٪", "status": "success" },
+    { "label": "پایداری پومودورو", "value": "۸۲٪", "status": "success" }
+  ],
+  "text": "تحلیل صمیمی، ارزیابی بهداشت ذهن داوطلب، فرمول تلاش و مربی‌گری در ۳ الی ۴ جمله فارسی ترغیب‌کننده و معمارانه با لحن صمیمی (با تاکید و وزن بیشتر بر سرفصل‌های اولویت‌دار اعلامی داوطلب)",
+  "recommendations": [
+    "توصیه کاربردی ۱ جهت رفع تله تستی دروس آسیب دیده و ارتقای احتمال قبولی در رشته و دانشگاه هدف",
+    "توصیه کاربردی ۲ جهت بهینه‌سازی کایزن مطالعاتی درسنامه گام به گام ترنم همدلی",
+    "توصیه کاربردی ۳ درباره مانیتورینگ دقیق ترازهای رقبا در آزمون‌های جامع پیش‌رو"
+  ]
+}
+
+فقط پاسخ خام JSON را بدون عبارت markdown مانند \`\`\`json برگردانید.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const textOutput = response.text?.trim() || "{}";
+    const cleanedText = textOutput.replace(/```json/gi, "").replace(/```/g, "").trim();
+    return json(JSON.parse(cleanedText), 200, meta.headers);
+  } catch (_) {
+    return json(getOfflineGoalInsight(student, currentTraz, currentPercentage, targetTraz, targetGrowth, latestQuizScore));
+  }
+}
+
+async function analyzeExam(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  if (body?.testPing) return json({ status: "ok" });
+  const { lessons, field, student } = body;
+
+  try {
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) return json(getOfflineExamAnalysis(lessons, field), 200, meta.headers);
+
+    const priorityInfo = student?.priorityTopics ? `\n- مباحث دارای اولویت و ضعیف (اعلامی داوطلب): ${student.priorityTopics}` : "";
+    const prompt = `یک کارنامه آزمون آزمایشی داوطلب کنکور سراسری با متغیرهای لاین تخصصی '${field}' دریافت شده است که آمارهای ممیزی پاسخ‌دهی به قرار زیر است:
+${JSON.stringify(lessons, null, 2)}${priorityInfo}
+
+لطفا یک تحلیل تخصصی مربی‌گری، روانشناسی آزمون، عارضه‌یابی درصد ممیزی‌ها به فرمت JSON دقیقا با ساختار زیر تهیه کنید. صمیمی و فنی بر اساس متدهای پیشرفته کایزن تحصیلی ترنم مهر طراحی شده باشد. به زبان فارسی شیوا پاسخ دهید:
+{
+  "weaknesses": [
+    {
+      "topic": "نام مبحث درسی آسیب‌دیده با جزئیات کامل",
+      "subject": "نام درس تخصصی آسیب‌دیده مربوطه",
+      "percentage": 30,
+      "recommendation": "پیشنهادی جامع و دلسوزانه برای رفع تله تستی",
+      "questionsCount": 40,
+      "severity": "warning"
+    }
+  ],
+  "psychological": {
+    "pattern": "نام الگوی کاهش تمرکز ذهن داوطلب",
+    "description": "تحلیل روانشناختی و ریتم مطالعاتی رفتار داوطلب در ۲ جمله",
+    "correctToWrongRate": 42,
+    "suggestion": "پیشنهاد مربی مشاور",
+    "cardColor": "orange",
+    "stressLevel": 55,
+    "stressAnalysis": {
+      "avgResponseTimeWrong": 75,
+      "avgResponseTimeCorrect": 45,
+      "consecutiveErrorsCount": 3,
+      "stressLabel": "متوسط",
+      "technicalDetail": "توضیح فنی کوتاه ۲ جمله‌ای فارسی"
+    }
+  },
+  "remedialPlan": [
+    { "day": "شنبه", "morningPlan": "...", "afternoonPlan": "...", "totalQuestions": 35 }
+  ],
+  "estimatedNextTraz": 8200
+}
+
+فقط کدهای خام JSON را بدون عبارت markdown مانند \`\`\`json برگردانید.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const textOutput = response.text?.trim() || "{}";
+    const cleanedText = textOutput.replace(/```json/gi, "").replace(/```/g, "").trim();
+    return json(JSON.parse(cleanedText), 200, meta.headers);
+  } catch (_) {
+    return json(getOfflineExamAnalysis(lessons, field));
+  }
+}
+
+async function psychologyAnalysis(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  if (body?.testPing) return json({ status: "ok" });
+  const { student, qAnxiety, qFocus, qPerfectionism, qSleep, qStamina } = body;
+
+  try {
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) return json(getOfflinePsychologyAnalysis(qAnxiety, qFocus, qPerfectionism, qSleep, qStamina, student), 200, meta.headers);
+
+    const fieldName = student?.field === "tajrobi" ? "علوم تجربی" : student?.field === "riazi" ? "ریاضی فیزیک" : "علوم انسانی";
+    const prompt = `شما یک روانشناس بالینی، متخصص علوم شناختی و "قصه‌گوی درمانی" در پرتال آکادمی "ترنم مهر" هستید.
+وظیفه شما ارائه تحلیل روانشناختی است که مانند یک "داستان پیروزی" باشد و شرایط زیستی داوطلب را در نظر بگیرد.
+
+مشخصات داوطلب:
+- نام: ${student?.name || "داوطلب"}
+- رشته: ${fieldName}
+- شهر: ${student?.city || "نامشخص"}
+- جو خانواده: ${student?.familyContext || "نامشخص"}
+- وضعیت مالی: ${student?.financialStatus || "نامشخص"}
+- هدف غایی: ${student?.mainGoal || "موفقیت"}
+
+پارامترهای سنجیده شده (۱ تا ۱۰):
+- اضطراب آزمون: ${qAnxiety}
+- کانون توجه: ${qFocus} (۱۰ عالی)
+- کمال‌گرایی وسواسی: ${qPerfectionism}
+- کیفیت خواب: ${qSleep} (۱۰ عالی)
+- استقامت عصرگاهی: ${qStamina} (۱۰ عالی)
+
+خروجی باید به صورت JSON باشد و شامل یک "تشخیص داستانی" (diagnosis) باشد که به شهر، خانواده، چالش‌های مالی و هدف داوطلب اشاره کند و از سمبل‌های روانشناختی استفاده نماید.
+
+JSON schema:
+{
+  "cognitiveProfile": { "focusIndex": 75, "resilience": 68, "academicDrive": 85, "stamina": 60, "anxietyManagement": 50, "sleepEfficacy": 70 },
+  "stressLevel": 58,
+  "diagnosis": "یک متن داستانی و صمیمی (حداکثر ۴ جمله) با استفاده از ایموجی.",
+  "cognitiveTrap": "نام نمادین تله",
+  "remedies": ["راهکار ۱", "راهکار ۲", "راهکار ۳"],
+  "meditationAdvice": "توصیه آرامش‌بخش بر اساس هدف داوطلب",
+  "breathingPaceSec": 4
+}
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const textOutput = response.text?.trim() || "{}";
+    const cleanedText = textOutput.replace(/```json/gi, "").replace(/```/g, "").trim();
+    return json(JSON.parse(cleanedText), 200, meta.headers);
+  } catch (_) {
+    return json(getOfflinePsychologyAnalysis(qAnxiety, qFocus, qPerfectionism, qSleep, qStamina, student));
+  }
+}
+
+/* --- ZarinPal payment --- */
+
+async function paymentRequest(ctx: Ctx): Promise<Response> {
+  const body = await readJson(ctx.request);
+  if (body?.testPing) return json({ status: "ok" });
+  const { amount, description, mobile, email } = body;
+  const merchantId = ctx.env.ZARINPAL_MERCHANT_ID;
+  const callbackUrl = ctx.env.ZARINPAL_CALLBACK_URL || `${ctx.env.APP_URL || ""}/api/payment/verify`;
+
+  if (!merchantId || merchantId === "" || merchantId === "undefined") {
+    return json({
+      status: 100,
+      authority: "MOCK_AUTHORITY_" + Date.now(),
+      url: `https://www.zarinpal.com/pg/StartPay/MOCK_AUTHORITY`,
+    });
+  }
+
+  try {
+    const resp = await fetch("https://api.zarinpal.com/pg/v4/payment/request.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ merchant_id: merchantId, amount, callback_url: callbackUrl, description, metadata: { mobile, email } }),
+    });
+    const data: any = await resp.json();
+    if (data?.data && data.data.code === 100) {
+      return json({ status: 100, authority: data.data.authority, url: `https://www.zarinpal.com/pg/StartPay/${data.data.authority}` });
+    }
+    return json({ error: "Failed to generate payment authority", details: data }, 400);
+  } catch (error: any) {
+    return json({ error: "Internal server error during payment request", detail: error?.message }, 500);
+  }
+}
+
+async function paymentVerify(ctx: Ctx): Promise<Response> {
+  const url = new URL(ctx.request.url);
+  const Authority = url.searchParams.get("Authority") || "";
+  const Status = url.searchParams.get("Status");
+  const merchantId = ctx.env.ZARINPAL_MERCHANT_ID;
+
+  if (Status !== "OK") return Response.redirect(`${url.origin}/?payment=failed`, 302);
+
+  if (!merchantId || merchantId === "" || merchantId === "undefined") {
+    return Response.redirect(`${url.origin}/?payment=success&refid=MOCK_REF_${Date.now()}`, 302);
+  }
+
+  try {
+    const resp = await fetch("https://api.zarinpal.com/pg/v4/payment/verify.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ merchant_id: merchantId, amount: 10000, authority: Authority }),
+    });
+    const data: any = await resp.json();
+    if (data?.data && data.data.code === 100) {
+      return Response.redirect(`${url.origin}/?payment=success&refid=${data.data.ref_id}`, 302);
+    }
+    return Response.redirect(`${url.origin}/?payment=failed`, 302);
+  } catch (_) {
+    return Response.redirect(`${url.origin}/?payment=error`, 302);
+  }
+}
+
+async function testAiConnection(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const userKey = getSafeHeader(ctx.request, "x-gemini-key") || getSafeHeader(ctx.request, "x-openrouter-key") || body?.geminiKey || body?.openRouterKey;
+  const testSection = body?.section || "chat";
+
+  const activeKey = userKey || ctx.env.GEMINI_API_KEY || "";
+  const isOpenRouter = activeKey.trim().startsWith("sk-or-");
+
+  const responseData: any = {
+    section: testSection,
+    apiKeySource: userKey ? "Custom Client Key (LocalStorage)" : "Environment Secret (Cloudflare)",
+    configuredModel: isOpenRouter ? "OpenRouter (GPT or other)" : "gemini-3.5-flash",
+    activeKeyMasked: userKey
+      ? `${userKey.substring(0, 7)}...${userKey.substring(userKey.length - 4)}`
+      : ctx.env.GEMINI_API_KEY
+      ? `${ctx.env.GEMINI_API_KEY.substring(0, 7)}...`
+      : "ثبت نشده - اتصال آفلاین",
+  };
+
+  try {
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) {
+      responseData.connected = false;
+      responseData.errorMessage = "کلید دسترسی معتبری از گوگل برای راه‌اندازی یافت نشد. سیستم در وضعیت آفلاین (نظیره‌یابی کایزن) قرار دارد.";
+      responseData.fallbackUsed = "شبیه‌ساز آفلاین هوشمند آکادمی ترنم";
+      return json(responseData, 200, meta.headers);
+    }
+
+    let promptSample = "در ۳ کلمه بگو مربی کایزن ترنم مهر چه تاثیری دارد؟";
+    if (testSection === "goal") promptSample = "ماژول تخمین شانس قبولی متصل است؟ در ۳ کلمه بگو.";
+    else if (testSection === "exam") promptSample = "ماژول عارضه‌یابی کارنامه زیست متصل است؟ در ۳ کلمه بگو.";
+    else if (testSection === "psychology") promptSample = "ماژول قصه درمانی و مهار کمال‌گرایی متصل است؟ در ۳ کلمه بگو.";
+    else if (testSection === "motivational") promptSample = "ماژول شعار و الهام روزانه متصل است؟ در ۳ کلمه بگو.";
+
+    const start = performance.now();
+    const response = await ai.models.generateContent({ model: "gemini-3.5-flash", contents: promptSample });
+    const elapsed = (performance.now() - start).toFixed(0);
+
+    responseData.connected = true;
+    responseData.responseTimeMs = parseInt(elapsed);
+    responseData.sampleReply = response.text?.trim() || "اتصال موفق ولی فاقد خروجی متنی";
+    responseData.actualModelUsed = userKey?.startsWith("sk-or-") ? "OpenRouter Models" : "Google Gemini 3.5 Flash";
+    return json(responseData, 200, meta.headers);
+  } catch (error: any) {
+    responseData.connected = false;
+    let errorMsg = error?.message || "خطای ناگهانی ارتباطی با سرورهای ممیزی گوگل رخ داد.";
+    const errStr = errorMsg.toLowerCase();
+    if (errStr.includes("resource_exhausted") || errStr.includes("quota") || errStr.includes("429")) {
+      errorMsg = "سقف مجاز استفاده از این کلید به پایان رسیده است (Quota Exceeded). لطفا یک کلید جدید ایجاد کنید یا مدتی صبر کنید.";
+    } else if (errStr.includes("permission_denied") || errStr.includes("permission denied") || errStr.includes("suspended")) {
+      errorMsg = "این کلید مسدود شده است (Suspended). لطفاً یک کلید جدید ایجاد کنید.";
+    } else if (errStr.includes("api key not valid") || errStr.includes("api_key_invalid")) {
+      errorMsg = "کلید وارد شده نامعتبر است. لطفا کلید را به درستی وارد کنید.";
+    }
+    responseData.errorMessage = errorMsg;
+    responseData.fallbackUsed = "موتور آفلاین شبیه‌ساز خلاق کایزن";
+    return json(responseData, 200, meta.headers);
+  }
+}
+
+async function sandbox(ctx: Ctx): Promise<Response> {
+  const body = await readJson(ctx.request);
+  let { provider, apiKey, prompt } = body;
+  const keyToUse = apiKey || ctx.env.GEMINI_API_KEY;
+
+  if (!prompt || typeof prompt !== "string") return json({ success: false, error: "Prompt is required." }, 400);
+  if (!keyToUse) return json({ success: false, error: "لطفا ابتدا یک کلید دسترسی معتبر (API Key) ثبت کنید." }, 400);
+
+  const start = performance.now();
+  try {
+    let adapterType = provider;
+    if (keyToUse.trim().startsWith("sk-or-")) adapterType = "OpenRouter";
+
+    if (adapterType === "Google Gemini" || adapterType === "OpenRouter" || !adapterType) {
+      const tempAi = new AIAdapter(keyToUse);
+      const result = await tempAi.models.generateContent({ model: "gemini-3.5-flash", contents: prompt });
+      return json({
+        success: true,
+        reply: result.text || "پاسخ خالی است.",
+        responseTimeMs: Math.round(performance.now() - start),
+        model: adapterType === "OpenRouter" ? "OpenRouter Endpoint" : "Gemini 3.5 Flash",
+      });
+    }
+    return json({ success: false, error: `پروایدر ${adapterType} هنوز پشتیبانی نمی‌شود.` }, 400);
+  } catch (err: any) {
+    let errorMsg = err.message || "خطای ناشناخته";
+    if (err?.status === 401 || err?.status === 403 || errorMsg.includes("API_KEY_INVALID")) {
+      errorMsg = "کلید API نامعتبر است یا منقضی شده است. لطفا کلید را بررسی کنید.";
+    }
+    return json({ success: false, error: errorMsg, responseTimeMs: Math.round(performance.now() - start) }, 500);
+  }
+}
+
+async function testProvider(ctx: Ctx): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const { provider, apiKey } = body;
+  if (!apiKey) return json({ valid: false, error: "API Key is missing." }, 400);
+
+  const start = performance.now();
+  try {
+    if (provider === "Google Gemini" || provider === "OpenRouter") {
+      const tempAi = new AIAdapter(apiKey);
+      await tempAi.models.generateContent({ model: "gemini-3.5-flash", contents: "test" });
+      return json({ valid: true, responseTimeMs: parseInt((performance.now() - start).toFixed(0)) });
+    } else if (provider === "OpenAI") {
+      const resp = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${apiKey}` } });
+      if (!resp.ok) throw new Error("Invalid OpenAI API Key");
+      return json({ valid: true, responseTimeMs: parseInt((performance.now() - start).toFixed(0)) });
+    } else if (provider === "Anthropic") {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: "claude-3-haiku-20240307", max_tokens: 1, messages: [{ role: "user", content: "test" }] }),
+      });
+      if (resp.status === 401 || resp.status === 403) throw new Error("Invalid Anthropic API Key");
+      return json({ valid: true, responseTimeMs: parseInt((performance.now() - start).toFixed(0)) });
+    } else {
+      await new Promise((r) => setTimeout(r, 600));
+      return json({ valid: true, responseTimeMs: parseInt((performance.now() - start).toFixed(0)) });
+    }
+  } catch (error: any) {
+    let errorMsg = "";
+    if (typeof error?.message === "string") errorMsg = error.message;
+    else if (typeof error === "string") errorMsg = error;
+    else { try { errorMsg = JSON.stringify(error); } catch (_) { errorMsg = "Unknown error"; } }
+
+    if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("quota") || errorMsg.includes("429")) {
+      errorMsg = "سقف مجاز استفاده از این کلید به پایان رسیده است (Quota Exceeded). لطفا یک کلید جدید ایجاد کنید یا از حساب پولی استفاده کنید.";
+    } else if (errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("Permission denied") || errorMsg.includes("suspended")) {
+      errorMsg = "این کلید مسدود شده است (Suspended). لطفاً یک کلید جدید ایجاد کنید.";
+    } else if (errorMsg.includes("API key not valid") || errorMsg.includes("API_KEY_INVALID") || errorMsg.includes("UNAUTHENTICATED") || errorMsg.includes("invalid authentication")) {
+      errorMsg = "کلید وارد شده نامعتبر است. لطفا کلید را به درستی کپی کنید.";
+    } else if (errorMsg.includes("402") || errorMsg.includes("credits")) {
+      errorMsg = "موجودی این حساب کافی نیست. لطفا حساب خود را در OpenRouter شارژ کنید.";
+    }
+    return json({ valid: false, error: errorMsg }, 400);
+  }
+}
+
+async function generateQuizQuestion(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const { subject, difficulty, customTopic } = body;
+  const start = performance.now();
+
+  const offlineFallbacks: Record<string, any[]> = {
+    "زیست‌شناسی": [
+      {
+        id: "Q-OFFLINE-BIO-1", subject: "زیست‌شناسی", title: "غشای سلولی و انتقال فعال",
+        text: "کدام گزینه درباره پمپ سدیم-پتاسیم در غشای یک نورون حرکتی مغز درست است؟",
+        options: [
+          "به ازای خروج هر ۳ یون سدیم، ۲ یون پتاسیم را با مصرف یک مولکول ATP وارد می‌کند.",
+          "فعالیت آن همواره غلظت سدیم درون سلول را بالاتر از بیرون نگه می‌دارد.",
+          "تنها در هنگام تولید پتانسیل عمل شروع به کار کرده و به سرعت غیرفعال می‌شود.",
+          "با خروج یون سدیم، غلظت آب درون نورون را به شدت افزایش می‌دهد.",
+        ],
+        correctIdx: 0,
+        explanation: "گزینه ۱ پاسخ صحیح است. پمپ سدیم پتاسیم یک پروتئین غشایی ناقل فعال است که با مصرف ATP سه یون Na+ را خارج و دو یون پتاسیم را وارد می‌کند.",
+        trapType: "تله جابجایی تعداد یون‌ها یا غلظت درون سلولی که معمولاً دانش‌آموزان در استرس آزمون اشتباه می‌کنند.",
+        difficulty: difficulty || "سخت", importance: "high",
+      },
+    ],
+    "شیمی": [
+      {
+        id: "Q-OFFLINE-CHEM-1", subject: "شیمی", title: "محلول‌ها و غلظت‌ها",
+        text: "در دمای معین غلظت یون هیدرونیوم در محلول اسیدی با pH برابر ۳ چند برابر غلظت آن در محلولی با pH برابر ۵ است؟",
+        options: ["۱۰۰ برابر", "۱۰ برابر", "۲ برابر", "۰.۰۱ برابر"],
+        correctIdx: 0,
+        explanation: "تفاوت pH برابر ۲ به معنی تفاوت غلظت ۱۰ به توان ۲ برابر یعنی ۱۰۰ برابر می‌باشد.",
+        trapType: "تله‌ی عکس پنداشتن نسبت غلظت با تغییرات یون هیدرونیوم در مقیاس لگاریتمی.",
+        difficulty: difficulty || "سخت", importance: "high",
+      },
+    ],
+    "ریاضی": [
+      {
+        id: "Q-OFFLINE-MATH-1", subject: "ریاضی", title: "مشتق و پیوستگی",
+        text: "کدام یک از جملات زیر درباره مشتق‌پذیری توابع در بازه مفروض همواره برقرار است؟",
+        options: [
+          "هر تابع پیوسته‌ای در بازه مفروض قطعا مشتق‌پذیر نیز هست.",
+          "هر تابع مشتق‌پذیری در بازه مفروض قطعا پیوسته است.",
+          "نقاط عطف تابع همواره دارای مشتق اول برابر صفر می‌باشند.",
+          "تابع پیوسته لزوما فاقد نقطه گوشه‌ای یا عطف می‌باشد.",
+        ],
+        correctIdx: 1,
+        explanation: "طبق قضیه اساسی حساب دیفرانسیل، شرط لازم برای مشتق‌پذیری یک تابع در یک نقطه، پیوسته بودن آن در آن نقطه است. اما عکس آن برقرار نیست.",
+        trapType: "استفاده غلط از عکس قضیه منطقی پیوستگی و مشتق‌پذیری.",
+        difficulty: difficulty || "متوسط", importance: "high",
+      },
+    ],
+    "فیزیک": [
+      {
+        id: "Q-OFFLINE-PHYS-1", subject: "فیزیک", title: "الکتریسیته و مدارها",
+        text: "با افزایش مقاومت متغیر در یک مدار ساده تک‌حلقه که دارای باتری با مقاومت درونی غیرصفر است، اختلاف پتانسیل دو سر باتری چگونه تغییر می‌کند؟",
+        options: ["کاهش می‌یابد.", "افزایش می‌یابد.", "تغییری نمی‌کند.", "ابتدا کاهش و سپس افزایش پیدا می‌کند."],
+        correctIdx: 1,
+        explanation: "فرمول پتانسیل ترمینال باتری V = E - ir است. با افزایش مقاومت خارجی، جریان کاهش یافته و پتانسیل ترمینال افزایش می‌یابد.",
+        trapType: "تله‌ی پنداشتن اینکه پتانسیل دو سر همواره با مقاومت خارجی رابطه عکس دارد.",
+        difficulty: difficulty || "سخت", importance: "high",
+      },
+    ],
+  };
+
+  const defaultQuestions = offlineFallbacks[subject] || [
+    {
+      id: "Q-OFFLINE-GEN-1", subject: subject || "عمومی", title: "مفهوم پایه و عارضه‌یابی",
+      text: `یک سوال تستی ارزشمند درباره مبحث (${customTopic || subject || "تحلیل تحصیلی"}) طراحی آزمون های شبیه‌ساز ترنم مهر.`,
+      options: [
+        "پالت کایزن و بهبود مستمر عادات ذهنی تستی",
+        "تمرکز صِرف روی تست زنی بدون تحلیل بهداشت روان",
+        "حذف دوره‌های مرور دوره‌ای مباحث پرضریب کنکور",
+        "کمال‌گرایی منفی در حل سوالات وقت‌گیر و تله‌دار",
+      ],
+      correctIdx: 0,
+      explanation: "سیستم کایزن ترنم مهر بر بهبود مداوم و تحلیل بهداشت روان تاکید دارد.",
+      trapType: "وسواس کمال‌گرایی در مدیریت تست‌ها", difficulty: "سخت", importance: "medium",
+    },
+  ];
+
+  try {
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) {
+      const selected = defaultQuestions[Math.floor(Math.random() * defaultQuestions.length)];
+      if (customTopic && selected.id === "Q-OFFLINE-GEN-1") {
+        selected.text = `یک سوال تستی ارزشمند درباره مبحث تخصصی (${customTopic}) منطبق بر آزمون های شبیه‌سازی کایزن درگاه ترنم مهر.`;
+      }
+      return json({
+        success: true, question: selected,
+        metadata: {
+          model: "Kaizen Local Logic Suite", mode: "offline", timestamp: new Date().toISOString(),
+          latencyMs: Math.round(performance.now() - start),
+          apiStatus: "هیچ کلید فعالی در پنل ادمین یافت نشد. برای تست زنده کلید اختصاصی خود را وارد کنید.",
+        },
+      }, 200, meta.headers);
+    }
+
+    const aiPrompt = `You are an elite, highly experienced question designer for the Iranian National College Entrance Exam (Konkur) for the subject "${subject || "زیست‌شناسی"}".
+Generate EXACTLY ONE high-quality, conceptual, and difficult multiple-choice test question in Persian.
+The question MUST cover the following precise topic: "${customTopic || "مفاهیم خلاقانه و پر بازده کتاب درسی"}".
+Focus on designing a difficult but logically flawless question with difficulty level: "${difficulty || "سخت"}".
+Include a strong psychological or conceptual test trap ("تله تستی") that matches high-yield school curriculum standards.
+
+You must respond with EXACTLY a valid JSON object matching this structure (do not wrap in markdown, use Persian language for user-facing values):
+{
+  "id": "Q-AI-${Math.floor(Math.random() * 9000 + 1000)}",
+  "subject": "${subject || "زیست‌شناسی"}",
+  "title": "A brief Persian title of the subtopic inside ${subject}",
+  "text": "The full Persian question, written in a clear, educational, standard Konkur style.",
+  "options": ["Persian Option 1", "Persian Option 2", "Persian Option 3", "Persian Option 4"],
+  "correctIdx": 0,
+  "explanation": "Extremely detailed Persian explanation.",
+  "trapType": "Explain the trap in Persian in 1 elegant sentence.",
+  "difficulty": "${difficulty || "سخت"}",
+  "importance": "high"
+}
+
+Verify that correctIdx is a valid number from 0 to 3 and references the actual correct option.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ role: "user", parts: [{ text: aiPrompt }] }],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const replyText = response.text?.trim() || "";
+    let questionObj: any;
+    try {
+      questionObj = JSON.parse(replyText);
+    } catch (_) {
+      const jsonMatch = replyText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) questionObj = JSON.parse(jsonMatch[0]);
+      else throw new Error("Failed to parse AI output as JSON: " + replyText.substring(0, 50));
+    }
+
+    if (!questionObj.title || !questionObj.text || !Array.isArray(questionObj.options) || questionObj.options.length < 4) {
+      throw new Error("Generated question structure was invalid.");
+    }
+
+    return json({
+      success: true, question: questionObj,
+      metadata: {
+        model: "Google Gemini 3.5-flash", mode: "live", timestamp: new Date().toISOString(),
+        latencyMs: Math.round(performance.now() - start), apiStatus: "ارتباط موفق زنده (Real-Time API)",
+      },
+    }, 200, meta.headers);
+  } catch (error: any) {
+    const selectedFallback = defaultQuestions[Math.floor(Math.random() * defaultQuestions.length)];
+    if (customTopic && selectedFallback.id === "Q-OFFLINE-GEN-1") {
+      selectedFallback.text = `یک سوال تستی ارزشمند درباره مبحث تخصصی (${customTopic}) منطبق بر آزمون های شبیه‌سازی کایزن درگاه ترنم مهر.`;
+    }
+    return json({
+      success: true, question: selectedFallback,
+      metadata: {
+        model: "Kaizen Local Simulator Mode", mode: "fallback", timestamp: new Date().toISOString(),
+        latencyMs: Math.round(performance.now() - start),
+        apiStatus: "انتقال خودکار به شبیه‌ساز پایدار: " + (error?.message || "خطای ارتباطی با API"),
+      },
+    }, 200, meta.headers);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Authentication (Cloudflare D1 + Web Crypto, no Node deps)
+ * -------------------------------------------------------------------------
+ * Routes:
+ *   POST /api/auth/register   {name,email,mobile,password,field,city,age,targetMajor}
+ *   POST /api/auth/login      {identifier,password}
+ *   POST /api/auth/otp-send   {mobile}
+ *   POST /api/auth/otp-verify {mobile,code}
+ *   GET  /api/auth/me
+ *   POST /api/auth/logout
+ *   GET  /api/auth/count
+ * ------------------------------------------------------------------------- */
+
+const SESSION_COOKIE = "taranom_session";
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+const OTP_TTL_MS = 1000 * 60 * 5; // 5 minutes
+
+interface UserRow {
+  id: string; email: string | null; mobile: string | null; name: string;
+  password_hash: string; password_salt: string; role: string; field: string;
+  grade: string | null; city: string | null; age: number | null; avatar: string | null;
+  target_major: string | null; created_at: string;
+}
+interface SessionRow { token: string; user_id: string; created_at: string; expires_at: string; }
+interface OtpRow { mobile: string; code: string; created_at: string; expires_at: string; }
+
+/** Minimal user-datastore interface so auth is testable without real D1. */
+interface AuthStore {
+  insertUser(u: UserRow): Promise<void>;
+  findUserByIdentifier(identifier: string): Promise<UserRow | null>;
+  findUserById(id: string): Promise<UserRow | null>;
+  countUsers(): Promise<number>;
+  upsertSession(s: SessionRow): Promise<void>;
+  findSession(token: string): Promise<SessionRow | null>;
+  deleteSession(token: string): Promise<void>;
+  upsertOtp(o: OtpRow): Promise<void>;
+  findOtp(mobile: string): Promise<OtpRow | null>;
+}
+
+/** D1-backed store (production). */
+class D1AuthStore implements AuthStore {
+  constructor(private db: any) {}
+  async insertUser(u: UserRow) {
+    await this.db.prepare(
+      "INSERT INTO users (id,email,mobile,name,password_hash,password_salt,role,field,grade,city,age,avatar,target_major,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(u.id, u.email, u.mobile, u.name, u.password_hash, u.password_salt, u.role, u.field, u.grade, u.city, u.age, u.avatar, u.target_major, u.created_at).run();
+  }
+  async findUserByIdentifier(identifier: string) {
+    return (await this.db.prepare("SELECT * FROM users WHERE email = ? OR mobile = ?").bind(identifier, identifier).first()) as UserRow | null;
+  }
+  async findUserById(id: string) {
+    return (await this.db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first()) as UserRow | null;
+  }
+  async countUsers() {
+    const r: any = await this.db.prepare("SELECT COUNT(*) as c FROM users").first();
+    return Number(r?.c || 0);
+  }
+  async upsertSession(s: SessionRow) {
+    await this.db.prepare("INSERT OR REPLACE INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)")
+      .bind(s.token, s.user_id, s.created_at, s.expires_at).run();
+  }
+  async findSession(token: string) {
+    return (await this.db.prepare("SELECT * FROM sessions WHERE token = ?").bind(token).first()) as SessionRow | null;
+  }
+  async deleteSession(token: string) {
+    await this.db.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
+  }
+  async upsertOtp(o: OtpRow) {
+    await this.db.prepare("INSERT OR REPLACE INTO otp_codes (mobile,code,created_at,expires_at) VALUES (?,?,?,?)")
+      .bind(o.mobile, o.code, o.created_at, o.expires_at).run();
+  }
+  async findOtp(mobile: string) {
+    return (await this.db.prepare("SELECT * FROM otp_codes WHERE mobile = ?").bind(mobile).first()) as OtpRow | null;
+  }
+}
+
+function getAuthStore(env: Env): AuthStore | null {
+  return env.DB ? new D1AuthStore(env.DB) : null;
+}
+
+/* --- Web Crypto helpers --- */
+const textEncoder = new TextEncoder();
+
+function bufToHex(buf: ArrayBuffer): string {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function hexToBuf(hex: string): Uint8Array {
+  const arr = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return arr;
+}
+function randomToken(byteLen = 32): string {
+  const arr = new Uint8Array(byteLen);
+  crypto.getRandomValues(arr);
+  return bufToHex(arr.buffer);
+}
+function generateOtp(): string {
+  const arr = new Uint8Array(3);
+  crypto.getRandomValues(arr);
+  const n = ((arr[0] << 16) | (arr[1] << 8) | arr[2]) % 1000000;
+  return n.toString().padStart(6, "0");
+}
+
+async function pbkdf2(password: string, saltHex: string): Promise<string> {
+  const keyMaterial = await crypto.subtle.importKey("raw", textEncoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: hexToBuf(saltHex), iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    256
+  );
+  return bufToHex(bits);
+}
+async function hashPassword(password: string): Promise<{ hash: string; salt: string }> {
+  const salt = randomToken(16);
+  const hash = await pbkdf2(password, salt);
+  return { hash, salt };
+}
+/** Constant-time-ish string compare. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/* --- cookie + mapping helpers --- */
+function getCookie(req: Request, name: string): string | null {
+  const header = req.headers.get("cookie") || "";
+  const match = header.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]+)"));
+  return match ? match[1] : null;
+}
+function sessionCookieHeader(token: string, maxAgeMs: number, sameSite = "Lax"): string {
+  return `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${Math.floor(maxAgeMs / 1000)}; SameSite=${sameSite}; Secure`;
+}
+function clearSessionCookieHeader(): string {
+  return `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`;
+}
+
+/** Map a DB user row to the Student shape the frontend expects. */
+function userToStudent(u: UserRow): any {
+  return {
+    id: u.id,
+    name: u.name,
+    code: u.mobile || u.email || u.id,
+    field: (u.field as any) || "tajrobi",
+    grade: u.grade || "پایه دوازدهم",
+    city: u.city || undefined,
+    age: u.age || undefined,
+    email: u.email || undefined,
+    mobile: u.mobile || undefined,
+    avatar: u.avatar || undefined,
+    accountRole: (u.role as any) || "student",
+  };
+}
+
+/** Resolve the session user from a request, or null. */
+async function getSessionUser(req: Request, store: AuthStore): Promise<UserRow | null> {
+  const token = getCookie(req, SESSION_COOKIE);
+  if (!token) return null;
+  const sess = await store.findSession(token);
+  if (!sess) return null;
+  if (Date.now() > new Date(sess.expires_at).getTime()) return null;
+  return store.findUserById(sess.user_id);
+}
+
+function authUnavailable(): Response {
+  return json({ error: "Database not configured", message: "D1 is not bound. Run `wrangler d1 create` and set database_id in wrangler.json." }, 503);
+}
+
+async function authRegister(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const name = (body?.name || "").toString().trim();
+  const mobile = (body?.mobile || "").toString().trim();
+  const email = (body?.email || "").toString().trim().toLowerCase();
+  const password = (body?.password || "").toString();
+  const field = ["tajrobi", "riazi", "ensani"].includes(body?.field) ? body.field : "tajrobi";
+
+  if (!name) return json({ error: "نام الزامی است." }, 400);
+  if (mobile && !/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست (مثال: 09123456789)." }, 400);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "ایمیل معتبر نیست." }, 400);
+  if (!mobile && !email) return json({ error: "ایمیل یا شماره موبایل الزامی است." }, 400);
+  if (password.length < 6) return json({ error: "رمز عبور باید حداقل ۶ کاراکتر باشد." }, 400);
+
+  if (mobile) {
+    const existingMobile = await store.findUserByIdentifier(mobile);
+    if (existingMobile) return json({ error: "این شماره موبایل قبلاً ثبت شده است. وارد شوید." }, 409);
+  }
+  if (email) {
+    const existingEmail = await store.findUserByIdentifier(email);
+    if (existingEmail) return json({ error: "این ایمیل قبلاً ثبت شده است. وارد شوید." }, 409);
+  }
+
+  const { hash, salt } = await hashPassword(password);
+  const user: UserRow = {
+    id: randomToken(12),
+    email: email || null,
+    mobile: mobile || null,
+    name,
+    password_hash: hash,
+    password_salt: salt,
+    role: "student",
+    field,
+    grade: "پایه دوازدهم",
+    city: (body?.city || "").toString().trim() || null,
+    age: body?.age ? Number(body.age) : null,
+    avatar: null,
+    target_major: (body?.targetMajor || "").toString().trim() || null,
+    created_at: new Date().toISOString(),
+  };
+  await store.insertUser(user);
+
+  const token = randomToken(32);
+  const now = Date.now();
+  await store.upsertSession({ token, user_id: user.id, created_at: new Date(now).toISOString(), expires_at: new Date(now + SESSION_TTL_MS).toISOString() });
+
+  return json({ user: userToStudent(user) }, 200, { "Set-Cookie": sessionCookieHeader(token, SESSION_TTL_MS) });
+}
+
+async function authLogin(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const identifier = (body?.identifier || "").toString().trim().toLowerCase();
+  const password = (body?.password || "").toString();
+  if (!identifier || !password) return json({ error: "ایمیل/موبایل و رمز عبور الزامی است." }, 400);
+
+  const user = await store.findUserByIdentifier(identifier);
+  if (!user || !user.password_hash) return json({ error: "کاربری با این مشخصات یافت نشد." }, 404);
+
+  const candidate = await pbkdf2(password, user.password_salt);
+  if (!safeEqual(candidate, user.password_hash)) return json({ error: "رمز عبور نادرست است." }, 401);
+
+  const token = randomToken(32);
+  const now = Date.now();
+  await store.upsertSession({ token, user_id: user.id, created_at: new Date(now).toISOString(), expires_at: new Date(now + SESSION_TTL_MS).toISOString() });
+
+  return json({ user: userToStudent(user) }, 200, { "Set-Cookie": sessionCookieHeader(token, SESSION_TTL_MS) });
+}
+
+async function authOtpSend(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const mobile = (body?.mobile || "").toString().trim();
+  if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست." }, 400);
+
+  const code = generateOtp();
+  const now = Date.now();
+  await store.upsertOtp({ mobile, code, created_at: new Date(now).toISOString(), expires_at: new Date(now + OTP_TTL_MS).toISOString() });
+
+  // NOTE: No real SMS provider configured. We return the code so testing works.
+  // In production, wire Kavenegar/Farapayamak here and do NOT return the code.
+  const existing = await store.findUserByIdentifier(mobile);
+  return json({
+    sent: true,
+    devCode: code,
+    message: existing ? "کد ورود ارسال شد." : "کد ورود ارسال شد. (شماره جدید = ثبت‌نام خودکار)",
+  });
+}
+
+async function authOtpVerify(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const mobile = (body?.mobile || "").toString().trim();
+  const code = (body?.code || "").toString().trim();
+  if (!/^09\d{9}$/.test(mobile) || !code) return json({ error: "موبایل و کد الزامی است." }, 400);
+
+  const otp = await store.findOtp(mobile);
+  if (!otp || Date.now() > new Date(otp.expires_at).getTime()) return json({ error: "کد منقضی شده است. دوباره درخواست کنید." }, 410);
+  if (!safeEqual(otp.code, code)) return json({ error: "کد نادرست است." }, 401);
+
+  let user = await store.findUserByIdentifier(mobile);
+  if (!user) {
+    user = {
+      id: randomToken(12), email: null, mobile, name: "کاربر " + mobile.slice(-4),
+      password_hash: "", password_salt: "", role: "student", field: "tajrobi",
+      grade: "پایه دوازدهم", city: null, age: null, avatar: null, target_major: null,
+      created_at: new Date().toISOString(),
+    };
+    await store.insertUser(user);
+  }
+
+  const token = randomToken(32);
+  const now = Date.now();
+  await store.upsertSession({ token, user_id: user.id, created_at: new Date(now).toISOString(), expires_at: new Date(now + SESSION_TTL_MS).toISOString() });
+
+  return json({ user: userToStudent(user) }, 200, { "Set-Cookie": sessionCookieHeader(token, SESSION_TTL_MS) });
+}
+
+async function authMe(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const user = await getSessionUser(ctx.request, store);
+  if (!user) return json({ user: null }, 200);
+  return json({ user: userToStudent(user) }, 200);
+}
+
+async function authLogout(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const token = getCookie(ctx.request, SESSION_COOKIE);
+  if (token) await store.deleteSession(token);
+  return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookieHeader() });
+}
+
+async function authCount(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const count = await store.countUsers();
+  return json({ count }, 200);
+}
+
+/* ----------------------------------------------------------------------------
+ * Body parsing + router
+ * ------------------------------------------------------------------------- */
+
+async function readJson(req: Request): Promise<any> {
+  try {
+    const text = await req.text();
+    if (!text) return {};
+    return JSON.parse(text);
+  } catch (_) {
+    return {};
+  }
+}
+
+export async function handleRequest(request: Request, env: Env, pathArray: string[]): Promise<Response> {
+  const ctx: Ctx = { request, env, params: { path: pathArray } };
+  const method = request.method;
+  const pathArr = Array.isArray(pathArray) ? pathArray : (pathArray ? [pathArray as any] : []);
+  const path = pathArr.join("/").replace(/^\/+|\/+$/g, "");
+  const meta = new RespMeta();
+
+  const isGet = method === "GET";
+  const isPost = method === "POST";
+
+  try {
+    // --- auth routes (require D1) ---
+    if (path.startsWith("auth/")) {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      switch (path) {
+        case "auth/register":       if (isPost) return await authRegister(ctx, store); break;
+        case "auth/login":          if (isPost) return await authLogin(ctx, store); break;
+        case "auth/otp-send":       if (isPost) return await authOtpSend(ctx, store); break;
+        case "auth/otp-verify":     if (isPost) return await authOtpVerify(ctx, store); break;
+        case "auth/me":             if (isGet)  return await authMe(ctx, store); break;
+        case "auth/logout":         if (isPost) return await authLogout(ctx, store); break;
+        case "auth/count":          if (isGet)  return await authCount(ctx, store); break;
+      }
+      return json({ error: "Method not allowed", path, method }, 405);
+    }
+
+    switch (path) {
+      case "health":
+        if (isGet) return health();
+        break;
+      case "ai-status":
+        if (isGet) return aiStatus(ctx.env);
+        break;
+      case "motivational":
+        if (isGet) return await motivational(ctx, meta);
+        break;
+      case "chat":
+        if (isPost) return await chat(ctx, meta);
+        break;
+      case "goal-insight":
+        if (isPost) return await goalInsight(ctx, meta);
+        break;
+      case "analyze-exam":
+        if (isPost) return await analyzeExam(ctx, meta);
+        break;
+      case "psychology-analysis":
+        if (isPost) return await psychologyAnalysis(ctx, meta);
+        break;
+      case "payment/request":
+        if (isPost) return await paymentRequest(ctx);
+        break;
+      case "payment/verify":
+        if (isGet) return await paymentVerify(ctx);
+        break;
+      case "test-ai-connection":
+        if (isPost) return await testAiConnection(ctx, meta);
+        break;
+      case "sandbox":
+        if (isPost) return await sandbox(ctx);
+        break;
+      case "test-provider":
+        if (isPost) return await testProvider(ctx);
+        break;
+      case "generate-quiz-question":
+        if (isPost) return await generateQuizQuestion(ctx, meta);
+        break;
+      default:
+        return json({ error: "Not found", path }, 404);
+    }
+    // method not allowed for this path
+    return json({ error: "Method not allowed", path, method }, 405);
+  } catch (error: any) {
+    return json({ error: "Internal server error", message: error?.message || String(error), path }, 500);
+  }
+}

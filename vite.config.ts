@@ -11,6 +11,21 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Raise the limit + split vendor libs into cacheable chunks (perf).
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            'chart-vendor': ['recharts'],
+            'icons-vendor': ['lucide-react'],
+            'pdf-vendor': ['jspdf', 'jszip'],
+          },
+        },
+      },
+    },
     server: {
       // Completely disable HMR or fallback gracefully with no overlay and silent client connection
       hmr: process.env.DISABLE_HMR === 'true' ? false : {
