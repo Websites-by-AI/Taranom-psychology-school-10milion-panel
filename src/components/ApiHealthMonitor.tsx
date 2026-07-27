@@ -20,8 +20,9 @@ export function ApiHealthMonitor({ role }: { role?: string | null }) {
   const [showOverlay, setShowOverlay] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryResult, setRetryResult] = useState<{ success: boolean; msg: string } | null>(null);
-  const [serverStatus, setServerStatus] = useState<{ hasServerGeminiKey?: boolean; hasServerOpenRouterKey?: boolean } | null>(null);
-  
+  const [serverStatus, setServerStatus] = useState<{ hasServerGeminiKey?: boolean; hasServerOpenRouterKey?: boolean; hasHuggingFace?: boolean; hasWandb?: boolean; huggingFaceModel?: string } | null>(null);
+  const [hfStatus, setHfStatus] = useState<any>(null);
+
   // Quick API Key setup inside the overlay
   const [showKeyForm, setShowKeyForm] = useState(false);
   const [inputKey, setInputKey] = useState("");
@@ -31,13 +32,15 @@ export function ApiHealthMonitor({ role }: { role?: string | null }) {
   useEffect(() => {
     fetch("/api/ai-status")
       .then(r => r.json())
-      .then(data => {
-        setServerStatus(data);
-      })
-      .catch(err => {
-        console.warn("Could not retrieve keys status in ApiHealthMonitor:", err);
-      });
+      .then(data => setServerStatus(data))
+      .catch(err => console.warn("Could not retrieve keys status in ApiHealthMonitor:", err));
   }, []);
+
+  // Hugging Face Llama + W&B + RAG connection (admin status bar)
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/hf-status").then(r => r.ok ? r.json() : null).then(d => { if (d) setHfStatus(d); }).catch(() => {});
+  }, [isAdmin]);
 
   useEffect(() => {
     // Sync starting key with what is currently stored
@@ -181,6 +184,15 @@ export function ApiHealthMonitor({ role }: { role?: string | null }) {
                 <Activity size={12} className="text-slate-400" />
                 <span className="font-mono text-slate-400 text-[11px]">API: STABLE</span>
               </div>
+          )}
+
+          {hfStatus && (
+            <div className="flex items-center gap-1.5 pr-2 mr-1 border-r border-slate-700/40" title={hfStatus.huggingface ? hfStatus.huggingface.note : ""}>
+              <span className="text-[11px]">🤗</span>
+              <span className="font-mono text-[11px] font-bold text-emerald-400">{hfStatus.huggingface && hfStatus.huggingface.configured ? "LLAMA" : "—"}</span>
+              {hfStatus.wandb && hfStatus.wandb.configured && <span className="text-[10px] font-bold text-indigo-300">✦W&B</span>}
+              {hfStatus.examRag && hfStatus.examRag.configured && <span className="text-[10px] font-bold text-purple-300">RAG</span>}
+            </div>
           )}
         </div>
       )}

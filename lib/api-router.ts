@@ -38,6 +38,14 @@ export interface Env {
   APP_URL?: string;
   /** Cloudflare D1 database binding (set in wrangler.json). */
   DB?: any;
+  /** Hugging Face token for Llama / open models (Inference Providers). */
+  HF_TOKEN?: string;
+  /** Hugging Face model id, e.g. "meta-llama/Llama-3.2-3B-Instruct". */
+  HF_MODEL?: string;
+  /** Weights & Biases API key (training metrics in admin). */
+  WANDB_API_KEY?: string;
+  /** URL of the education exam-RAG static Space. */
+  EXAM_RAG_URL?: string;
 }
 
 interface Ctx {
@@ -110,6 +118,7 @@ function getRequestKeys(req: Request, body: any, env: Env): string[] {
     k1, k2, k3, k4, k5, k6,
     env.OPENROUTER_API_KEY,
     env.GEMINI_API_KEY,
+    env.HF_TOKEN,
   ].filter(
     (k): k is string =>
       !!k && typeof k === "string" && k.trim() !== "" && k !== "undefined" && k !== "null" &&
@@ -131,6 +140,7 @@ function getProviderNameForKey(key: string, req: Request): string {
     }
   } catch (_) {}
   if (key.startsWith("sk-or-")) return "OpenRouter";
+  if (key.startsWith("hf_")) return "Hugging Face (Llama)";
   if (key.startsWith("sk-")) return "OpenAI/Anthropic";
   return "Google Gemini";
 }
@@ -284,19 +294,71 @@ async function openRouterGenerate(apiKey: string, params: any): Promise<{ text: 
   return { text: data.choices?.[0]?.message?.content || "" };
 }
 
+/** Call a Llama / open model via the Hugging Face Inference Providers router
+ *  (OpenAI-compatible chat completions endpoint). */
+async function huggingFaceGenerate(apiKey: string, model: string, params: any): Promise<{ text: string }> {
+  const messages: any[] = [];
+
+  if (params.config?.systemInstruction) {
+    const si = params.config.systemInstruction;
+    const text = typeof si === "string" ? si : (si?.parts?.map((p: any) => p.text).join("\n") || "");
+    if (text) messages.push({ role: "system", content: text });
+  }
+
+  if (typeof params.contents === "string") {
+    messages.push({ role: "user", content: params.contents });
+  } else if (Array.isArray(params.contents)) {
+    for (const content of params.contents) {
+      let text = "";
+      if (content.parts) {
+        for (const p of content.parts) { if (p.text) text += p.text + "\n"; }
+      }
+      const role = content.role === "model" ? "assistant" : "user";
+      messages.push({ role, content: text.trim() });
+    }
+  }
+
+  const url = `https://router.huggingface.co/hf-inference/models/${model}/v1/chat/completions`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: params.config?.maxOutputTokens || 1024,
+      temperature: params.config?.temperature ?? 0.7,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    const e: any = new Error(`HuggingFace error ${resp.status}: ${errorText}`);
+    e.status = resp.status;
+    throw e;
+  }
+  const data: any = await resp.json();
+  return { text: data.choices?.[0]?.message?.content || "" };
+}
+
 /** Adapter exposing the same .models / .chats surface the handlers expect. */
 class AIAdapter {
   apiKey: string;
   isOpenRouter: boolean;
+  isHuggingFace: boolean;
   constructor(apiKey: string) {
     this.apiKey = apiKey.trim();
     this.isOpenRouter = this.apiKey.startsWith("sk-or-");
+    this.isHuggingFace = this.apiKey.startsWith("hf_");
   }
 
   get models() {
     return {
       generateContent: async (params: any) => {
         if (this.isOpenRouter) return openRouterGenerate(this.apiKey, params);
+        if (this.isHuggingFace) {
+          const hfModel = (params.model && params.model.includes("/")) ? params.model : (params.hfModel || "meta-llama/Llama-3.2-3B-Instruct");
+          return huggingFaceGenerate(this.apiKey, hfModel, params);
+        }
         return geminiGenerate(this.apiKey, params);
       },
     };
@@ -313,12 +375,14 @@ class AIAdapter {
             const contents = [...history, { role: "user", parts: [{ text: userMessage }] }];
             const paramsForCall: any = {
               model: params.model,
+              hfModel: params.hfModel,
               contents,
             };
             if (params.config?.systemInstruction) {
               paramsForCall.config = { systemInstruction: params.config.systemInstruction };
             }
             if (this.isOpenRouter) return openRouterGenerate(this.apiKey, paramsForCall);
+            if (this.isHuggingFace) return huggingFaceGenerate(this.apiKey, params.hfModel || "meta-llama/Llama-3.2-3B-Instruct", paramsForCall);
             return geminiGenerate(this.apiKey, paramsForCall);
           },
         };
@@ -336,10 +400,19 @@ class AIFallbackWrapper {
   private keys: string[];
   private req: Request;
   private meta: RespMeta;
-  constructor(keys: string[], req: Request, meta: RespMeta) {
+  private hfModel: string;
+  constructor(keys: string[], req: Request, meta: RespMeta, hfModel?: string) {
     this.keys = keys;
     this.req = req;
     this.meta = meta;
+    this.hfModel = hfModel || "meta-llama/Llama-3.2-3B-Instruct";
+  }
+
+  /** Pick the right model for a given key. */
+  private modelForKey(key: string): any {
+    if (key.startsWith("hf_")) return this.hfModel;
+    if (key.startsWith("sk-or-")) return undefined;
+    return "gemini-3.5-flash";
   }
 
   get models() {
@@ -349,7 +422,7 @@ class AIFallbackWrapper {
         for (let i = 0; i < this.keys.length; i++) {
           const key = this.keys[i];
           try {
-            const effectiveParams = { ...params, model: "gemini-3.5-flash" };
+            const effectiveParams = { ...params, model: this.modelForKey(key), hfModel: this.hfModel };
             const ai = new AIAdapter(key);
             const result = await ai.models.generateContent(effectiveParams);
             const providerName = getProviderNameForKey(key, this.req);
@@ -375,7 +448,8 @@ class AIFallbackWrapper {
             try {
               const paramsClone = {
                 ...params,
-                model: "gemini-3.5-flash",
+                model: this.modelForKey(key),
+                hfModel: this.hfModel,
                 history: params.history ? [...params.history] : [],
               };
               const ai = new AIAdapter(key);
@@ -400,7 +474,7 @@ function getAI(req: Request, body: any, env: Env, meta: RespMeta): AIFallbackWra
   try {
     const keys = getRequestKeys(req, body, env);
     if (keys.length === 0) return null;
-    return new AIFallbackWrapper(keys, req, meta);
+    return new AIFallbackWrapper(keys, req, meta, env.HF_MODEL);
   } catch (_) {
     return null;
   }
@@ -634,6 +708,56 @@ function aiStatus(env: Env): Response {
     models: ["gemini-3.5-flash", "gemini-3.1-pro-preview"],
     hasServerGeminiKey: !!(env.GEMINI_API_KEY && env.GEMINI_API_KEY.includes("AIzaSy") && env.GEMINI_API_KEY.length > 10),
     hasServerOpenRouterKey: !!(env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY.startsWith("sk-") && env.OPENROUTER_API_KEY.length > 10),
+    hasHuggingFace: !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10),
+    huggingFaceModel: env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct",
+    hasWandb: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10),
+    examRagUrl: env.EXAM_RAG_URL || null,
+  });
+}
+
+/** Hugging Face + W&B + RAG status for the admin panel. */
+async function hfStatus(env: Env): Promise<Response> {
+  const hasHf = !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10);
+  const model = env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct";
+  let inferenceOk = false;
+  let inferenceError = "";
+  let inferenceSample = "";
+  let inferenceMs: number | null = null;
+
+  if (hasHf) {
+    const start = performance.now();
+    try {
+      const resp = await fetch(`https://router.huggingface.co/hf-inference/models/${model}/v1/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.HF_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "سلام" }], max_tokens: 12 }),
+      });
+      inferenceMs = Math.round(performance.now() - start);
+      if (resp.ok) {
+        const data: any = await resp.json();
+        inferenceSample = data.choices?.[0]?.message?.content || "";
+        inferenceOk = true;
+      } else {
+        inferenceError = `HTTP ${resp.status}: ${(await resp.text()).slice(0, 160)}`;
+      }
+    } catch (e: any) {
+      inferenceError = e?.message || String(e);
+    }
+  }
+
+  return json({
+    huggingface: {
+      configured: hasHf,
+      tokenMasked: hasHf ? `${env.HF_TOKEN!.substring(0, 6)}...${env.HF_TOKEN!.slice(-4)}` : null,
+      model,
+      inferenceReachable: inferenceOk,
+      inferenceError,
+      inferenceSample: inferenceSample.slice(0, 200),
+      inferenceMs,
+      note: !hasHf ? "HF_TOKEN not set" : (!inferenceOk ? "Token may lack 'Make calls to Inference Providers' permission, or model is gated." : "Live Llama inference OK"),
+    },
+    wandb: { configured: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10), project: "taranom-exam-rag" },
+    examRag: { configured: !!env.EXAM_RAG_URL, url: env.EXAM_RAG_URL || null },
   });
 }
 
@@ -1596,6 +1720,9 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         break;
       case "ai-status":
         if (isGet) return aiStatus(ctx.env);
+        break;
+      case "hf-status":
+        if (isGet) return await hfStatus(ctx.env);
         break;
       case "motivational":
         if (isGet) return await motivational(ctx, meta);
