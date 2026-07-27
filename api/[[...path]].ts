@@ -12,7 +12,7 @@ import { handleRequest, Env } from "../lib/api-router";
 
 // Force the Edge runtime so the same Web-API code (Request/Response/crypto) works.
 export const config = {
-  runtime: "edge" as const,
+  runtime: "edge",
 };
 
 export default async function handler(request: Request): Promise<Response> {
