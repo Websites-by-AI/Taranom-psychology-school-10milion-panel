@@ -88,10 +88,12 @@ function answer(btn, r) {
     ? `<span class="ok">✅ آفرین! پاسخ درست بود</span>`
     : `<span class="no">❌ پاسخ نادرست — پاسخ صحیح سبز است</span>`;
   $("#revealBody").innerHTML = `
-    <div class="meta-row"><span>📅 سال/منبع:</span><b>${escapeHtml(r.source || "کنکور " + faNum(r.year))}</b></div>
-    <div class="meta-row"><span>📚 درس:</span><b>${escapeHtml(r.subject)} (${escapeHtml(r.field)})</b></div>
+    <div class="meta-row"><span>📅 سال و نوبت:</span><b>${escapeHtml(r.source || "کنکور " + faNum(r.year))} — نوبت ${escapeHtml(r.session || "-")}</b></div>
+    <div class="meta-row"><span>📚 درس و رشته:</span><b>${escapeHtml(r.subject)} (${escapeHtml(r.field)})</b></div>
+    <div class="meta-row"><span>📖 مبحث:</span><b>${escapeHtml(r.chapter || "-")}</b></div>
     <div class="meta-row"><span>⚡ درجه سختی:</span><b>${escapeHtml(r.difficulty || "-")}</b></div>
     <div class="meta-row"><span>🏷️ نوع سوال:</span><b>${escapeHtml(r.type || "-")}</b></div>
+    <div class="meta-row"><span>📑 دفترچه / شماره:</span><b>${escapeHtml(r.booklet || "-")} — سوال ${faNum(r.qNo || 0)}</b></div>
     ${r.trapType ? `<div class="meta-row"><span>⚠️ تله تستی:</span><b>${escapeHtml(r.trapType)}</b></div>` : ""}
     ${r.explanation ? `<p class="expl">💡 ${escapeHtml(r.explanation)}</p>` : ""}`;
   $("#reveal").style.display = "block";

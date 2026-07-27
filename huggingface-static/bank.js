@@ -77,7 +77,7 @@ function renderStructure(struct) {
     let h = `<div class="struct-total">مجموع اختصاصی: <b>${faNum(t.totalSpecific)}</b> سوال</div>`;
     for (const b of t.booklets) {
       h += `<div class="booklet"><div class="booklet-name">${escapeHtml(b.name)} <span>(${faNum(b.time)} دقیقه)</span></div>`;
-      for (const s of b.subjects) h += `<div class="booklet-subj"><span>${escapeHtml(s.subject)}</span><b>${faNum(s.count)} سوال</b></div>`;
+      for (const s of b.subjects) h += `<div class="booklet-subj"><span>${escapeHtml(s.subject)}</span><b>${faNum(s.count)} سوال ${s.coefficient && s.coefficient !== "-" ? "(ضریب " + faNum(s.coefficient) + ")" : ""}</b></div>`;
       h += `</div>`;
     }
     return h;

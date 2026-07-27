@@ -28,7 +28,8 @@
         "subjects": [
           {
             "subject": "زیست‌شناسی",
-            "count": 45
+            "count": 45,
+            "coefficient": 9
           }
         ]
       },
@@ -38,11 +39,13 @@
         "subjects": [
           {
             "subject": "فیزیک",
-            "count": 30
+            "count": 30,
+            "coefficient": 5
           },
           {
             "subject": "شیمی",
-            "count": 35
+            "count": 35,
+            "coefficient": 9
           }
         ]
       },
@@ -52,11 +55,13 @@
         "subjects": [
           {
             "subject": "ریاضی",
-            "count": 30
+            "count": 30,
+            "coefficient": 2
           },
           {
             "subject": "زمین‌شناسی",
-            "count": 15
+            "count": 15,
+            "coefficient": 2
           }
         ]
       }
@@ -90,7 +95,8 @@
         "subjects": [
           {
             "subject": "ریاضی",
-            "count": 40
+            "count": 40,
+            "coefficient": 9
           }
         ]
       },
@@ -100,11 +106,13 @@
         "subjects": [
           {
             "subject": "فیزیک",
-            "count": 35
+            "count": 35,
+            "coefficient": 9
           },
           {
             "subject": "شیمی",
-            "count": 30
+            "count": 30,
+            "coefficient": 5
           }
         ]
       },
@@ -114,11 +122,13 @@
         "subjects": [
           {
             "subject": "زمین‌شناسی",
-            "count": 15
+            "count": 15,
+            "coefficient": 2
           },
           {
             "subject": "حسابان",
-            "count": 20
+            "count": 20,
+            "coefficient": 9
           }
         ]
       }
@@ -152,31 +162,38 @@
         "subjects": [
           {
             "subject": "ادبیات و زبان فارسی تخصصی",
-            "count": 35
+            "count": 35,
+            "coefficient": 9
           },
           {
             "subject": "عربی تخصصی",
-            "count": 25
+            "count": 25,
+            "coefficient": 9
           },
           {
             "subject": "تاریخ",
-            "count": 15
+            "count": 15,
+            "coefficient": 3
           },
           {
             "subject": "جغرافیا",
-            "count": 15
+            "count": 15,
+            "coefficient": 3
           },
           {
             "subject": "فلسفه و منطق",
-            "count": 20
+            "count": 20,
+            "coefficient": 5
           },
           {
             "subject": "جامعه‌شناسی",
-            "count": 15
+            "count": 15,
+            "coefficient": 3
           },
           {
             "subject": "اقتصاد",
-            "count": 15
+            "count": 15,
+            "coefficient": 2
           }
         ]
       }
