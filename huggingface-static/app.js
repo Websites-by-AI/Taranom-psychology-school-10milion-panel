@@ -130,6 +130,27 @@ function saveHistory(q, top) {
   } catch (e) {}
 }
 
+// ---------- Konkur structure (official question counts per subject) ----------
+function renderStructure(struct) {
+  const el = $("#structure");
+  if (!el || !struct) return;
+  // Show تجربی by default (most common)
+  const t = struct.tajrobi;
+  const fa = (n) => faNum(n);
+  let html = `<div class="struct-head">ساختار رسمی کنکور تجربی — ${fa(t.totalSpecific)} سوال اختصاصی (+ عمومی)</div>`;
+  html += `<div class="struct-booklets">`;
+  for (const b of t.booklets) {
+    html += `<div class="booklet"><div class="booklet-name">${escapeHtml(b.name)} <span>(${fa(b.time)} دقیقه)</span></div>`;
+    for (const s of b.subjects) {
+      html += `<div class="booklet-subj"><span>${escapeHtml(s.subject)}</span><b>${fa(s.count)} سوال</b></div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  html += `<div class="struct-note">بانک فعلی: ${fa(EXAMS.length)} سوال نمونه — قابل گسترش با Colab تا پوشش کامل هر درس</div>`;
+  el.innerHTML = html;
+}
+
 // ---------- Init ----------
 async function init() {
   try {
@@ -143,6 +164,11 @@ async function init() {
   } catch (e) {
     $("#loading").innerHTML = `⚠️ خطا در بارگذاری پایگاه دانش: ${escapeHtml(e.message)}`;
   }
+  // Load Konkur structure (best-effort)
+  try {
+    const sres = await fetch("data/konkur-structure.json", { cache: "no-store" });
+    if (sres.ok) renderStructure(await sres.json());
+  } catch (_) {}
   $("#btn").addEventListener("click", doSearch);
   $("#query").addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "Enter") doSearch(); });
 }

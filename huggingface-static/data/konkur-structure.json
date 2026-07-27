@@ -1,0 +1,185 @@
+{
+  "tajrobi": {
+    "name": "علوم تجربی",
+    "totalSpecific": 155,
+    "totalSpecificTime": 180,
+    "general": [
+      {
+        "subject": "دین و زندگی",
+        "count": 25
+      },
+      {
+        "subject": "زبان و ادبیات فارسی",
+        "count": 25
+      },
+      {
+        "subject": "عربی",
+        "count": 15
+      },
+      {
+        "subject": "زبان انگلیسی",
+        "count": 25
+      }
+    ],
+    "booklets": [
+      {
+        "name": "دفترچه ۱",
+        "time": 45,
+        "subjects": [
+          {
+            "subject": "زیست‌شناسی",
+            "count": 45
+          }
+        ]
+      },
+      {
+        "name": "دفترچه ۲",
+        "time": 75,
+        "subjects": [
+          {
+            "subject": "فیزیک",
+            "count": 30
+          },
+          {
+            "subject": "شیمی",
+            "count": 35
+          }
+        ]
+      },
+      {
+        "name": "دفترچه ۳",
+        "time": 60,
+        "subjects": [
+          {
+            "subject": "ریاضی",
+            "count": 30
+          },
+          {
+            "subject": "زمین‌شناسی",
+            "count": 15
+          }
+        ]
+      }
+    ]
+  },
+  "riazi": {
+    "name": "ریاضی و فیزیک",
+    "totalSpecific": 140,
+    "general": [
+      {
+        "subject": "دین و زندگی",
+        "count": 25
+      },
+      {
+        "subject": "فارسی",
+        "count": 25
+      },
+      {
+        "subject": "عربی",
+        "count": 15
+      },
+      {
+        "subject": "انگلیسی",
+        "count": 25
+      }
+    ],
+    "booklets": [
+      {
+        "name": "دفترچه ۱",
+        "time": 60,
+        "subjects": [
+          {
+            "subject": "ریاضی",
+            "count": 40
+          }
+        ]
+      },
+      {
+        "name": "دفترچه ۲",
+        "time": 75,
+        "subjects": [
+          {
+            "subject": "فیزیک",
+            "count": 35
+          },
+          {
+            "subject": "شیمی",
+            "count": 30
+          }
+        ]
+      },
+      {
+        "name": "دفترچه ۳",
+        "time": 45,
+        "subjects": [
+          {
+            "subject": "زمین‌شناسی",
+            "count": 15
+          },
+          {
+            "subject": "حسابان",
+            "count": 20
+          }
+        ]
+      }
+    ]
+  },
+  "ensani": {
+    "name": "علوم انسانی",
+    "totalSpecific": 155,
+    "general": [
+      {
+        "subject": "دین و زندگی",
+        "count": 25
+      },
+      {
+        "subject": "فارسی",
+        "count": 25
+      },
+      {
+        "subject": "عربی",
+        "count": 25
+      },
+      {
+        "subject": "انگلیسی",
+        "count": 25
+      }
+    ],
+    "booklets": [
+      {
+        "name": "دفترچه اختصاصی",
+        "time": 180,
+        "subjects": [
+          {
+            "subject": "ادبیات و زبان فارسی تخصصی",
+            "count": 35
+          },
+          {
+            "subject": "عربی تخصصی",
+            "count": 25
+          },
+          {
+            "subject": "تاریخ",
+            "count": 15
+          },
+          {
+            "subject": "جغرافیا",
+            "count": 15
+          },
+          {
+            "subject": "فلسفه و منطق",
+            "count": 20
+          },
+          {
+            "subject": "جامعه‌شناسی",
+            "count": 15
+          },
+          {
+            "subject": "اقتصاد",
+            "count": 15
+          }
+        ]
+      }
+    ]
+  }
+}

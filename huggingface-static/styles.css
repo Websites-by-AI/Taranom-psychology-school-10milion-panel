@@ -21,6 +21,17 @@ body { font-family:'Vazirmatn',Tahoma,sans-serif; background:linear-gradient(180
 .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:20px; }
 .chip { font-size:11px; font-weight:700; background:#eef2ff; color:#4338ca; padding:5px 12px; border-radius:999px; border:1px solid #e0e7ff; }
 
+/* Konkur structure */
+.structure { margin-bottom:20px; }
+.struct-head { font-size:13px; font-weight:900; color:#334155; margin-bottom:10px; }
+.struct-booklets { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+.booklet { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px; }
+.booklet-name { font-size:12px; font-weight:900; color:var(--indigo); margin-bottom:8px; padding-bottom:6px; border-bottom:1px dashed #e2e8f0; }
+.booklet-name span { font-size:10px; font-weight:700; color:var(--slate); }
+.booklet-subj { display:flex; justify-content:space-between; font-size:11px; padding:3px 0; color:#475569; }
+.booklet-subj b { color:var(--emerald); font-weight:800; }
+.struct-note { font-size:11px; color:var(--slate); margin-top:10px; font-style:italic; }
+
 /* Loading */
 .loading { display:flex; align-items:center; justify-content:center; gap:10px; color:var(--slate); padding:30px; font-weight:600; }
 .spinner { width:18px; height:18px; border:3px solid #e2e8f0; border-top-color:var(--indigo); border-radius:50%; animation:spin .8s linear infinite; }
