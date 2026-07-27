@@ -95,10 +95,35 @@ function answer(btn, r) {
     <div class="meta-row"><span>🏷️ نوع سوال:</span><b>${escapeHtml(r.type || "-")}</b></div>
     <div class="meta-row"><span>📑 دفترچه / شماره:</span><b>${escapeHtml(r.booklet || "-")} — سوال ${faNum(r.qNo || 0)}</b></div>
     ${r.trapType ? `<div class="meta-row"><span>⚠️ تله تستی:</span><b>${escapeHtml(r.trapType)}</b></div>` : ""}
-    ${r.explanation ? `<p class="expl">💡 ${escapeHtml(r.explanation)}</p>` : ""}`;
+    ${r.explanation ? `<p class="expl">💡 ${escapeHtml(r.explanation)}</p>` : ""}
+    ${r.sourceUrl ? `<a href="${escapeHtml(r.sourceUrl)}" target="_blank" rel="noopener" class="src-link">🔗 مشاهده دفترچه اصلی این سال (منبع رسمی)</a>` : ""}
+    <div class="ai-box">
+      <button id="aiBtn" class="ai-btn">🤖 بررسی هوش مصنوعی این سوال</button>
+      <div id="aiOut" class="ai-out"></div>
+    </div>`;
   $("#reveal").style.display = "block";
   $("#nextBtn").style.display = "inline-block";
   $("#nextBtn").textContent = IDX + 1 >= POOL.length ? "دیدن نتیجه 🏁" : "سوال بعدی ←";
+  const aiBtn = $("#aiBtn");
+  if (aiBtn) aiBtn.addEventListener("click", () => runAiAnalysis(r));
+}
+
+const AI_API = "https://taranom-psychology-school-10milion.vercel.app/api/chat";
+async function runAiAnalysis(r) {
+  const out = $("#aiOut");
+  const btn = $("#aiBtn");
+  if (!out) return;
+  btn.disabled = true;
+  out.innerHTML = '<span class="ai-loading">🤖 هوش مصنوعی در حال بررسی سوال است...</span>';
+  try {
+    const prompt = "این یک سوال کنکور است. تحلیل علمی کوتاه، دلیل درستی پاسخ صحیح و تله‌های تستی آن را به فارسی بگو.\n\nسوال: " + r.question + "\nگزینه‌ها: " + (r.options || []).join(" | ") + "\nپاسخ صحیح: " + r.answer;
+    const resp = await fetch(AI_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: prompt, history: [] }) });
+    const data = await resp.json();
+    out.innerHTML = '<div class="ai-result">' + escapeHtml(data.reply || "پاسخی دریافت نشد.") + '</div>';
+  } catch (err) {
+    out.innerHTML = '<div class="ai-error">⚠️ هوش مصنوعی در دسترس نیست (احتمالاً کلید تنظیم نشده). از توضیح بالا استفاده کنید.</div>';
+  }
+  btn.disabled = false;
 }
 
 function next() { IDX++; renderQuestion(); }
