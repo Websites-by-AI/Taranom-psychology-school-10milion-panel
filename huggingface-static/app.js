@@ -130,6 +130,76 @@ function saveHistory(q, top) {
   } catch (e) {}
 }
 
+// ---------- Bulk import (so you can add ALL your real Konkur questions) ----------
+const STORAGE_IMPORTED = "taranom_exam_rag_imported_v1";
+
+function loadImported() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_IMPORTED) || "[]"); } catch (_) { return []; }
+}
+function saveImported(arr) { localStorage.setItem(STORAGE_IMPORTED, JSON.stringify(arr)); }
+
+function normalizeImportItem(r) {
+  if (!r || typeof r !== "object") return null;
+  const q = (r.question || r.text || "").toString().trim();
+  if (!q) return null;
+  return {
+    id: r.id || "q-imp-" + Math.random().toString(36).slice(2, 8),
+    question: q,
+    options: Array.isArray(r.options) ? r.options : [],
+    answer: r.answer || (Array.isArray(r.options) ? r.options[0] : ""),
+    year: r.year || "نامشخص", subject: r.subject || "عمومی", field: r.field || "عمومی",
+    source: r.source || "افزوده‌شده توسط شما", explanation: r.explanation || "",
+  };
+}
+
+// Parse JSON array OR pipe-lines: سوال | گزینه‌ها(با،) | پاسخ | سال | درس | رشته
+function parseImport(text) {
+  const t = (text || "").trim();
+  if (!t) return { items: [], error: "متن خالی است." };
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t);
+      if (!Array.isArray(arr)) return { items: [], error: "یک آرایه JSON لازم است." };
+      return { items: arr.map(normalizeImportItem).filter(Boolean), error: "" };
+    } catch (e) { return { items: [], error: "JSON نامعتبر: " + e.message }; }
+  }
+  const lines = t.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  const items = [];
+  for (const line of lines) {
+    const parts = line.split("|").map((p) => p.trim());
+    if (parts.length < 2) continue;
+    const [question, optsStr, answer, year, subject, field] = parts;
+    const options = optsStr.split(/[،,؛;]/).map((o) => o.trim()).filter(Boolean);
+    items.push({
+      id: "q-imp-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+      question, options, answer: answer || options[0],
+      year: year || "نامشخص", subject: subject || "عمومی", field: field || "عمومی",
+      source: "افزوده‌شده توسط شما", explanation: "",
+    });
+  }
+  if (items.length === 0) return { items: [], error: "هیچ سوال معتبری شناسایی نشد." };
+  return { items, error: "" };
+}
+
+function doImport() {
+  const res = parseImport($("#importText").value || "");
+  if (res.error) { $("#importMsg").textContent = "❌ " + res.error; return; }
+  const merged = loadImported().concat(res.items);
+  saveImported(merged);
+  EXAMS = window.__BASE_EXAMS.concat(merged);
+  INDEX = buildIndex(EXAMS);
+  renderStats();
+  $("#importMsg").textContent = "✅ " + res.items.length + " سوال اضافه شد. مجموع بانک: " + faNum(EXAMS.length) + " سوال.";
+  $("#importText").value = "";
+}
+function doImportFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { $("#importText").value = String(reader.result || ""); };
+  reader.readAsText(file);
+}
+
 // ---------- Konkur structure (official question counts per subject) ----------
 function renderStructure(struct) {
   const el = $("#structure");
@@ -156,6 +226,10 @@ async function init() {
   try {
     const res = await fetch(DATA_URL, { cache: "no-store" });
     EXAMS = await res.json();
+    window.__BASE_EXAMS = EXAMS;
+    // Merge any questions the user has imported (persisted in localStorage)
+    const imported = loadImported();
+    if (imported.length) EXAMS = EXAMS.concat(imported);
     INDEX = buildIndex(EXAMS);
     renderStats();
     $("#ready").style.display = "flex";
@@ -171,6 +245,11 @@ async function init() {
   } catch (_) {}
   $("#btn").addEventListener("click", doSearch);
   $("#query").addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "Enter") doSearch(); });
+  // Import handlers
+  const ib = $("#importBtn");
+  if (ib) ib.addEventListener("click", doImport);
+  const ifile = $("#importFile");
+  if (ifile) ifile.addEventListener("change", doImportFile);
 }
 
 document.addEventListener("DOMContentLoaded", init);

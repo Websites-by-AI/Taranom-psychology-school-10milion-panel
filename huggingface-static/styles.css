@@ -76,5 +76,17 @@ button#btn:active { transform:scale(.98); }
 
 /* Footer */
 .foot { text-align:center; padding:24px 16px; color:var(--slate); font-size:12px; }
+
+/* Bulk import */
+.import-box { background:#fff; border:2px dashed #c7d2fe; border-radius:18px; padding:20px; margin-bottom:24px; }
+.import-head { font-size:15px; font-weight:900; color:var(--indigo); margin-bottom:8px; }
+.import-note { font-size:11.5px; color:#475569; margin-bottom:12px; line-height:1.9; }
+.import-note code { background:#f1f5f9; padding:1px 5px; border-radius:5px; font-size:10.5px; direction:ltr; display:inline-block; }
+.import-file { font-size:11px; margin-bottom:10px; }
+#importText { width:100%; padding:12px; border:2px solid #e2e8f0; border-radius:12px; font-family:inherit; font-size:13px; resize:vertical; direction:rtl; }
+#importText:focus { outline:none; border-color:var(--indigo); }
+#importBtn { margin-top:10px; padding:11px; background:var(--emerald); color:#fff; border:none; border-radius:12px; font-family:inherit; font-size:14px; font-weight:800; cursor:pointer; }
+#importBtn:active { transform:scale(.98); }
+.import-msg { margin-top:10px; font-size:12.5px; font-weight:700; min-height:18px; }
 .foot a { color:var(--indigo); text-decoration:none; }
 .foot a:hover { text-decoration:underline; }

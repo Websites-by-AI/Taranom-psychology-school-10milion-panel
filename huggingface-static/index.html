@@ -44,6 +44,18 @@
       <div id="headline" class="headline"></div>
       <div id="results" class="results"></div>
     </div>
+
+    <!-- Bulk import: add your real Konkur questions -->
+    <div class="import-box">
+      <div class="import-head">➕ افزودن سوال (Import گروهی)</div>
+      <p class="import-note">سوالات واقعی کنکور خود را اینجا اضافه کنید. دو فرمت پشتیبانی می‌شود:<br>
+        <b>۱) JSON:</b> یک آرایه مثل <code>[{"question":"...","options":["a","b","c","d"],"answer":"a","year":"1403","subject":"زیست‌شناسی","field":"تجربی"}]</code><br>
+        <b>۲) خطی (با | جدا کنید):</b> سوال | گزینه۱،گزینه۲،گزینه۳،گزینه۴ | پاسخ | سال | درس | رشته</p>
+      <input type="file" id="importFile" accept=".json,.csv,.txt" class="import-file" />
+      <textarea id="importText" rows="5" placeholder='یک سوال در هر خط، مثلاً:&#10;در فتوسنتز واکنش نوری کجا رخ می‌دهد؟ | تیلاکوئید،استروما،آوند،میتوکندری | تیلاکوئید | 1401 | زیست‌شناسی | تجربی'></textarea>
+      <button id="importBtn">➕ افزودن به بانک</button>
+      <div id="importMsg" class="import-msg"></div>
+    </div>
   </main>
 
   <footer class="foot">
