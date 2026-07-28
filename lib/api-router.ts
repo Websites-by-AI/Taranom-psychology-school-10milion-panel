@@ -331,18 +331,30 @@ async function huggingFaceGenerate(apiKey: string, model: string, params: any): 
     "meta-llama/Llama-3.2-3B-Instruct:featherless-ai",
   ];
   const tryModels = [model, ...HF_FALLBACK_MODELS.filter((m) => m !== model)];
+  const HF_TIMEOUT_MS = 12000; // سقف زمانی هر مدل تا مدلِ کند سریع‌تر به بعدی برسد
   let lastErr: any = null;
   for (const m of tryModels) {
-    const resp = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: m,
-        messages,
-        max_tokens: params.config?.maxOutputTokens || 1024,
-        temperature: params.config?.temperature ?? 0.7,
-      }),
-    });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), HF_TIMEOUT_MS);
+    let resp: Response;
+    try {
+      resp = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: m,
+          messages,
+          max_tokens: params.config?.maxOutputTokens || 512,
+          temperature: params.config?.temperature ?? 0.7,
+        }),
+        signal: ctrl.signal,
+      });
+    } catch (netErr: any) {
+      clearTimeout(timer);
+      lastErr = netErr; // تایم‌اوت/شبکه → مدل بعدی
+      continue;
+    }
+    clearTimeout(timer);
     if (resp.ok) {
       const data: any = await resp.json();
       const text = data.choices?.[0]?.message?.content || "";
