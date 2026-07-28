@@ -40,7 +40,7 @@ export interface Env {
   DB?: any;
   /** Hugging Face token for Llama / open models (Inference Providers). */
   HF_TOKEN?: string;
-  /** Hugging Face model id, e.g. "meta-llama/Llama-3.2-3B-Instruct". */
+  /** Hugging Face model id, e.g. "meta-llama/Llama-3.2-3B-Instruct:featherless-ai". */
   HF_MODEL?: string;
   /** Weights & Biases API key (training metrics in admin). */
   WANDB_API_KEY?: string;
@@ -318,7 +318,7 @@ async function huggingFaceGenerate(apiKey: string, model: string, params: any): 
     }
   }
 
-  const url = `https://router.huggingface.co/hf-inference/models/${model}/v1/chat/completions`;
+  const url = `https://router.huggingface.co/v1/chat/completions`;  // OpenAI-compatible (router)
   const resp = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -356,7 +356,7 @@ class AIAdapter {
       generateContent: async (params: any) => {
         if (this.isOpenRouter) return openRouterGenerate(this.apiKey, params);
         if (this.isHuggingFace) {
-          const hfModel = (params.model && params.model.includes("/")) ? params.model : (params.hfModel || "meta-llama/Llama-3.2-3B-Instruct");
+          const hfModel = (params.model && params.model.includes("/")) ? params.model : (params.hfModel || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai");
           return huggingFaceGenerate(this.apiKey, hfModel, params);
         }
         return geminiGenerate(this.apiKey, params);
@@ -382,7 +382,7 @@ class AIAdapter {
               paramsForCall.config = { systemInstruction: params.config.systemInstruction };
             }
             if (this.isOpenRouter) return openRouterGenerate(this.apiKey, paramsForCall);
-            if (this.isHuggingFace) return huggingFaceGenerate(this.apiKey, params.hfModel || "meta-llama/Llama-3.2-3B-Instruct", paramsForCall);
+            if (this.isHuggingFace) return huggingFaceGenerate(this.apiKey, params.hfModel || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai", paramsForCall);
             return geminiGenerate(this.apiKey, paramsForCall);
           },
         };
@@ -405,7 +405,7 @@ class AIFallbackWrapper {
     this.keys = keys;
     this.req = req;
     this.meta = meta;
-    this.hfModel = hfModel || "meta-llama/Llama-3.2-3B-Instruct";
+    this.hfModel = hfModel || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai";
   }
 
   /** Pick the right model for a given key. */
@@ -709,7 +709,7 @@ function aiStatus(env: Env): Response {
     hasServerGeminiKey: !!(env.GEMINI_API_KEY && env.GEMINI_API_KEY.includes("AIzaSy") && env.GEMINI_API_KEY.length > 10),
     hasServerOpenRouterKey: !!(env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY.startsWith("sk-") && env.OPENROUTER_API_KEY.length > 10),
     hasHuggingFace: !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10),
-    huggingFaceModel: env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct",
+    huggingFaceModel: env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai",
     hasWandb: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10),
     examRagUrl: env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space",
   });
@@ -718,7 +718,7 @@ function aiStatus(env: Env): Response {
 /** Hugging Face + W&B + RAG status for the admin panel. */
 async function hfStatus(env: Env): Promise<Response> {
   const hasHf = !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10);
-  const model = env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct";
+  const model = env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai";
   let inferenceOk = false;
   let inferenceError = "";
   let inferenceSample = "";
@@ -727,7 +727,7 @@ async function hfStatus(env: Env): Promise<Response> {
   if (hasHf) {
     const start = performance.now();
     try {
-      const resp = await fetch(`https://router.huggingface.co/hf-inference/models/${model}/v1/chat/completions`, {
+      const resp = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${env.HF_TOKEN}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, messages: [{ role: "user", content: "سلام" }], max_tokens: 12 }),
