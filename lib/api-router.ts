@@ -38,6 +38,12 @@ export interface Env {
   APP_URL?: string;
   /** Cloudflare D1 database binding (set in wrangler.json). */
   DB?: any;
+  /** Cloudflare account id — enables D1 access over REST on non-CF hosts (Vercel). */
+  CF_ACCOUNT_ID?: string;
+  /** D1 database id used with CF_ACCOUNT_ID + D1_API_TOKEN for REST access. */
+  D1_DATABASE_ID?: string;
+  /** Cloudflare API token with D1 Edit permission (REST queries on Vercel). */
+  D1_API_TOKEN?: string;
   /** Hugging Face token for Llama / open models (Inference Providers). */
   HF_TOKEN?: string;
   /** Hugging Face model id, e.g. "meta-llama/Llama-3.2-3B-Instruct:featherless-ai". */
@@ -1463,8 +1469,74 @@ class D1AuthStore implements AuthStore {
   }
 }
 
+/**
+ * D1-backed store over the Cloudflare D1 REST API.
+ * Lets a non-Cloudflare host (e.g. Vercel) read/write the SAME D1 database used on
+ * Cloudflare Pages, so auth works identically on both platforms.
+ * Active only when CF_ACCOUNT_ID + D1_DATABASE_ID + D1_API_TOKEN are set.
+ */
+class D1RestAuthStore implements AuthStore {
+  constructor(private env: Env) {}
+
+  private async query(sql: string, params: any[] = []): Promise<any[]> {
+    const url = `https://api.cloudflare.com/client/v4/accounts/${this.env.CF_ACCOUNT_ID}/d1/database/${this.env.D1_DATABASE_ID}/query`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.env.D1_API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sql, params }),
+    });
+    const data: any = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.success) {
+      throw new Error(`D1 REST ${resp.status}: ${JSON.stringify(data.errors || data).slice(0, 220)}`);
+    }
+    return (data?.result?.[0]?.results as any[]) || [];
+  }
+
+  async insertUser(u: UserRow) {
+    await this.query(
+      "INSERT INTO users (id,email,mobile,name,password_hash,password_salt,role,field,grade,city,age,avatar,target_major,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      [u.id, u.email, u.mobile, u.name, u.password_hash, u.password_salt, u.role, u.field, u.grade, u.city, u.age, u.avatar, u.target_major, u.created_at]
+    );
+  }
+  async findUserByIdentifier(identifier: string) {
+    const rows = await this.query("SELECT * FROM users WHERE email = ? OR mobile = ?", [identifier, identifier]);
+    return (rows[0] as UserRow) || null;
+  }
+  async findUserById(id: string) {
+    const rows = await this.query("SELECT * FROM users WHERE id = ?", [id]);
+    return (rows[0] as UserRow) || null;
+  }
+  async countUsers() {
+    const rows = await this.query("SELECT COUNT(*) as c FROM users");
+    return Number(rows[0]?.c || 0);
+  }
+  async upsertSession(s: SessionRow) {
+    await this.query("INSERT OR REPLACE INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)", [s.token, s.user_id, s.created_at, s.expires_at]);
+  }
+  async findSession(token: string) {
+    const rows = await this.query("SELECT * FROM sessions WHERE token = ?", [token]);
+    return (rows[0] as SessionRow) || null;
+  }
+  async deleteSession(token: string) {
+    await this.query("DELETE FROM sessions WHERE token = ?", [token]);
+  }
+  async upsertOtp(o: OtpRow) {
+    await this.query("INSERT OR REPLACE INTO otp_codes (mobile,code,created_at,expires_at) VALUES (?,?,?,?)", [o.mobile, o.code, o.created_at, o.expires_at]);
+  }
+  async findOtp(mobile: string) {
+    const rows = await this.query("SELECT * FROM otp_codes WHERE mobile = ?", [mobile]);
+    return (rows[0] as OtpRow) || null;
+  }
+}
+
 function getAuthStore(env: Env): AuthStore | null {
-  return env.DB ? new D1AuthStore(env.DB) : null;
+  // Cloudflare Pages: native D1 binding.
+  if (env.DB) return new D1AuthStore(env.DB);
+  // Any host (e.g. Vercel) without a D1 binding: reach the SAME D1 database via REST.
+  if (env.CF_ACCOUNT_ID && env.D1_DATABASE_ID && env.D1_API_TOKEN) {
+    return new D1RestAuthStore(env);
+  }
+  return null;
 }
 
 /* --- Web Crypto helpers --- */
