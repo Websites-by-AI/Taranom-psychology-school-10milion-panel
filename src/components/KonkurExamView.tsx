@@ -1,18 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Student } from "../types";
 import { ExternalLink, FileQuestion, LibraryBig, NotebookPen } from "lucide-react";
 
 /**
  * KonkurExamView — بانک سؤالات و شبیه‌ساز کنکور
  *
- * این تب، ابزارهای RAG (شناسایی سؤال / بانک سؤالات / آزمون تمرینی) که روی
- * Hugging Face Space مستقر شده‌اند را داخل خودِ سایت اصلی جاسازی (embed) می‌کند
- * تا دانش‌آموز بدون ترک سایت بتواند تمرین کند.
+ * هر ابزار RAG آدرس اختصاصی خودش را دارد:
+ *   /konkur            → (پیش‌فرض) آزمون تمرینی
+ *   /konkur/practice   → آزمون تمرینی
+ *   /konkur/bank       → بانک سؤالات
+ *   /konkur/identifier → شناسایی سؤال
  *
- * منبع داده‌ها: sosa123454321/taranom-exam-rag (Space ایستا روی HF)
+ * ابزارها داخل سایت (با iframe) جاسازی می‌شوند تا دانش‌آموز بدون خروج تمرین کند.
+ * منبع داده‌ها: sosa123454321/taranom-exam-rag (Space ایستا روی Hugging Face).
  */
 
-// آدرس زندهٔ Space تثبیت‌شده (همین مقدار روی Vercel به‌صورت EXAM_RAG_URL هم ست می‌شود)
 const EXAM_RAG_BASE = "https://sosa123454321-taranom-exam-rag.static.hf.space";
 
 type ToolId = "practice" | "bank" | "identifier";
@@ -54,12 +57,23 @@ const TOOLS: Tool[] = [
 ];
 
 export default function KonkurExamView({ student }: { student?: Student }) {
-  const [tool, setTool] = useState<ToolId>("practice");
+  const location = useLocation();
+  const navigate = useNavigate();
   const [iframeLoaded, setIframeLoaded] = useState(false);
 
+  // ابزار از روی آدرس انتخاب می‌شود: /konkur/practice → "practice"
+  const segment = (location.pathname.split("/")[2] || "").toLowerCase();
+  const tool: ToolId = TOOLS.find((t) => t.id === segment)?.id ?? "practice";
   const active = TOOLS.find((t) => t.id === tool)!;
   const activeUrl = EXAM_RAG_BASE + active.path;
   const ActiveIcon = active.icon;
+
+  const goTo = (id: ToolId) => navigate(`/konkur/${id}`);
+
+  // با تعویض ابزار، قاب دوباره لود شود
+  useEffect(() => {
+    setIframeLoaded(false);
+  }, [tool]);
 
   return (
     <div className="RTL max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6" style={{ direction: "rtl" }}>
@@ -85,7 +99,7 @@ export default function KonkurExamView({ student }: { student?: Student }) {
         </div>
       </div>
 
-      {/* انتخاب ابزار */}
+      {/* انتخاب ابزار (هر کدام آدرس جدا دارد) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {TOOLS.map((t) => {
           const Icon = t.icon;
@@ -93,10 +107,7 @@ export default function KonkurExamView({ student }: { student?: Student }) {
           return (
             <button
               key={t.id}
-              onClick={() => {
-                setTool(t.id);
-                setIframeLoaded(false);
-              }}
+              onClick={() => goTo(t.id)}
               className={`text-right rounded-2xl p-4 border-2 transition-all duration-200 ${
                 isActive
                   ? "border-amber-500 bg-amber-50 shadow-md shadow-amber-500/10"
@@ -110,6 +121,7 @@ export default function KonkurExamView({ student }: { student?: Student }) {
                 <span className={`font-black text-sm ${isActive ? "text-amber-700" : "text-slate-800"}`}>{t.label}</span>
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">{t.desc}</p>
+              <p className="mt-1.5 text-[10px] text-slate-300 font-mono truncate" dir="ltr">/konkur/{t.id}</p>
             </button>
           );
         })}
@@ -124,7 +136,7 @@ export default function KonkurExamView({ student }: { student?: Student }) {
             </span>
             <div className="min-w-0">
               <div className="font-black text-sm text-slate-800 truncate">{active.label}</div>
-              <div className="text-[10px] text-slate-400 truncate font-mono">{activeUrl}</div>
+              <div className="text-[10px] text-slate-400 truncate font-mono" dir="ltr">{activeUrl}</div>
             </div>
           </div>
           <a
@@ -162,8 +174,7 @@ export default function KonkurExamView({ student }: { student?: Student }) {
         <ul className="list-disc pr-5 space-y-1">
           <li>شناسایی سؤال، بانک و آزمون تمرینی کاملاً داخل همین سایت کار می‌کنند و به اینترنت نیاز دارند.</li>
           <li>
-            دکمهٔ «تحلیل هوش مصنوعی» داخل آزمون، فقط در صورت فعال‌بودن اجازهٔ Inference Providers در توکن Hugging Face کار می‌کند؛
-            در غیر این صورت پاسخ صحیح و اطلاعات سؤال بدون تحلیل AI نمایش داده می‌شوند.
+            دکمهٔ «تحلیل هوش مصنوعی» داخل آزمون، اکنون با مدل Llama (Hugging Face) به‌صورت زنده کار می‌کند.
           </li>
           <li>سؤالات بانک نمونهٔ ساختاریافتهٔ کنکور هستند؛ برای افزودن سؤال بیشتر از ابزار Import داخل بانک استفاده کنید.</li>
         </ul>
