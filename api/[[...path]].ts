@@ -31,8 +31,11 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   const url = new URL(request.url);
-  // Strip the leading "/api/" so the router sees e.g. "health" or "auth/login".
-  const clean = url.pathname.replace(/^\/api\/?/, "").replace(/^\/+|\/+$/g, "");
+  // Vercel rewrites nest /api/* -> /api?_p=<original path> (see vercel.json).
+  // Prefer the explicit _p param; fall back to the pathname for direct hits.
+  const qp = url.searchParams.get("_p");
+  const clean = (qp != null ? qp : url.pathname.replace(/^\/api\/?/, ""))
+    .replace(/^\/+|\/+$/g, "");
   const pathArray = clean ? clean.split("/") : [];
 
   // process.env is available on the Vercel Edge runtime for project env vars.
