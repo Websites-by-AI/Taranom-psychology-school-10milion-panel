@@ -16,7 +16,7 @@ import WelcomeTourPortal from "./components/WelcomeTourPortal";
 import MainFooter from "./components/MainFooter";
 import ProfileSettingsView from "./components/ProfileSettingsView";
 import ViewFactory, { RoleType, ALLOWED_VIEWS_BY_ROLE } from "./components/ViewFactory";
-import { Brain, Settings, Database, Home, Lock } from "lucide-react";
+import { Brain, Settings, Database, Home, Lock, LibraryBig } from "lucide-react";
 import SmartNotifications, { getRoleBannerAlert } from "./components/SmartNotifications";
 import FocusChallengeOverlay from "./components/FocusChallengeOverlay";
 import AiCircuitBreaker from "./components/AiCircuitBreaker";
@@ -209,6 +209,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "metacognition", label: "تحلیل یادگیری", icon: Sparkles },
       { id: "counseling", label: "انتخاب رشته", icon: GraduationCap },
       { id: "historical-db", label: "بانک اطلاعات کنکور", icon: Database },
+      { id: "konkur", label: "بانک سؤالات کنکور", icon: LibraryBig },
       { id: "admin", label: "تنظیمات", icon: Shield },
       { id: "study-planner", label: "میز مطالعه", icon: BookOpen },
       { id: "smart-stress-trainer", label: "شبیه‌ساز آزمون", icon: Zap },
@@ -221,6 +222,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "psychology", label: "وضعیت روحی", icon: Brain },
       { id: "counseling", label: "تخمین رتبه", icon: GraduationCap },
       { id: "historical-db", label: "اطلاعات کنکور", icon: Database },
+      { id: "konkur", label: "بانک سؤالات", icon: LibraryBig },
       { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     counselor: [
@@ -251,14 +253,14 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     student: [
       { title: "🏠 خانه", items: ["dashboard", "welcome", "study-planner"] },
       { title: "📅 برنامه‌ریزی", items: ["schedule", "counseling"] },
-      { title: "✍️ تمرین و آزمون", items: ["quiz", "traps", "smart-stress-trainer"] },
+      { title: "✍️ تمرین و آزمون", items: ["quiz", "traps", "smart-stress-trainer", "konkur"] },
       { title: "📊 کارنامه‌ام", items: ["report", "progress", "psychology"] },
       { title: "💬 مربی هوشمند", items: ["counselor"] },
       { title: "⋯ بیشتر", items: ["manova", "metacognition", "historical-db", "admin"] }
     ],
     parent: [
       { title: "پیشخوان", items: ["welcome", "parents", "manova"] },
-      { title: "گزارش‌های فرزند", items: ["report", "psychology", "counseling", "historical-db"] },
+      { title: "گزارش‌های فرزند", items: ["report", "psychology", "counseling", "historical-db", "konkur"] },
       { title: "تنظیمات", items: ["admin"] }
     ],
     counselor: [

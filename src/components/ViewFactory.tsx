@@ -21,6 +21,7 @@ const ParentsView = lazy(() => import("./ParentsView"));
 const CounselorDashboardView = lazy(() => import("./CounselorDashboardView"));
 const TeacherDashboardView = lazy(() => import("./TeacherDashboardView"));
 const StudyDashboardView = lazy(() => import("./StudyDashboardView"));
+const KonkurExamView = lazy(() => import("./KonkurExamView"));
 
 export type RoleType = "student" | "parent" | "admin" | "counselor" | "teacher";
 
@@ -41,11 +42,11 @@ export const ALLOWED_VIEWS_BY_ROLE: Record<RoleType, string[]> = {
   student: [
     "welcome", "dashboard", "manova", "report", "schedule", "counselor", 
     "progress", "traps", "quiz", "psychology", "metacognition", "counseling", 
-    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer"
+    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur"
   ],
   parent: [
     "welcome", "parents", "manova", "report", "psychology", "counseling", 
-    "historical-db", "shop", "blog", "contact"
+    "historical-db", "shop", "blog", "contact", "konkur"
   ],
   admin: [
     "welcome", "admin", "manova", "shop", "blog", "contact"
@@ -194,7 +195,9 @@ export default function ViewFactory({
     case "smart-stress-trainer":
       return <SmartStressTrainerView student={student} />;
     
-    case "admin":
+    case "konkur":
+      return <KonkurExamView student={student} />;
+        case "admin":
       return <AdminView student={student} onUpdateBrand={onUpdateBrand} />;
     
     case "parents":

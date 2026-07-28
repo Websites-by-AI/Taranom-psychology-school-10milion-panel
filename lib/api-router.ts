@@ -711,7 +711,7 @@ function aiStatus(env: Env): Response {
     hasHuggingFace: !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10),
     huggingFaceModel: env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct",
     hasWandb: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10),
-    examRagUrl: env.EXAM_RAG_URL || null,
+    examRagUrl: env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space",
   });
 }
 
@@ -757,7 +757,7 @@ async function hfStatus(env: Env): Promise<Response> {
       note: !hasHf ? "HF_TOKEN not set" : (!inferenceOk ? "Token may lack 'Make calls to Inference Providers' permission, or model is gated." : "Live Llama inference OK"),
     },
     wandb: { configured: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10), project: "taranom-exam-rag" },
-    examRag: { configured: !!env.EXAM_RAG_URL, url: env.EXAM_RAG_URL || null },
+    examRag: { configured: true, url: env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space" },
   });
 }
 
