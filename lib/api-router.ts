@@ -318,26 +318,41 @@ async function huggingFaceGenerate(apiKey: string, model: string, params: any): 
     }
   }
 
-  const url = `https://router.huggingface.co/v1/chat/completions`;  // OpenAI-compatible (router)
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: params.config?.maxOutputTokens || 1024,
-      temperature: params.config?.temperature ?? 0.7,
-    }),
-  });
-
-  if (!resp.ok) {
-    const errorText = await resp.text();
-    const e: any = new Error(`HuggingFace error ${resp.status}: ${errorText}`);
+  // مدل اصلی (از env) + زنجیرهٔ پشتیبان: اگر مدل روی ظرفیت نبود یا پشتیبانی نمی‌شد، مدل بعدی امتحان می‌شود.
+  const HF_FALLBACK_MODELS = [
+    "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
+    "Qwen/Qwen2.5-7B-Instruct:featherless-ai",
+    "meta-llama/Llama-3.2-3B-Instruct:featherless-ai",
+  ];
+  const tryModels = [model, ...HF_FALLBACK_MODELS.filter((m) => m !== model)];
+  let lastErr: any = null;
+  for (const m of tryModels) {
+    const resp = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: m,
+        messages,
+        max_tokens: params.config?.maxOutputTokens || 1024,
+        temperature: params.config?.temperature ?? 0.7,
+      }),
+    });
+    if (resp.ok) {
+      const data: any = await resp.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      if (text) return { text };
+      lastErr = new Error(`HuggingFace empty reply from ${m}`);
+      continue;
+    }
+    const errorText = await resp.text().catch(() => "");
+    const e: any = new Error(`HuggingFace error ${resp.status} (${m}): ${errorText}`);
     e.status = resp.status;
-    throw e;
+    lastErr = e;
+    // خطای احراز هویت → تلاش برای مدل‌های دیگر بی‌فایده است؛ همین حالا پرتاب کن.
+    if (resp.status === 401 || resp.status === 403) throw e;
+    // ۴xx (مدل پشتیبانی‌نشده) یا ۵xx/ظرفیت → مدل بعدی را امتحان کن.
   }
-  const data: any = await resp.json();
-  return { text: data.choices?.[0]?.message?.content || "" };
+  throw lastErr || new Error("HuggingFace: all models failed");
 }
 
 /** Adapter exposing the same .models / .chats surface the handlers expect. */
@@ -356,7 +371,7 @@ class AIAdapter {
       generateContent: async (params: any) => {
         if (this.isOpenRouter) return openRouterGenerate(this.apiKey, params);
         if (this.isHuggingFace) {
-          const hfModel = (params.model && params.model.includes("/")) ? params.model : (params.hfModel || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai");
+          const hfModel = (params.model && params.model.includes("/")) ? params.model : (params.hfModel || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai");
           return huggingFaceGenerate(this.apiKey, hfModel, params);
         }
         return geminiGenerate(this.apiKey, params);
@@ -382,7 +397,7 @@ class AIAdapter {
               paramsForCall.config = { systemInstruction: params.config.systemInstruction };
             }
             if (this.isOpenRouter) return openRouterGenerate(this.apiKey, paramsForCall);
-            if (this.isHuggingFace) return huggingFaceGenerate(this.apiKey, params.hfModel || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai", paramsForCall);
+            if (this.isHuggingFace) return huggingFaceGenerate(this.apiKey, params.hfModel || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai", paramsForCall);
             return geminiGenerate(this.apiKey, paramsForCall);
           },
         };
@@ -405,7 +420,7 @@ class AIFallbackWrapper {
     this.keys = keys;
     this.req = req;
     this.meta = meta;
-    this.hfModel = hfModel || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai";
+    this.hfModel = hfModel || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai";
   }
 
   /** Pick the right model for a given key. */
@@ -709,7 +724,7 @@ function aiStatus(env: Env): Response {
     hasServerGeminiKey: !!(env.GEMINI_API_KEY && env.GEMINI_API_KEY.includes("AIzaSy") && env.GEMINI_API_KEY.length > 10),
     hasServerOpenRouterKey: !!(env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY.startsWith("sk-") && env.OPENROUTER_API_KEY.length > 10),
     hasHuggingFace: !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10),
-    huggingFaceModel: env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai",
+    huggingFaceModel: env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
     hasWandb: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10),
     examRagUrl: env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space",
   });
@@ -718,7 +733,7 @@ function aiStatus(env: Env): Response {
 /** Hugging Face + W&B + RAG status for the admin panel. */
 async function hfStatus(env: Env): Promise<Response> {
   const hasHf = !!(env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_") && env.HF_TOKEN.length > 10);
-  const model = env.HF_MODEL || "meta-llama/Llama-3.2-3B-Instruct:featherless-ai";
+  const model = env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai";
   let inferenceOk = false;
   let inferenceError = "";
   let inferenceSample = "";
