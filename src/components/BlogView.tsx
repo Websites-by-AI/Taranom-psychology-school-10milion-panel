@@ -1,5 +1,45 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { BLOG_ARTICLES, BlogArticle, BlogArticleSection, findArticle } from "../data/blogArticles";
+
+/** تبدیل تاریخ شمسی ("۱۲ مرداد ۱۴۰۵") به ISO برای JSON-LD — تقریبی (بدون محاسبه کبیسه) */
+const FA_MONTHS = ["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
+function persianDateToISO(dateStr: string): string {
+  try {
+    const toEn = (t: string) => t.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
+    const parts = dateStr.trim().split(/\s+/);
+    const pd = parseInt(toEn(parts[0]), 10);
+    const pm = FA_MONTHS.indexOf(parts[1]) + 1;
+    const py = parseInt(toEn(parts[2]), 10);
+    if (!pd || pm < 1 || !py) return "";
+    const dayOfYear = pm <= 7 ? (pm - 1) * 31 + pd : 186 + (pm - 7) * 30 + pd;
+    const start = new Date(Date.UTC(py + 621, 2, 21)); // نوروز ≈ ۲۱ مارس
+    start.setUTCDate(start.getUTCDate() + (dayOfYear - 1));
+    return start.toISOString().slice(0, 10);
+  } catch (e) {
+    return "";
+  }
+}
+
+/** خواندن slug از مسیر /blog/:slug (برای URLهای قابل اشتراک) */
+function getPathSlug(): string | null {
+  try {
+    const m = window.location.pathname.match(/^\/blog\/(.+)$/);
+    if (m) {
+      const s = decodeURIComponent(m[1]);
+      if (findArticle(s)) return s;
+    }
+  } catch (e) {}
+  return null;
+}
+
+/** به‌روزرسانی آدرس مرورگر بدون ریلود */
+function pushBlogUrl(slug: string | null) {
+  try {
+    if (!window.location.pathname.startsWith("/blog")) return;
+    const url = slug ? `/blog/${encodeURIComponent(slug)}` : "/blog";
+    window.history.pushState({ blogSlug: slug }, "", url);
+  } catch (e) {}
+}
 
 // ثابت نگه داشتن کلاس‌های Tailwind (بدون ساخت رشته‌ای در runtime)
 const ACCENTS: Record<
@@ -53,9 +93,10 @@ interface BlogViewProps {
 }
 
 export default function BlogView({ onNavigate }: BlogViewProps) {
-  // Deep-link support: صفحه اول یا سایر ماژول‌ها می‌توانند قبل از ناوبری به وبلاگ
-  // یک slug در localStorage قرار دهند تا همان مقاله مستقیم باز شود.
+  // Deep-link: اولویت با URL (/blog/slug) سپس localStorage pending از صفحه اول
   const [activeSlug, setActiveSlug] = useState<string | null>(() => {
+    const fromPath = getPathSlug();
+    if (fromPath) return fromPath;
     try {
       const pending = localStorage.getItem("taranom_blog_pending_slug");
       if (pending) {
@@ -67,6 +108,78 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
   });
   const [categoryFilter, setCategoryFilter] = useState<string>("همه");
 
+  const active = activeSlug ? findArticle(activeSlug) : undefined;
+
+  /** باز/بستن مقاله + همگام‌سازی URL مرورگر */
+  const openArticle = (slug: string | null) => {
+    setActiveSlug(slug);
+    pushBlogUrl(slug);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // دکمه‌های back/forward مرورگر
+  useEffect(() => {
+    const onPop = () => setActiveSlug(getPathSlug());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // متا تگ داینامیک title + description برای سئو
+  const defaultsRef = React.useRef<{ title: string; desc: string } | null>(null);
+  useEffect(() => {
+    if (!defaultsRef.current) {
+      defaultsRef.current = {
+        title: document.title,
+        desc: document.querySelector('meta[name="description"]')?.getAttribute("content") || "",
+      };
+    }
+    if (active) {
+      document.title = `${active.title} | وبلاگ ترنم همدلی`;
+      let meta = document.querySelector('meta[name="description"]');
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "description");
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", active.excerpt.slice(0, 160));
+    } else if (defaultsRef.current) {
+      document.title = defaultsRef.current.title;
+      const meta = document.querySelector('meta[name="description"]');
+      if (meta) meta.setAttribute("content", defaultsRef.current.desc);
+    }
+  }, [activeSlug]);
+
+  // JSON-LD نوع Article برای رتبه‌بندی موتورهای جستجو
+  useEffect(() => {
+    const id = "taranom-blog-jsonld";
+    document.getElementById(id)?.remove();
+    if (active) {
+      const iso = persianDateToISO(active.date);
+      const ld: Record<string, unknown> = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: active.title,
+        description: active.excerpt,
+        inLanguage: "fa",
+        articleSection: active.category,
+        keywords: active.keywords.join("، "),
+        timeRequired: `PT${active.readMinutes}M`,
+        author: { "@type": "Organization", name: "تیم آموزش و مشاوره آکادمی ترنم همدلی" },
+        publisher: { "@type": "Organization", name: "آکادمی ترنم همدلی" },
+        mainEntityOfPage: `${window.location.origin}/blog/${active.slug}`,
+      };
+      if (iso) ld.datePublished = iso;
+      const el = document.createElement("script");
+      el.type = "application/ld+json";
+      el.id = id;
+      el.textContent = JSON.stringify(ld);
+      document.head.appendChild(el);
+    }
+    return () => {
+      document.getElementById(id)?.remove();
+    };
+  }, [activeSlug]);
+
   const categories = useMemo(
     () => ["همه", ...Array.from(new Set(BLOG_ARTICLES.map((a) => a.category)))],
     []
@@ -76,20 +189,34 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
     [categoryFilter]
   );
 
-  const active = activeSlug ? findArticle(activeSlug) : undefined;
-
   // -------------------------------------- Reading view (تک مقاله)
   if (active) {
     const acc = ACCENTS[active.accent];
     const related = BLOG_ARTICLES.filter((a) => a.slug !== active.slug).slice(0, 3);
+    const toc = active.sections
+      .map((s, i) => ({ heading: s.heading, index: i }))
+      .filter((x): x is { heading: string; index: number } => Boolean(x.heading));
     return (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8" style={{ direction: "rtl" }}>
-        <button
-          onClick={() => { setActiveSlug(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-          className="inline-flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-800 bg-white border border-slate-200 rounded-full px-4 py-2 shadow-sm transition"
-        >
-          → بازگشت به همه مقالات
-        </button>
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+          <button
+            onClick={() => openArticle(null)}
+            className="inline-flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-800 bg-white border border-slate-200 rounded-full px-4 py-2 shadow-sm transition"
+          >
+            → بازگشت به همه مقالات
+          </button>
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/blog/${active.slug}`;
+              if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+              window.history.replaceState(null, "", window.location.pathname);
+            }}
+            title="کپی لینک مقاله برای اشتراک‌گذاری"
+            className="inline-flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-2 transition"
+          >
+            🔗 کپی لینک مقاله
+          </button>
+        </div>
 
         <article className="max-w-3xl mx-auto bg-white border border-slate-100 rounded-[2.5rem] shadow-xl overflow-hidden">
           <div className={`h-44 bg-gradient-to-tr ${acc.gradient} flex items-center justify-center relative`}>
@@ -110,8 +237,27 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
               <p className="text-xs text-slate-500 font-bold leading-7 text-right">{active.excerpt}</p>
             </header>
 
+            {/* 📑 فهرست مطالب — برای مقاله‌های دارای حداقل ۲ سرفصل */}
+            {toc.length >= 2 && (
+              <nav className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 space-y-2" aria-label="فهرست مطالب">
+                <p className="text-[10px] font-black text-slate-500">📑 فهرست این مقاله</p>
+                <ol className="space-y-1">
+                  {toc.map((h, n) => (
+                    <li key={h.index}>
+                      <button
+                        onClick={() => document.getElementById(`blog-sec-${h.index}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        className="text-[11px] font-bold text-slate-500 hover:text-slate-900 leading-6 text-right transition"
+                      >
+                        {n + 1}. {h.heading}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+            )}
+
             {active.sections.map((sec, i) => (
-              <section key={i} className="space-y-3">
+              <section key={i} id={`blog-sec-${i}`} className="space-y-3 scroll-mt-6">
                 {sec.heading && (
                   <h2 className={`text-base font-black ${acc.text} flex items-center gap-2`}>
                     <span className={`w-1.5 h-6 rounded-full bg-gradient-to-b ${acc.gradient}`} />
@@ -140,14 +286,63 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
               </section>
             ))}
 
-            <footer className="border-t border-slate-100 pt-5 space-y-3">
+            <footer className="border-t border-slate-100 pt-5 space-y-5">
               <div className="flex flex-wrap gap-2">
                 {active.keywords.map((k) => (
                   <span key={k} className="text-[9px] font-black bg-slate-50 text-slate-400 border border-slate-100 px-2.5 py-1 rounded-full">#{k}</span>
                 ))}
               </div>
+
+              {/* ✍️ باکس نویسنده (E-E-A-T) */}
+              <div className="flex items-start gap-4 bg-gradient-to-l from-slate-50 to-white border border-slate-100 rounded-2xl p-5">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${acc.gradient} flex items-center justify-center text-2xl shrink-0 shadow-md`}>
+                  ✍️
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[12px] font-black text-slate-800">تیم آموزش و مشاوره آکادمی ترنم همدلی</p>
+                  <p className="text-[10px] text-slate-500 font-bold leading-6">
+                    مشاوران کنکور و متخصصان روان‌شناسی یادگیری — محتوای این مقاله بر اساس منابع علمی معتبر و تجربه میدانی کار با داوطلبان رتبه‌برتر تدوین شده و هر دوره بازبینی تخصصی می‌شود.
+                  </p>
+                </div>
+              </div>
+
+              {/* 📚 منابع علمی */}
+              {active.sources && active.sources.length > 0 && (
+                <div className="border border-slate-100 rounded-2xl p-5 space-y-2.5 bg-white">
+                  <p className="text-[11px] font-black text-slate-700">📚 منابع و مراجع علمی</p>
+                  <ul className="space-y-1.5">
+                    {active.sources.map((src, i) => (
+                      <li key={i} className="text-[10px] text-slate-500 font-bold leading-5 flex gap-2">
+                        <span className="text-slate-300 shrink-0 font-mono">{i + 1}.</span>
+                        <span dir="auto">{src}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 🧩 ماژول‌های مرتبط در سایت */}
+              {active.relatedModules && active.relatedModules.length > 0 && onNavigate && (
+                <div className={`rounded-2xl p-5 space-y-3 border ${acc.callout}`}>
+                  <p className="text-[11px] font-black">🧩 این مفاهیم را عملی اجرا کنید:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {active.relatedModules.map((m) => (
+                      <button
+                        key={m.target}
+                        onClick={() => onNavigate(m.target)}
+                        className="bg-white/90 hover:bg-white text-slate-700 hover:text-slate-900 text-[11px] font-black px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm hover:shadow transition active:scale-95 flex items-center gap-2"
+                      >
+                        <span>{m.emoji}</span>
+                        <span>{m.label}</span>
+                        <span className="text-slate-400">←</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <p className="text-[10px] text-slate-400 font-bold text-center pt-1">
-                تیم مشاوره آکادمی ترنم همدلی — همراه گام‌به‌گام در مسیر یادگیری شما ❤️
+                آکادمی ترنم همدلی — همراه گام‌به‌گام در مسیر یادگیری شما ❤️
               </p>
             </footer>
           </div>
@@ -160,7 +355,7 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
             {related.map((a) => (
               <button
                 key={a.slug}
-                onClick={() => { setActiveSlug(a.slug); window.scrollTo({ top: 0 }); }}
+                onClick={() => openArticle(a.slug)}
                 className="text-right bg-white border border-slate-100 rounded-2xl p-4 hover:-translate-y-0.5 hover:shadow-lg transition group space-y-2"
               >
                 <span className="text-2xl">{a.emoji}</span>
@@ -213,14 +408,14 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
 
       {/* Featured (first article) */}
       {filtered.length > 0 && (
-        <ArticleCard article={filtered[0]} featured onOpen={() => setActiveSlug(filtered[0].slug)} />
+        <ArticleCard article={filtered[0]} featured onOpen={() => openArticle(filtered[0].slug)} />
       )}
 
       {/* Grid */}
       <div className="grid sm:grid-cols-2 gap-5">
         {filtered.slice(1).map((a) => (
           <React.Fragment key={a.slug}>
-            <ArticleCard article={a} onOpen={() => setActiveSlug(a.slug)} />
+            <ArticleCard article={a} onOpen={() => openArticle(a.slug)} />
           </React.Fragment>
         ))}
       </div>
