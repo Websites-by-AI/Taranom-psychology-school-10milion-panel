@@ -39,6 +39,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentSuccessData, setPaymentSuccessData] = useState<any>(null);
   const [formError, setFormError] = useState("");
+  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   // Helper helper function to retrieve custom local registrations
   const getLocalRegistrations = (): Student[] => {
@@ -49,6 +50,55 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       return [];
     }
   };
+
+  /** ذخیره ثبت‌نام در فضای محلی (برای حالت دمو/آفلاین و جستجوی ورود بعدی) */
+  const saveLocalRegistration = (s: Student) => {
+    try {
+      const regs = getLocalRegistrations();
+      localStorage.setItem("arateb_new_registrations", JSON.stringify([...regs, s]));
+    } catch {}
+  };
+
+  /**
+   * فراخوان واحد API احراز هویت (دیتابیس واقعی D1).
+   * اگر سرور/دیتابیس در دسترس نباشد (503 یا خطای شبکه) available=false برمی‌گردد
+   * تا جریان جایگزین لوکال فعال شود.
+   */
+  const apiAuth = async (path: string, body: Record<string, unknown>): Promise<{ available: boolean; ok: boolean; status: number; data: any }> => {
+    try {
+      const res = await fetch(`/api/auth/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      let data: any = null;
+      if (ct.includes("application/json")) {
+        try { data = await res.json(); } catch {}
+      }
+      // پاسخ SPA fallback (HTML) یا نبود سرویس دیتابیس (503) ⇒ حالت جایگزین لوکال
+      if (!ct.includes("application/json") || res.status === 503 || (res.status === 404 && data?.error === "Not found")) {
+        return { available: false, ok: false, status: res.status, data };
+      }
+      return { available: true, ok: res.ok, status: res.status, data };
+    } catch {
+      return { available: false, ok: false, status: 0, data: null };
+    }
+  };
+
+  /** تبدیل پاسخ کاربر D1 به مدل Student */
+  const apiUserToStudent = (u: any): Student => ({
+    id: u.id,
+    name: u.name,
+    code: u.code || u.mobile || u.id,
+    field: u.field || "tajrobi",
+    grade: u.grade || "کاربر ثبت‌نام شده",
+    city: u.city || "نامشخص",
+    age: u.age || 18,
+    paymentStatus: "paid",
+    subscriptionType: "free",
+  } as Student);
 
   // داوطلبان و لاین‌های فعال در ترنم مهر
   const mockStudents: Student[] = [
@@ -89,14 +139,18 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
 
   const confirmPaymentSimulation = async () => {
     setShowPaymentModal(false);
-    setLoading(true);
-    
-    // Success simulation
-    const studentCode = "NEW_" + Math.floor(Math.random() * 100000 + 10000);
+
+    const userEmail = email.trim().toLowerCase();
+    if (!password || password.length < 6) {
+      setFormError("رمز عبور باید حداقل ۶ کاراکتر باشد.");
+      setLoading(false);
+      return;
+    }
+
     const newStudentObj: Student = {
       id: Date.now().toString(),
       name: regName,
-      code: studentCode,
+      code: "NEW_" + Math.floor(Math.random() * 100000 + 10000),
       field: regField,
       grade: `پایه دوازدهم - هدف: ${regTargetMajor}`,
       city: regCity || "تهران",
@@ -105,57 +159,91 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       subscriptionType: "free"
     };
 
-    // Save to Firestore with password
-    try {
-      const userEmail = email || (mobileNumber + "@arateb.test");
-      await setDoc(doc(db, "users", newStudentObj.id), {
-        uid: newStudentObj.id,
-        email: userEmail,
-        mobile: mobileNumber,
-        displayName: newStudentObj.name,
-        password: password || "123456", // Default password if not provided
-        role: "student",
-        parentName: parentName || null,
-        parentMobile: parentMobile || null,
-        paymentStatus: "paid",
-        subscriptionType: "free",
-        createdAt: new Date().toISOString()
-      });
-      
-      setPaymentSuccessData({
-        ...newStudentObj,
-        email: userEmail
-      });
-    } catch (e) {
-      console.error("Firestore Save Error:", e);
-      setFormError("خطا در ثبت اطلاعات در دیتابیس.");
-      handleFirestoreError(e, OperationType.WRITE, `users/${newStudentObj.id}`);
-    } finally {
+    // ۱) ثبت‌نام واقعی در دیتابیس D1 — رمز عبور سمت سرور به‌صورت PBKDF2 هش می‌شود
+    const signup = await apiAuth("register", {
+      name: regName.trim(),
+      email: userEmail || undefined,
+      mobile: mobileNumber,
+      password,
+      field: regField,
+      city: regCity || undefined,
+      age: Number(regAge) || undefined,
+      targetMajor: regTargetMajor || undefined,
+    });
+
+    if (signup.available) {
+      if (signup.ok && signup.data?.user) {
+        const student = {
+          ...apiUserToStudent(signup.data.user),
+          grade: newStudentObj.grade,
+          city: newStudentObj.city,
+          age: newStudentObj.age,
+        };
+        saveLocalRegistration(student);
+        setPaymentSuccessData({ ...student, email: signup.data.user.email || userEmail || undefined });
+      } else {
+        // خطای منطقی سرور: تکراری (۴۰۹)، داده نامعتبر (۴۰۰) و ...
+        setFormError(signup.data?.error || "ثبت‌نام انجام نشد؛ اطلاعات را بررسی کنید.");
+      }
       setLoading(false);
+      return;
     }
+
+    // ۲) حالت جایگزین آفلاین/دمو — فقط ذخیره محلی (هیچ رمزی به صورت متن‌باز نگهداری نمی‌شود)
+    saveLocalRegistration(newStudentObj);
+    setPaymentSuccessData({ ...newStudentObj, email: userEmail || undefined, offlineMode: true });
+    setLoading(false);
   };
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mobileNumber.startsWith("09") || mobileNumber.length !== 11) {
       alert("لطفاً شماره موبایل معتبر ۱۱ رقمی وارد نمایید. (شروع با ۰۹)");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setOtpSent(true);
-    }, 700);
+    setDevOtp(null);
+    // ۱) درخواست کد واقعی از سرور D1 (محلی: devCode نمایش داده می‌شود تا وقتی درگاه SMS متصل نیست)
+    const sent = await apiAuth("otp-send", { mobile: mobileNumber });
+    setLoading(false);
+    if (sent.available) {
+      if (sent.ok) {
+        setOtpSent(true);
+        if (sent.data?.devCode) setDevOtp(String(sent.data.devCode));
+      } else {
+        alert(sent.data?.error || "ارسال کد ناموفق بود. لطفاً دوباره تلاش کنید.");
+      }
+      return;
+    }
+    // ۲) حالت دمو (آفلاین)
+    setOtpSent(true);
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+
+    // ۱) تأیید کد واقعی از سرور D1
+    const verified = await apiAuth("otp-verify", { mobile: mobileNumber, code: otpCode });
+    if (verified.available) {
+      if (verified.ok && verified.data?.user) {
+        const student = apiUserToStudent(verified.data.user);
+        saveLocalRegistration(student);
+        onLogin(student, activeTab);
+      } else {
+        alert(verified.data?.error || "کد تایید نادرست است.");
+      }
+      setLoading(false);
+      return;
+    }
+
+    // ۲) حالت دمو (کد ارزیابی 1234)
     if (otpCode !== "1234" && otpCode !== "12345") {
+      setLoading(false);
       alert("کد تایید نادرست است. (جهت ارزیابی از '1234' استفاده کنید)");
       return;
     }
 
-    setLoading(true);
     try {
       const q = query(collection(db, "users"), where("mobile", "==", mobileNumber));
       const querySnapshot = await getDocs(q);
@@ -195,6 +283,22 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // ۱) ورود واقعی از سرور D1 (مقایسه امن رمز با PBKDF2)
+    const login = await apiAuth("login", { identifier: email.trim(), password });
+    if (login.available) {
+      if (login.ok && login.data?.user) {
+        onLogin(apiUserToStudent(login.data.user), activeTab);
+      } else {
+        alert(login.status === 404 || login.status === 401
+          ? "نام کاربری یا رمز عبور اشتباه است."
+          : (login.data?.error || "خطا در ورود. لطفاً دوباره تلاش کنید."));
+      }
+      setLoading(false);
+      return;
+    }
+
+    // ۲) مسیر قدیمی برای کاربرانی که پیش از اتصال D1 ثبت‌نام کرده‌اند
     try {
       // Try by email or mobile
       const qEmail = query(collection(db, "users"), where("email", "==", email), where("password", "==", password));
@@ -806,6 +910,13 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                     </div>
                   </div>
 
+                  {devOtp && (
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-center" id="dev-otp-box">
+                      <p className="text-[10px] text-amber-700 font-bold">درگاه پیامک هنوز متصل نیست — کد آزمایشی شما:</p>
+                      <p className="text-2xl font-black text-amber-600 font-mono tracking-[0.4em] mt-1 select-all">{devOtp}</p>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-2">کد یکبار مصرف امنیتی</label>
                     <div className="relative">
@@ -1039,7 +1150,14 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
               خوش آمدید <strong className="text-slate-900">{paymentSuccessData.name}</strong> عزیز.
               <br />
-              حساب کاربری شما با ایمیل <span className="font-mono text-indigo-600">{paymentSuccessData.email}</span> فعال گردید.
+              {paymentSuccessData.email
+                ? <>حساب کاربری شما با ایمیل <span className="font-mono text-indigo-600">{paymentSuccessData.email}</span> فعال گردید.</>
+                : <>حساب کاربری شما با شماره موبایل ثبت‌شده فعال گردید.</>}
+              {paymentSuccessData.offlineMode && (
+                <span className="block mt-2 text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
+                  حالت آفلاین/دمو: اطلاعات فعلاً به‌صورت محلی نگهداری می‌شود.
+                </span>
+              )}
             </p>
             
             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-8">
