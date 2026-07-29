@@ -3,7 +3,7 @@
 // - The app shell (index.html) is network-first so new deploys appear instantly.
 // - API requests are NEVER cached (always go to the network).
 
-const CACHE_VERSION = "taranom-v2"; // bump this to force a cache refresh on deploy
+const CACHE_VERSION = "taranom-v3"; // v3: never cache non-JS/CSS/HTML-mislabeled asset responses
 const APP_SHELL = ["/", "/index.html"];
 
 self.addEventListener("install", (event) => {
@@ -36,13 +36,25 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Hashed build assets are immutable → cache-first (instant loads, offline).
+  // Only cache responses whose Content-Type matches the expected file type —
+  // during an edge rollout an asset URL can briefly return the SPA fallback
+  // HTML; caching that poisons the module loader for that asset forever.
   if (url.pathname.startsWith("/assets/")) {
     event.respondWith(
       caches.match(request).then((cached) =>
-        cached || fetch(request).then((resp) => {
+        cached || fetch(request).then(async (resp) => {
           if (resp && resp.status === 200) {
-            const copy = resp.clone();
-            caches.open(CACHE_VERSION).then((c) => c.put(request, copy));
+            const ct = (resp.headers.get("content-type") || "").toLowerCase();
+            const isJs = url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs");
+            const isCss = url.pathname.endsWith(".css");
+            const typeOk =
+              (isJs && (ct.includes("javascript") || ct.includes("ecmascript") || ct === "")) ||
+              (isCss && (ct.includes("css") || ct === "")) ||
+              (!isJs && !isCss);
+            if (typeOk) {
+              const copy = resp.clone();
+              caches.open(CACHE_VERSION).then((c) => c.put(request, copy));
+            }
           }
           return resp;
         }).catch(() => cached)

@@ -22,7 +22,10 @@ const CounselorDashboardView = lazy(() => import("./CounselorDashboardView"));
 const TeacherDashboardView = lazy(() => import("./TeacherDashboardView"));
 const StudyDashboardView = lazy(() => import("./StudyDashboardView"));
 const KonkurExamView = lazy(() => import("./KonkurExamView"));
-const BlogView = lazy(() => import("./BlogView"));
+// BlogView is imported eagerly: it is small (~10 kB gz) and a separate dynamic
+// chunk was failing behind the service worker when an edge served the SPA
+// fallback for a brand-new asset URL (poisoned cache-first /assets entry).
+import BlogView from "./BlogView";
 
 export type RoleType = "student" | "parent" | "admin" | "counselor" | "teacher";
 
