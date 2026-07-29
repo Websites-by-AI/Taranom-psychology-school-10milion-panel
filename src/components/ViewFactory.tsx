@@ -22,6 +22,7 @@ const CounselorDashboardView = lazy(() => import("./CounselorDashboardView"));
 const TeacherDashboardView = lazy(() => import("./TeacherDashboardView"));
 const StudyDashboardView = lazy(() => import("./StudyDashboardView"));
 const KonkurExamView = lazy(() => import("./KonkurExamView"));
+const BlogView = lazy(() => import("./BlogView"));
 
 export type RoleType = "student" | "parent" | "admin" | "counselor" | "teacher";
 
@@ -249,33 +250,7 @@ export default function ViewFactory({
       );
 
     case "blog":
-      return (
-        <div className="p-12 text-center bg-white border border-slate-100 rounded-[2.5rem] shadow-xl space-y-8 animate-in fade-in zoom-in-95 duration-500 RTL" style={{ direction: 'rtl' }}>
-          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner ring-4 ring-emerald-50/50">
-             <span className="text-4xl">✍️</span>
-          </div>
-          <div className="space-y-3">
-             <h2 className="text-3xl font-black text-slate-900">وبلاگ تحلیلی و آموزشی</h2>
-             <p className="text-sm text-slate-500 font-bold max-w-md mx-auto leading-relaxed">
-               آخرین مقالات مربوط به روانشناسی کنکور، مدیریت زمان و تکنیک‌های تست‌زنی سرعتی را اینجا بخوانید.
-             </p>
-          </div>
-          <div className="space-y-4 max-w-3xl mx-auto">
-             {[1, 2, 3].map(i => (
-                <div key={i} className="flex items-center gap-6 p-5 hover:bg-slate-50 rounded-2xl transition-all border border-transparent hover:border-slate-100 text-right cursor-pointer">
-                   <div className="w-32 h-20 bg-slate-100 rounded-xl shrink-0 overflow-hidden relative">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-slate-200 to-transparent" />
-                   </div>
-                   <div className="space-y-2">
-                      <h4 className="text-sm font-black text-slate-900">چگونه در آزمون‌های جامع تراز خود را ۱۰٪ افزایش دهیم؟</h4>
-                      <p className="text-[11px] text-slate-400 font-bold">منتشر شده در ۲۴ خرداد ۱۴۰۵ • زمان مطالعه: ۵ دقیقه</p>
-                   </div>
-                </div>
-             ))}
-          </div>
-          <button onClick={() => onNavigate("welcome")} className="text-emerald-600 text-xs font-black hover:underline">بازگشت به پیشخوان</button>
-        </div>
-      );
+      return <BlogView onNavigate={onNavigate} />;
 
     case "contact":
       return (
