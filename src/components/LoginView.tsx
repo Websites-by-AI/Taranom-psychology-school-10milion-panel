@@ -926,8 +926,8 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                       <input
                         type="text"
                         required
-                        maxLength={5}
-                        placeholder="کد ۴ یا ۵ رقمی"
+                        maxLength={6}
+                        placeholder="کد ۶ رقمی (در دمو: 1234)"
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
                         className="w-full pl-3 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white font-mono tracking-widest text-slate-800 text-lg transition duration-150"
