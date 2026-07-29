@@ -562,9 +562,10 @@ app.get("/api/ai-status", (req, res) => {
 });
 
 // Offline & Simulation Fallback Utility Functions
-function toPersianNum(num: number | string): string {
+function toPersianNum(num: number | string | null | undefined): string {
+  if (num === null || num === undefined || num === "") return "۰";
   const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
-  return num.toString().replace(/\d/g, (x) => persianDigits[parseInt(x)]);
+  return String(num).replace(/\d/g, (x) => persianDigits[parseInt(x)]);
 }
 
 function getOfflineChatReply(message: string): string {

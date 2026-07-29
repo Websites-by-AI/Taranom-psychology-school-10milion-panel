@@ -135,14 +135,20 @@ export function AIModuleAuditor({ moduleName, subModules, externalLogs }: AIModu
         </div>
       )}
 
-      {suggestion && (
+      {suggestion && typeof suggestion === 'string' && (
+        <div className="absolute right-4 top-16 z-10 w-80 p-4 bg-white border border-amber-200 rounded-lg text-[11px] text-amber-950 shadow-xl space-y-2">
+          <h4 className="font-bold border-b border-amber-100 pb-1">اعلان سامانه</h4>
+          <p className="whitespace-pre-line">{suggestion}</p>
+        </div>
+      )}
+      {suggestion && typeof suggestion === 'object' && (
         <div className="absolute right-4 top-16 z-10 w-80 p-4 bg-white border border-indigo-200 rounded-lg text-[11px] text-indigo-950 shadow-xl space-y-2">
           <h4 className="font-bold border-b border-indigo-100 pb-1">تحلیل فنی</h4>
-          <p className="whitespace-pre-line">{suggestion.analysis}</p>
+          <p className="whitespace-pre-line">{suggestion.analysis || "تحلیلی ارائه نشد."}</p>
           
           <h4 className="font-bold border-b border-indigo-100 pb-1">پیشنهادها</h4>
           <ul className="list-disc pl-3">
-            {suggestion.recommendations.map((rec, i) => <li key={i}>{rec}</li>)}
+            {(Array.isArray(suggestion.recommendations) ? suggestion.recommendations : []).map((rec, i) => <li key={i}>{rec}</li>)}
           </ul>
           
           <div className={`mt-2 px-2 py-1 rounded text-center text-[10px] font-bold ${

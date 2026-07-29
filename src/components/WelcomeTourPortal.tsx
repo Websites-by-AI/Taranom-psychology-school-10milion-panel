@@ -354,7 +354,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<BarChart3 size={24} />}
               title="خودشناسی تحصیلی با مانوا"
               desc="ببین کجاها واقعاً وقتت تلف می‌شه و کدوم ساعت‌ها بیشترین بازدهی رو داری. ما بهت کمک می‌کنیم خودت رو بهتر بشناسی تا هوشمندانه‌تر تلاش کنی."
-              image="https://images.unsplash.com/photo-1551288049-bbbda536639a?auto=format&fit=crop&q=80&w=800"
+              image="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
             />
             <BentoCard 
               className="md:col-span-6 lg:col-span-4"
@@ -494,12 +494,12 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { title: "کارت‌های یادگیری عمیق زیست", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1544640808-32ca72ac7f67?auto=format&fit=crop&q=80&w=400" },
+                  { title: "کارت‌های یادگیری عمیق زیست", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&q=80&w=400" },
                   { title: "دفتر برنامه‌ریزی کایزن", price: "۹۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=400" },
                   { title: "بسته آزمون‌های جامع شبیه‌ساز", price: "۲۱۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=400" },
                   { title: "کتاب کار عارضه‌یابی تحصیلی", price: "۱۲۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400" },
                   { title: "پکیج فلش‌کارت‌های شیمی", price: "۱۶۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400" },
-                  { title: "جامدادی طرح کایزن", price: "۴۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1583339793403-3d9b001b5608?auto=format&fit=crop&q=80&w=400" },
+                  { title: "جامدادی طرح کایزن", price: "۴۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&q=80&w=400" },
                   { title: "دفترچه نکات رتبه برترها", price: "۷۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&q=80&w=400" },
                   { title: "پوستر بودجه‌بندی کنکور", price: "۳۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1503596476-1c12a8ba09a9?auto=format&fit=crop&q=80&w=400" }
                 ].map((item, idx) => (

@@ -17,6 +17,7 @@
  *   POST /api/chat
  *   POST /api/goal-insight
  *   POST /api/analyze-exam
+ *   POST /api/audit-module
  *   POST /api/psychology-analysis
  *   POST /api/payment/request
  *   GET  /api/payment/verify
@@ -517,9 +518,10 @@ function getAI(req: Request, body: any, env: Env, meta: RespMeta): AIFallbackWra
  * Offline / simulation fallbacks (verbatim from server.ts)
  * ------------------------------------------------------------------------- */
 
-function toPersianNum(num: number | string): string {
+function toPersianNum(num: number | string | null | undefined): string {
+  if (num === null || num === undefined || num === "") return "۰";
   const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
-  return num.toString().replace(/\d/g, (x) => persianDigits[parseInt(x)]);
+  return String(num).replace(/\d/g, (x) => persianDigits[parseInt(x)]);
 }
 
 function getOfflineChatReply(message: string): string {
@@ -1245,6 +1247,61 @@ async function testProvider(ctx: Ctx): Promise<Response> {
   }
 }
 
+/** AI module audit (ported from server.ts) — previously MISSING here, which
+ *  made every deployed /api/audit-module call return 404. */
+async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const { moduleName, logs, selectedSubModules, type, history, healthLogs } = body;
+  try {
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) return json({ suggestion: "سرویس هوش مصنوعی در دسترس نیست." }, 200, meta.headers);
+
+    const logSummary = (logs || []).map((l: any) => `${l.timestamp}: ${l.action} - ${l.detail}`).join("\n");
+    const healthLogSummary = healthLogs ? healthLogs.map((l: any) => `${l.timestamp}: ${l.type} - ${l.message}`).join("\n") : "";
+    const historySummary = history && Array.isArray(history)
+      ? `تحلیل‌های قبلی:\n${history.map((h: any) => (typeof h === "string" ? h : h.analysis)).join("\n---\n")}`
+      : "";
+
+    let systemInstruction = "";
+    let userPrompt = "";
+
+    if (type === "project") {
+      systemInstruction = `شما یک مهندس ارشد قابلیت اطمینان سیستم (SRE) و تحلیلگر معماری هستید.
+             وظیفه شما: ارائه یک تحلیل عمیق از دیدگاه SRE درباره سلامت کلی سیستم، شناسایی الگوهای خطا در لاگ‌ها، پیشنهاد بهبودهای زیرساختی و شناسایی نقاط گلوگاه احتمالی.
+             پاسخ باید فنی، استراتژیک و مبتنی بر داده‌های ارائه شده باشد.`;
+      userPrompt = `لاگ‌های سیستم:\n${logSummary}\n\nلاگ‌های سلامت عملکرد:\n${healthLogSummary}\n\nتحلیل‌های قبلی:\n${historySummary}\nلطفا وضعیت سلامت کلی سیستم را تحلیل کن و پیشنهاداتی برای پایداری و بهبود ارائه بده.`;
+    } else {
+      systemInstruction = `شما یک متخصص تحلیل خطا و بهبود کد هستید.
+             وظیفه شما: تحلیل عمیق لاگ‌های ماژول ${moduleName}، بخش‌های انتخابی: ${selectedSubModules?.join(", ") || "همه موارد"}، شناسایی الگوهای تکرارشونده خطا، تحلیل ریشه‌ای (Root Cause Analysis)، و ارائه پیشنهادهای عملیاتی برای رفع خطاها و بهبود کارایی کد.`;
+      userPrompt = `لاگ‌های ماژول ${moduleName}، بخش‌های انتخابی: ${selectedSubModules?.join(", ") || "همه موارد"}:\n${logSummary}\n\nلاگ‌های سلامت عملکرد:\n${healthLogSummary}\n\nتحلیل‌های قبلی:\n${historySummary}\nلطفا خطاها را کلاسترینگ کن (دسته‌بندی کن)، ریشه آن‌ها را شناسایی کن و راهکارهای فنی و مشخص برای بهبود ارائه بده.`;
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      config: {
+        systemInstruction: `${systemInstruction}
+         
+         پاسخ را دقیقاً در قالب فرمت JSON زیر بدون تگ‌های خارجی تحویل دهید:
+         {
+           "analysis": "تحلیل عمیق و فنی وضعیت",
+           "recommendations": ["راهکار بهبود ۱", "راهکار بهبود ۲"],
+           "riskLevel": "high" | "medium" | "low"
+         }`,
+        responseMimeType: "application/json",
+      },
+    });
+
+    const resultText = response.text?.trim() || "{}";
+    const cleanedText = resultText.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const resultJson = JSON.parse(cleanedText);
+    return json({ suggestion: resultJson }, 200, meta.headers);
+  } catch (e: any) {
+    const errorMessage = e?.message || "خطای نامشخص";
+    return json({ suggestion: `خطا در اتصال به هوش مصنوعی: ${errorMessage}` }, 200, meta.headers);
+  }
+}
+
 async function generateQuizQuestion(ctx: Ctx, meta: RespMeta): Promise<Response> {
   const body = await readJson(ctx.request);
   const { subject, difficulty, customTopic } = body;
@@ -1834,6 +1891,9 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         break;
       case "analyze-exam":
         if (isPost) return await analyzeExam(ctx, meta);
+        break;
+      case "audit-module":
+        if (isPost) return await auditModule(ctx, meta);
         break;
       case "psychology-analysis":
         if (isPost) return await psychologyAnalysis(ctx, meta);
