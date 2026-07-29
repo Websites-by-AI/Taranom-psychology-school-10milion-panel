@@ -53,7 +53,18 @@ interface BlogViewProps {
 }
 
 export default function BlogView({ onNavigate }: BlogViewProps) {
-  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  // Deep-link support: صفحه اول یا سایر ماژول‌ها می‌توانند قبل از ناوبری به وبلاگ
+  // یک slug در localStorage قرار دهند تا همان مقاله مستقیم باز شود.
+  const [activeSlug, setActiveSlug] = useState<string | null>(() => {
+    try {
+      const pending = localStorage.getItem("taranom_blog_pending_slug");
+      if (pending) {
+        localStorage.removeItem("taranom_blog_pending_slug");
+        if (findArticle(pending)) return pending;
+      }
+    } catch (e) {}
+    return null;
+  });
   const [categoryFilter, setCategoryFilter] = useState<string>("همه");
 
   const categories = useMemo(

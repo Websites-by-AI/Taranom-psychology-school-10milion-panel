@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { BRAND_CONFIG } from '../constants';
 import { Student } from '../types';
+import { BLOG_ARTICLES } from '../data/blogArticles';
 
 import MainFooter from './MainFooter';
 
@@ -67,6 +68,14 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
     }, 4000);
   };
 
+  // ورود به صفحه وبلاگ — در صورت داشتن slug، همان مقاله مستقیم باز می‌شود
+  const openBlog = (slug?: string) => {
+    try {
+      if (slug) localStorage.setItem("taranom_blog_pending_slug", slug);
+    } catch (e) {}
+    onNavigate("blog");
+  };
+
   // Convert numbers to Persian characters visually
   const toPersianNum = (num: number | string) => {
     const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
@@ -112,7 +121,8 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 ].map((link) => (
                   <a 
                     key={link.id}
-                    href={`#${link.id}`} 
+                    href={link.id === "blog" ? "/blog" : `#${link.id}`}
+                    onClick={link.id === "blog" ? (e) => { e.preventDefault(); openBlog(); } : undefined}
                     className="px-4 py-2 rounded-xl hover:bg-slate-100/50 hover:text-indigo-600 transition-all active:scale-95 flex items-center gap-1.5"
                   >
                     <link.icon size={13} className="text-indigo-400 group-hover:text-indigo-600" />
@@ -184,8 +194,11 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 ].map((link) => (
                   <a 
                     key={link.id}
-                    href={`#${link.id}`} 
-                    onClick={() => setIsMobileMenuOpen(false)}
+                    href={link.id === "blog" ? "/blog" : `#${link.id}`}
+                    onClick={(e) => {
+                      setIsMobileMenuOpen(false);
+                      if (link.id === "blog") { e.preventDefault(); openBlog(); }
+                    }}
                     className="p-4 rounded-2xl bg-slate-50/50 hover:bg-indigo-50 hover:text-indigo-600 transition-all font-heavy text-sm flex items-center gap-4"
                   >
                     <div className="p-2 bg-white rounded-lg text-slate-400 group-hover:text-indigo-600 border border-slate-100">
@@ -528,37 +541,44 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               </button>
             </div>
 
-            {/* Blog Preview */}
-            <div className="lg:w-5/12 space-y-8 border-r border-slate-200 pr-12 hidden lg:block" id="blog">
+            {/* Blog Preview — اتصال به وبلاگ واقعی سایت */}
+            <div className="lg:w-5/12 w-full space-y-8 lg:border-r lg:border-slate-200 lg:pr-12" id="blog">
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <BookOpen size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-lg">مجله آموزشی</span>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-indigo-600">
+                    <BookOpen size={20} />
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-lg">مجله آموزشی</span>
+                  </div>
+                  <button
+                    onClick={() => openBlog()}
+                    className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-100 px-3 py-1.5 rounded-full shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer"
+                  >
+                    مشاهده همه مقالات ←
+                  </button>
                 </div>
                 <h2 className="text-4xl font-black text-slate-900 leading-tight">یادداشت‌های <br /> نوین</h2>
+                <p className="text-sm text-slate-500 font-bold leading-relaxed">مقالات تخصصی مشاوره‌ای کنکور و آموزش کار با ماژول‌های سایت</p>
               </div>
 
               <div className="space-y-4">
-                {[
-                  { title: "تمرکز عمیق با تکنیک کایزن در کنکور", category: "تمرکز", img: "https://images.unsplash.com/photo-1484417894907-623942c8ee29?auto=format&fit=crop&q=80&w=150", date: "۲۵ اسفند ۱۴۰۲" },
-                  { title: "نقش خواب در تثبیت آموخته‌های روزانه", category: "سلامت", img: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&q=80&w=150", date: "۲۰ اسفند ۱۴۰۲" },
-                  { title: "مدیریت اضطراب در آزمون‌های شبیه‌ساز", category: "روانشناسی", img: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=150", date: "۱۵ اسفند ۱۴۰۲" },
-                  { title: "تغذیه هوشمندانه برای ذهن کنکوری", category: "تغذیه", img: "https://images.unsplash.com/photo-1490818387583-1baba5e638af?auto=format&fit=crop&q=80&w=150", date: "۱۰ اسفند ۱۴۰۲" },
-                  { title: "روش خلاصه نویسی به سبک رتبه‌های برتر", category: "روش مطالعه", img: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=150", date: "۰۵ اسفند ۱۴۰۲" }
-                ].map((post, idx) => (
-                  <div key={idx} className="p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center gap-5">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-inner border border-slate-50">
-                      <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                {BLOG_ARTICLES.slice(0, 5).map((post) => (
+                  <button
+                    key={post.slug}
+                    onClick={() => openBlog(post.slug)}
+                    className="w-full text-right p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center gap-5"
+                  >
+                    <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-inner border border-slate-50 bg-gradient-to-br from-indigo-50 to-violet-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                      <span className="text-3xl" role="img" aria-hidden>{post.emoji}</span>
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-tighter">{post.category}</span>
-                        <span className="text-[8px] text-slate-400 font-bold">{post.date}</span>
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-tighter whitespace-nowrap">{post.category}</span>
+                        <span className="text-[8px] text-slate-400 font-bold whitespace-nowrap">{post.date} · {toPersianNum(post.readMinutes)} دقیقه مطالعه</span>
                       </div>
-                      <h4 className="text-[12px] font-black text-slate-800 group-hover:text-indigo-600 transition-colors leading-tight">{post.title}</h4>
+                      <h4 className="text-[12px] font-black text-slate-800 group-hover:text-indigo-600 transition-colors leading-relaxed line-clamp-2">{post.title}</h4>
                     </div>
-                    <ArrowLeft size={16} className="text-slate-200 group-hover:text-indigo-600 group-hover:-translate-x-1 transition-all" />
-                  </div>
+                    <ArrowLeft size={16} className="text-slate-200 group-hover:text-indigo-600 group-hover:-translate-x-1 transition-all shrink-0" />
+                  </button>
                 ))}
               </div>
             </div>
