@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Calendar, Clock, BookOpen, Target, Sparkles, CheckCircle2, Award, Zap, ArrowRight, 
   Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle
@@ -19,6 +19,17 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   const [dailyLogSubmitted, setDailyLogSubmitted] = useState(false);
   const [dailyReportText, setDailyReportText] = useState("");
 
+  // Check if counselor published a manual plan for this student and load it automatically
+  useEffect(() => {
+    try {
+      const savedManualPlan = localStorage.getItem(`taranom_manual_study_plan_${student.id}`);
+      if (savedManualPlan) {
+        const parsed = JSON.parse(savedManualPlan);
+        setGeneratedPlan(parsed);
+      }
+    } catch {}
+  }, [student.id]);
+
   // Student mock grades / report card integration data
   const studentGrades = [
     { lesson: "زیست‌شناسی", percentage: 48, status: "warning", advice: "نیاز به مرور خط‌به‌خط کتاب درسی و تصاویر." },
@@ -33,7 +44,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
     setTimeout(() => {
       const fieldName = student.field === "tajrobi" ? "علوم تجربی (پزشکی/دندان)" : student.field === "riazi" ? "ریاضی فیزیک (مهندسی شریف)" : "علوم انسانی (وکالت/روانشناسی)";
       
-      setGeneratedPlan({
+      const defaultPlanData = {
         title: `نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه ${student.name}`,
         profile: fieldName,
         dailyHours: targetHours,
@@ -57,7 +68,13 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           "جلسه مشاوره گروهی مدیریت استرس و بهداشت روان کنکور (پنج‌شنبه‌ها ساعت ۱۱)",
           "دوره حل مسائل سرعت محاسبات بدون چک‌نویس در ریاضی و فیزیک"
         ]
-      });
+      };
+
+      setGeneratedPlan(defaultPlanData);
+      try {
+        localStorage.setItem(`taranom_manual_study_plan_${student.id}`, JSON.stringify(defaultPlanData));
+      } catch {}
+
       setIsGenerating(false);
     }, 1200);
   };
