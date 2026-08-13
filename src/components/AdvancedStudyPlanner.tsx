@@ -111,6 +111,14 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               <UserCheck size={16} />
               <span>درخواست بازبینی و بازنویسی برنامه از مشاور</span>
             </button>
+
+            <button
+              onClick={() => onNavigate("counselor-chat")}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-6 py-3 rounded-2xl text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer backdrop-blur-md"
+            >
+              <MessageSquare size={16} className="text-amber-400" />
+              <span>ورود به بخش مشاوره و گفتگوی مستقیم</span>
+            </button>
           </div>
         </div>
       </div>

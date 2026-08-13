@@ -47,7 +47,7 @@ export const ALLOWED_VIEWS_BY_ROLE: Record<RoleType, string[]> = {
   student: [
     "welcome", "dashboard", "manova", "report", "schedule", "counselor", 
     "progress", "traps", "quiz", "psychology", "metacognition", "counseling", 
-    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download", "planner-gen"
+    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download", "planner-gen", "counselor-chat"
   ],
   parent: [
     "welcome", "parents", "manova", "report", "psychology", "counseling", 
