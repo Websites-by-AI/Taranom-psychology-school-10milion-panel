@@ -53,8 +53,10 @@ export interface Env {
   WANDB_API_KEY?: string;
   /** URL of the education exam-RAG static Space. */
   EXAM_RAG_URL?: string;
-  /** Telegram Bot Token for @taranom_mehr_bot */
+  /** Telegram Bot Token for @taranom_hamdeli_bot */
   TELEGRAM_BOT_TOKEN?: string;
+  /** Bale Bot Token for @taranom_hamdeli_bot */
+  BALE_BOT_TOKEN?: string;
 }
 
 interface Ctx {
@@ -1306,7 +1308,7 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
 
 async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
   const body = await readJson(ctx.request);
-  const token = ctx.env.TELEGRAM_BOT_TOKEN || "8808309926:AAGoYAb8ehQrsphnsRQB-nWTRiT3H9Emf-w";
+  const token = ctx.env.TELEGRAM_BOT_TOKEN || "8905918951:AAFIO3Y0aGYgZREUFWUdDzEwyvOojZkURww";
   
   const message = body?.message || body?.edited_message;
   if (!message || !message.chat || !message.chat.id) {
@@ -1320,13 +1322,13 @@ async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
   let replyText = "";
 
   if (text === "/start") {
-    replyText = `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند **ترنم مهر** (@taranom_mehr_bot) خوش آمدید.\n\nمن دکتر رادان، مشاور تحصیلی و همراه شما در مسیر کنکور و یادگیری کایزن هستم. 🚀\n\nشما می‌توانید سوالات درسی، چالش‌های انگیزشی یا وضعیت تراز خود را بپرسید تا با هم بررسی کنیم.\n\nدستورات:\n/help - راهنمای ربات\n/quiz - شبیه‌ساز تستی\n/status - وضعیت سیستم`;
+    replyText = `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند **ترنم همدلی** (@taranom_hamdeli_bot) خوش آمدید.\n\nمن دکتر رادان، مشاور تحصیلی و همراه شما در مسیر کنکور و یادگیری کایزن هستم. 🚀\n\nشما می‌توانید سوالات درسی، چالش‌های انگیزشی یا وضعیت تراز خود را بپرسید تا با هم بررسی کنیم.\n\nدستورات:\n/help - راهنمای ربات\n/quiz - شبیه‌ساز تستی\n/status - وضعیت سیستم`;
   } else if (text === "/help") {
-    replyText = `📌 **راهنمای ربات ترنم مهر**\n\nاین ربات متصل به سامانه هوشمند ترنم همدلی (hamdeltar.ir) است.\n- ارسال پیام متنی: پاسخ مشاوره‌ای فوری\n- /start: شروع مجدد\n- /quiz: دریافت تله تستی نمونه\n- /status: بررسی وضعیت اتصال هوش مصنوعی`;
+    replyText = `📌 **راهنمای ربات ترنم همدلی**\n\nاین ربات متصل به سامانه هوشمند ترنم همدلی (hamdeltar.ir) است.\n- ارسال پیام متنی: پاسخ مشاوره‌ای فوری\n- /start: شروع مجدد\n- /quiz: دریافت تله تستی نمونه\n- /status: بررسی وضعیت اتصال هوش مصنوعی`;
   } else if (text === "/quiz") {
     replyText = `🎯 **نمونه تله تستی کایزن:**\n\nکدام گزینه درباره پمپ سدیم-پتاسیم در سلول‌های عصبی درست است؟\n\n۱) خارج کردن ۳ یون سدیم با ورود ۲ یون پتاسیم همراه است.\n۲) بدون مصرف ATP انجام می‌شود.\n\n💡 *برای تست‌های بیشتر و جامع‌تر به سایت hamdeltar.ir مراجعه کنید!*`;
   } else if (text === "/status") {
-    replyText = `🟢 **وضعیت ربات و سامانه:**\n- ربات تلگرام: فعال و متصل (@taranom_mehr_bot)\n- موتور هوش مصنوعی: آماده\n- سامانه اصلی: hamdeltar.ir\n- نسخه: 2.4.0`;
+    replyText = `🟢 **وضعیت ربات و سامانه:**\n- ربات تلگرام: فعال و متصل (@taranom_hamdeli_bot)\n- موتور هوش مصنوعی: آماده\n- سامانه اصلی: hamdeltar.ir\n- نسخه: 2.4.0`;
   } else {
     try {
       const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
@@ -1357,6 +1359,64 @@ async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
     });
   } catch (err) {
     console.error("Telegram send error:", err);
+  }
+
+  return json({ ok: true });
+}
+
+async function baleWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  const body = await readJson(ctx.request);
+  const token = ctx.env.BALE_BOT_TOKEN || "298530966:2r-M9wLle8BgMhleit2hBFZTg0_sXNdTg2E";
+  
+  const message = body?.message || body?.edited_message;
+  if (!message || !message.chat || !message.chat.id) {
+    return json({ ok: true, note: "No message found in Bale update" });
+  }
+
+  const chatId = message.chat.id;
+  const text = (message.text || "").trim();
+  const userName = message.from?.first_name || "همسفر";
+
+  let replyText = "";
+
+  if (text === "/start") {
+    replyText = `سلام ${userName} عزیز! 🌸\n\nبه بازوی هوشمند **ترنم همدلی** (ble.ir/taranom_hamdeli_bot) خوش آمدید.\n\nمن دکتر رادان، مشاور تحصیلی و همراه شما در مسیر کنکور و یادگیری کایزن هستم. 🚀\n\nدستورات:\n/help - راهنمای بازو\n/quiz - شبیه‌ساز تستی\n/status - وضعیت سیستم`;
+  } else if (text === "/help") {
+    replyText = `📌 **راهنمای بازوی بله ترنم همدلی**\n\nاین بازو متصل به سامانه هوشمند hamdeltar.ir است.\n- ارسال پیام متنی: پاسخ مشاوره‌ای فوری\n- /quiz: دریافت تله تستی نمونه\n- /status: بررسی وضعیت سامانه`;
+  } else if (text === "/quiz") {
+    replyText = `🎯 **نمونه تله تستی کایزن (بله):**\n\nکدام گزینه درباره پمپ سدیم-پتاسیم درست است؟\n\n۱) خروج ۳ یون سدیم با ورود ۲ یون پتاسیم با مصرف ATP.\n۲) انتقال غیرفعال یون‌ها.\n\n💡 *به سایت hamdeltar.ir سر بزنید!*`;
+  } else if (text === "/status") {
+    replyText = `🟢 **وضعیت بازوی بله و سامانه:**\n- بازوی بله: فعال و متصل (@taranom_hamdeli_bot)\n- سامانه اصلی: hamdeltar.ir\n- نسخه: 2.4.0`;
+  } else {
+    try {
+      const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
+      if (ai) {
+        const res = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: [{ role: "user", parts: [{ text }] }],
+          config: { systemInstruction: "شما دکتر رادان، مشاور تحصیلی ترنم همدلی در پیام‌رسان بله هستید. کوتاه، صمیمی و همدلانه پاسخ دهید." }
+        });
+        replyText = res.text?.trim() || getOfflineChatReply(text);
+      } else {
+        replyText = getOfflineChatReply(text);
+      }
+    } catch (_) {
+      replyText = getOfflineChatReply(text);
+    }
+  }
+
+  try {
+    await fetch(`https://tapi.bale.ai/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: replyText,
+        parse_mode: "Markdown"
+      })
+    });
+  } catch (err) {
+    console.error("Bale send error:", err);
   }
 
   return json({ ok: true });
@@ -1978,6 +2038,9 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         break;
       case "telegram-webhook":
         if (isPost) return await telegramWebhook(ctx, meta);
+        break;
+      case "bale-webhook":
+        if (isPost) return await baleWebhook(ctx, meta);
         break;
       default:
         return json({ error: "Not found", path }, 404);

@@ -28,16 +28,19 @@ export default function MainFooter() {
               سامانه هوشمند پایش و ارتقای تراز داوطلبان آزمون‌های سراسری. مسیر حرفه‌ای برای رسیدن به قله‌های موفقیت علمی با متدولوژی کایزن.
             </p>
             <div className="flex items-center gap-4">
-              <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all">
+              <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all" title="توئیتر">
                 <Twitter size={18} />
               </a>
-              <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all">
+              <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all" title="اینستاگرام">
                 <Instagram size={18} />
               </a>
-              <a href="https://t.me/taranom_mehr_bot" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all" title="ربات تلگرام ترنم مهر">
+              <a href="https://t.me/taranom_hamdeli_bot" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-700 transition-all" title="ربات تلگرام: @taranom_hamdeli_bot">
                 <MessageSquare size={18} />
               </a>
-              <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all">
+              <a href="https://ble.ir/taranom_hamdeli_bot" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-400 hover:border-emerald-700 transition-all" title="بازوی بله: @taranom_hamdeli_bot">
+                <span className="font-bold text-[10px]">بله</span>
+              </a>
+              <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all" title="گیت‌هاب">
                 <Github size={18} />
               </a>
             </div>
