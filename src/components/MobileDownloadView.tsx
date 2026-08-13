@@ -3,9 +3,9 @@ import { Download, Smartphone, Apple, Monitor, CheckCircle2, Shield, Zap, ArrowR
 import { BRAND_CONFIG } from '../constants';
 
 export default function MobileDownloadView({ onNavigate }: { onNavigate: (target: string) => void }) {
-  // Direct APK download link (pointing to the compiled production build / stable APK asset in repo / release)
-  const apkDownloadUrl = "https://github.com/Websites-by-AI/Taranom-psychology-school-10milion-panel/raw/main/public/downloads/taranom-mehr-v2.4.0.apk";
-  const pwaUrl = "https://hamdeltar.ir";
+  // Production Web App URL acting as PWA / Android WebAPK wrapper & iOS Progressive Web App
+  const androidAppUrl = "https://hamdeltar.ir/?source=android_apk_download";
+  const iosAppUrl = "https://hamdeltar.ir/?source=ios_pwa";
 
   return (
     <div className="min-h-screen bg-slate-950 text-white py-16 px-6 RTL" style={{ direction: 'rtl' }}>
@@ -15,13 +15,13 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
         <div className="text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-black text-indigo-400">
             <Smartphone size={14} />
-            <span>لینک‌های مستقیم دانلود اپلیکیشن موبایل</span>
+            <span>نسخه‌های رسمی موبایل — اندروید و iOS</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-black tracking-tight">
             دانلود اپلیکیشن <span className="text-indigo-400">{BRAND_CONFIG.name}</span>
           </h1>
           <p className="text-slate-400 text-sm md:text-base max-w-2xl mx-auto font-medium leading-relaxed">
-            نسخه‌های رسمی اندروید و iOS اپلیکیشن ترنم همدلی آماده دانلود هستند. با نصب اپلیکیشن، همیشه به مشاور هوش مصنوعی و آزمون‌های تله‌های تستی دسترسی خواهید داشت.
+            نسخه‌های بهینه‌شده موبایل برای اندروید و آیفون آماده استفاده هستند. با نصب وب‌اپلیکیشن پیشرفته (PWA)، همیشه به مشاور هوش مصنوعی و آزمون‌های تله‌های تستی دسترسی خواهید داشت.
           </p>
         </div>
 
@@ -37,39 +37,39 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
                 <Smartphone size={32} />
               </div>
               <div>
-                <h3 className="text-xl font-black text-white">نسخه اندروید (APK)</h3>
-                <p className="text-xs text-slate-400 font-bold mt-1">نسخه ۲.۴.۰ — حجم: ۱۵.۲ مگابایت</p>
+                <h3 className="text-xl font-black text-white">نسخه اندروید (Android PWA)</h3>
+                <p className="text-xs text-slate-400 font-bold mt-1">نصب آنی و بدون نیاز به دانلود فایل حجیم</p>
               </div>
             </div>
 
             <ul className="space-y-3 text-xs text-slate-300 font-bold">
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>دسترسی آفلاین به خلاصه‌های درسی و تله‌های تستی</span>
+                <span>نصب خودکار به صورت اپلیکیشن در صفحه اصلی گوشی</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>نوتیفیکیشن هوشمند پومودورو و یادآوری پارت‌های مطالعاتی</span>
+                <span>بروزرسانی خودکار و اتصال دائمی به دیتابیس ابری D1</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>سازگار با تمامی گوشی‌ها و تبلت‌های اندروید (۸ به بالا)</span>
+                <span>سازگار با تمامی مرورگرها (Chrome / Firefox)</span>
               </li>
             </ul>
 
             <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
               <a 
-                href={apkDownloadUrl}
+                href={androidAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs py-4 px-6 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 text-center"
               >
                 <Download size={16} />
-                <span>دانلود مستقیم فایل APK اندروید</span>
+                <span>نصب نسخه اندروید (WebAPK)</span>
               </a>
             </div>
             <div className="text-[10px] text-slate-500 font-mono text-center">
-              لینک مستقیم: {apkDownloadUrl}
+              لینک دسترسی: {androidAppUrl}
             </div>
           </div>
 
@@ -83,28 +83,28 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
               </div>
               <div>
                 <h3 className="text-xl font-black text-white">نسخه آیفون و آیپد (iOS)</h3>
-                <p className="text-xs text-slate-400 font-bold mt-1">نسخه وب‌اپلیکیشن پیشرفته (PWA)</p>
+                <p className="text-xs text-slate-400 font-bold mt-1">وب‌اپلیکیشن اختصاصی آیفون (Safari PWA)</p>
               </div>
             </div>
 
             <ul className="space-y-3 text-xs text-slate-300 font-bold">
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-indigo-400 shrink-0" />
-                <span>بدون نیاز به اپ‌استور — اجرا مستقیم از مرورگر Safari</span>
+                <span>اجرای تمام‌صفحه و بومی بدون نیاز به اپ‌استور</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-indigo-400 shrink-0" />
-                <span>قابلیت افزودن به صفحه اصلی آیفون (Add to Home Screen)</span>
+                <span>افزودن به صفحه اصلی آیفون از طریق دکمه Share در Safari</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-indigo-400 shrink-0" />
-                <span>همگام‌سازی لحظه‌ای با دیتابیس ابری D1</span>
+                <span>همگام‌سازی لحظه‌ای با حساب کاربری و ربات تلگرام</span>
               </li>
             </ul>
 
             <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
               <a 
-                href={pwaUrl}
+                href={iosAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs py-4 px-6 rounded-2xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 text-center"
@@ -114,7 +114,7 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
               </a>
             </div>
             <div className="text-[10px] text-slate-500 font-mono text-center">
-              آدرس دسترسی: {pwaUrl}
+              لینک دسترسی: {iosAppUrl}
             </div>
           </div>
 
