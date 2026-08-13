@@ -19,16 +19,81 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   const [dailyLogSubmitted, setDailyLogSubmitted] = useState(false);
   const [dailyReportText, setDailyReportText] = useState("");
 
-  // Check if counselor published a manual plan for this student and load it automatically
+  // Load counselor manual plan or fallback to professional Konkur standard schedule
   useEffect(() => {
     try {
       const savedManualPlan = localStorage.getItem(`taranom_manual_study_plan_${student.id}`);
       if (savedManualPlan) {
         const parsed = JSON.parse(savedManualPlan);
         setGeneratedPlan(parsed);
+        return;
       }
     } catch {}
-  }, [student.id]);
+
+    // Default professional Konkur standard schedule featuring Pomodoro 50/10 cycles & AI diagnostic tips
+    const fieldName = student.field === "tajrobi" ? "علوم تجربی (پزشکی/دندان)" : student.field === "riazi" ? "ریاضی فیزیک (مهندسی شریف)" : "علوم انسانی (وکالت/روانشناسی)";
+    
+    setGeneratedPlan({
+      title: `نقشه راه تخصصی کنکور ۱۴۰۵ — کایزن درسی (${student.name})`,
+      profile: fieldName,
+      dailyHours: 10,
+      examStandard: "کنکور سراسری (سطح رتبه برتر و تله‌دار)",
+      strategy: "چرخه طلایی ۵۰/۱۰ پومودورو: ۵۰ دقیقه مطالعه متمرکز مفهومی + ۱۰ دقیقه استراحت پویا بدون گوشی تلفن همراه.",
+      warnings: [
+        "⚠️ هشدار عارضه‌یابی کارنامه: نوسان تراز در دروس پایه مشاهده شد؛ پارت‌های جبرانی مرور ۳ روزه در جدول زیر فعال شدند.",
+        "💡 پیشنهاد مشاور ارشد (استاد مریم رحیمی): در شیفت صبح حتماً از روش بازیابی (Active Recall) به جای خواندن مجدد درسنامه استفاده کنید."
+      ],
+      schedule: [
+        { 
+          day: "شنبه", 
+          morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): مطالعه عمیق کتاب درسی + پارت پومودوروهای مفهومی (۴ ساعت)", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): حل ۴۰ تست زمان‌دار تله‌دار + تحلیل غلط‌ها در دفتر اشتباهات", 
+          totalQ: 40 
+        },
+        { 
+          day: "یکشنبه", 
+          morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): حل مسائل محاسباتی پیشرفته و فرمول‌شناسی (۴ ساعت)", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): آزمون موضوعی موازی و رفع اشکال عارضه‌یابی تراز", 
+          totalQ: 45 
+        },
+        { 
+          day: "دوشنبه", 
+          morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): مرور دروس حفظی، فرمول‌های فیزیک و خلاصه‌نویسی نموداری (۳ ساعت)", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تست‌زنی جامع موازی و بررسی پاسخ‌نامه تشریحی", 
+          totalQ: 40 
+        },
+        { 
+          day: "سه‌شنبه", 
+          morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان (۴ ساعت)", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تحلیل موشکافانه تراز و تکنیک ضربدر منها", 
+          totalQ: 60 
+        },
+        { 
+          day: "چهارشنبه", 
+          morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای (۳ ساعت)", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): حل تست‌های سطح المپیاد و تله‌های پرتکرار", 
+          totalQ: 35 
+        },
+        { 
+          day: "پنجشنبه", 
+          morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): آزمون جامع آزمایشی شبیه‌ساز استاندارد (۴ ساعت)", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تحلیل کارنامه و استراحت بازسازنده ذهن", 
+          totalQ: 50 
+        },
+        { 
+          day: "جمعه", 
+          morning: "شیفت اول (۰۹:۰۰ الی ۱۲:۰۰): مرور خلاصه‌های طلایی، استراحت و ریکاوری روحی کایزن", 
+          afternoon: "شیفت دوم (۱۶:۰۰ الی ۱۹:۰۰): ارسال گزارش هفتگی به مشاور ارشد و والدین", 
+          totalQ: 20 
+        },
+      ],
+      extracurricular: [
+        "کارگاه آنلاین تحلیل تله‌های تستی زیست‌شناسی و شیمی (چهارشنبه‌ها ساعت ۱۸)",
+        "جلسه مشاوره گروهی مدیریت استرس و بهداشت روان کنکور (پنج‌شنبه‌ها ساعت ۱۱)",
+        "دوره حل مسائل سرعت محاسبات بدون چک‌نویس در ریاضی و فیزیک"
+      ]
+    });
+  }, [student.id, student.field]);
 
   // Student mock grades / report card integration data
   const studentGrades = [
@@ -44,35 +109,34 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
     setTimeout(() => {
       const fieldName = student.field === "tajrobi" ? "علوم تجربی (پزشکی/دندان)" : student.field === "riazi" ? "ریاضی فیزیک (مهندسی شریف)" : "علوم انسانی (وکالت/روانشناسی)";
       
-      const defaultPlanData = {
+      const newPlan = {
         title: `نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه ${student.name}`,
         profile: fieldName,
         dailyHours: targetHours,
         examStandard: selectedExamType === "konkur_master" ? "کنکور سراسری ۱۴۰۵ (سطح فوق سخت)" : "آزمون‌های جامع آزمایشی (سطح استاندارد)",
-        strategy: "تلفیق پارت‌های ۵۰ دقیقه‌ای پومودورو با تمرکز ویژه روی دروس ضعیف کارنامه (ریاضی و زیست) و گزارش خودکار به مشاور و والدین.",
+        strategy: "تلفیق پارت‌های ۵۰ دقیقه‌ای پومودورو با تمرکز ویژه روی دروس ضعیف کارنامه و گزارش خودکار به مشاور و والدین.",
         warnings: [
           "⚠️ هشدار عارضه‌یابی کارنامه: درس ریاضی (حسابان) با ۳۸٪ و زیست‌شناسی با ۴۸٪ در منطقه خطر تراز هستند؛ پارت‌های جبرانی در برنامه امروز تزریق شدند.",
           "💡 پیشنهاد مشاور: حتماً در شیفت صبح از روش بازیابی (Active Recall) برای رفع اشکال ریاضی استفاده کنید."
         ],
         schedule: [
-          { day: "شنبه", morning: "پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت", afternoon: "حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات", totalQ: 40 },
-          { day: "یکشنبه", morning: "مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت", afternoon: "تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور", totalQ: 50 },
-          { day: "دوشنبه", morning: "مرور فرمول‌های فیزیک و شیمی - ۳ ساعت", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
-          { day: "سه‌شنبه", morning: "شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 60 },
-          { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
-          { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", totalQ: 50 },
-          { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
+          { day: "شنبه", morning: `شیفت اول: پارت جبرانی تخصصی (${targetHours} ساعت مطالعه متمرکز)`, afternoon: "حل تست‌های زمان‌دار تله‌دار + ثبت در دفتر اشتباهات", totalQ: 45 },
+          { day: "یکشنبه", morning: "شیفت اول: مطالعه مباحث پایه و حل مسائل تشریحی", afternoon: "آزمون موضوعی موازی و رفع اشکال عارضه‌یابی", totalQ: 40 },
+          { day: "دوشنبه", morning: "شیفت اول: مرور فرمول‌های فیزیک و شیمی و خلاصه‌نویسی", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
+          { day: "سه‌شنبه", morning: "شیفت اول: شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 55 },
+          { day: "چهارشنبه", morning: "شیفت اول: رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
+          { day: "پنجشنبه", morning: "شیفت اول: آزمون جامع آزمایشی شبیه‌ساز استاندارد", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهنی", totalQ: 50 },
+          { day: "جمعه", morning: "شیفت اول: مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
         ],
         extracurricular: [
-          "کارگاه رفع اشکال اضطراری ریاضی و مشتق (چهارشنبه‌ها ساعت ۱۷)",
-          "جلسه مشاوره گروهی مدیریت استرس و بهداشت روان کنکور (پنج‌شنبه‌ها ساعت ۱۱)",
-          "دوره حل مسائل سرعت محاسبات بدون چک‌نویس در ریاضی و فیزیک"
+          "کارگاه رفع اشکال اضطراری دروس تخصصی (با حضور مشاور)",
+          "جلسه مشاوره گروهی مدیریت استرس و بهداشت روان کنکور"
         ]
       };
 
-      setGeneratedPlan(defaultPlanData);
+      setGeneratedPlan(newPlan);
       try {
-        localStorage.setItem(`taranom_manual_study_plan_${student.id}`, JSON.stringify(defaultPlanData));
+        localStorage.setItem(`taranom_manual_study_plan_${student.id}`, JSON.stringify(newPlan));
       } catch {}
 
       setIsGenerating(false);
