@@ -5,7 +5,8 @@ import { Student } from "../types";
 const WelcomeTourPortal = lazy(() => import("./WelcomeTourPortal"));
 const DashboardView = lazy(() => import("./DashboardView"));
 const ManovaDashboard = lazy(() => import("./ManovaDashboard"));
-const ReportCardView = lazy(() => import("./ReportCardView"));
+// ReportCardView is imported eagerly to prevent dynamic import chunk hashing mismatch / stale cache error
+import ReportCardView from "./ReportCardView";
 const StudyPlanView = lazy(() => import("./StudyPlanView"));
 const CounselorView = lazy(() => import("./CounselorView"));
 const ProgressView = lazy(() => import("./ProgressView"));
