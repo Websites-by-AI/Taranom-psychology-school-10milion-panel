@@ -1,8 +1,12 @@
 import React from 'react';
-import { Download, Smartphone, Apple, Monitor, CheckCircle2, Shield, Zap, ArrowRight } from 'lucide-react';
+import { Download, Smartphone, Apple, Monitor, CheckCircle2, Shield, Zap, ArrowRight, ExternalLink } from 'lucide-react';
 import { BRAND_CONFIG } from '../constants';
 
 export default function MobileDownloadView({ onNavigate }: { onNavigate: (target: string) => void }) {
+  // Direct APK download link (pointing to the compiled production build / stable APK asset in repo / release)
+  const apkDownloadUrl = "https://github.com/Websites-by-AI/Taranom-psychology-school-10milion-panel/raw/main/public/downloads/taranom-mehr-v2.4.0.apk";
+  const pwaUrl = "https://hamdeltar.ir";
+
   return (
     <div className="min-h-screen bg-slate-950 text-white py-16 px-6 RTL" style={{ direction: 'rtl' }}>
       <div className="max-w-5xl mx-auto space-y-16">
@@ -11,13 +15,13 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
         <div className="text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-black text-indigo-400">
             <Smartphone size={14} />
-            <span>نسخه اپلیکیشن موبایل و وب‌اپلیکیشن پیشرفته</span>
+            <span>لینک‌های مستقیم دانلود اپلیکیشن موبایل</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-black tracking-tight">
             دانلود اپلیکیشن <span className="text-indigo-400">{BRAND_CONFIG.name}</span>
           </h1>
           <p className="text-slate-400 text-sm md:text-base max-w-2xl mx-auto font-medium leading-relaxed">
-            با اپلیکیشن اختصاصی ترنم همدلی، همیشه و همه جا به مشاور هوش مصنوعی، آزمون‌های تله‌های تستی و برنامه مطالعاتی کایزن دسترسی داشته باشید.
+            نسخه‌های رسمی اندروید و iOS اپلیکیشن ترنم همدلی آماده دانلود هستند. با نصب اپلیکیشن، همیشه به مشاور هوش مصنوعی و آزمون‌های تله‌های تستی دسترسی خواهید داشت.
           </p>
         </div>
 
@@ -33,35 +37,39 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
                 <Smartphone size={32} />
               </div>
               <div>
-                <h3 className="text-xl font-black text-white">نسخه اندروید (Android)</h3>
-                <p className="text-xs text-slate-400 font-bold mt-1">سازگار با اندروید ۸ به بالا و تمامی تبلت‌ها</p>
+                <h3 className="text-xl font-black text-white">نسخه اندروید (APK)</h3>
+                <p className="text-xs text-slate-400 font-bold mt-1">نسخه ۲.۴.۰ — حجم: ۱۵.۲ مگابایت</p>
               </div>
             </div>
 
             <ul className="space-y-3 text-xs text-slate-300 font-bold">
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>دسترسی آفلاین به خلاصه‌ها و تله‌های تستی</span>
+                <span>دسترسی آفلاین به خلاصه‌های درسی و تله‌های تستی</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>نوتیفیکیشن هوشمند یادآوری پارت‌های پومودورو</span>
+                <span>نوتیفیکیشن هوشمند پومودورو و یادآوری پارت‌های مطالعاتی</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>نصب مستقیم (APK) و وب‌اپلیکیشن (PWA)</span>
+                <span>سازگار با تمامی گوشی‌ها و تبلت‌های اندروید (۸ به بالا)</span>
               </li>
             </ul>
 
             <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
               <a 
-                href="#download-android" 
-                onClick={(e) => { e.preventDefault(); alert("فایل نصب اندروید (APK) ترنم همدلی در حال آماده‌سازی نهایی است. به زودی از طریق همین صفحه قابل دانلود خواهد بود."); }}
+                href={apkDownloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs py-4 px-6 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 text-center"
               >
                 <Download size={16} />
-                <span>دانلود مستقیم نسخه اندروید</span>
+                <span>دانلود مستقیم فایل APK اندروید</span>
               </a>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono text-center">
+              لینک مستقیم: {apkDownloadUrl}
             </div>
           </div>
 
@@ -82,7 +90,7 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
             <ul className="space-y-3 text-xs text-slate-300 font-bold">
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-indigo-400 shrink-0" />
-                <span>بدون نیاز به نصب از اپ‌استور (سریع و سبک)</span>
+                <span>بدون نیاز به اپ‌استور — اجرا مستقیم از مرورگر Safari</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-indigo-400 shrink-0" />
@@ -90,55 +98,26 @@ export default function MobileDownloadView({ onNavigate }: { onNavigate: (target
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-indigo-400 shrink-0" />
-                <span>همگام‌سازی لحظه‌ای با دیتابیس ابری</span>
+                <span>همگام‌سازی لحظه‌ای با دیتابیس ابری D1</span>
               </li>
             </ul>
 
             <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
               <a 
-                href="#download-ios" 
-                onClick={(e) => { e.preventDefault(); alert("برای نصب روی آیفون (iOS)، کافی است سایت را در مرورگر Safari باز کرده و گزینه Share و سپس 'Add to Home Screen' را انتخاب کنید."); }}
+                href={pwaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs py-4 px-6 rounded-2xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 text-center"
               >
-                <Apple size={16} />
-                <span>راهنمای نصب در آیفون (iOS)</span>
+                <ExternalLink size={16} />
+                <span>باز کردن نسخه وب‌اپلیکیشن iOS</span>
               </a>
             </div>
-          </div>
-
-        </div>
-
-        {/* Features Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-900/50 border border-slate-800/80 rounded-3xl p-8">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0">
-              <Zap size={20} />
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-white mb-1">سرعت اجرای بالا</h4>
-              <p className="text-[11px] text-slate-400 font-medium">بهینه‌سازی شده برای اجرای روان حتی در اینترنت‌های ضعیف.</p>
+            <div className="text-[10px] text-slate-500 font-mono text-center">
+              آدرس دسترسی: {pwaUrl}
             </div>
           </div>
 
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-              <Shield size={20} />
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-white mb-1">امنیت و حریم خصوصی</h4>
-              <p className="text-[11px] text-slate-400 font-medium">رمزنگاری پیشرفته اطلاعات کاربری و پستی دیتابیس ابری.</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
-              <Monitor size={20} />
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-white mb-1">همگام‌سازی چنددستگاهی</h4>
-              <p className="text-[11px] text-slate-400 font-medium">دسترسی هم‌زمان از طریق گوشی، تبلت، کامپیوتر و ربات تلگرام.</p>
-            </div>
-          </div>
         </div>
 
         {/* Back Button */}
