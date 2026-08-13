@@ -25,7 +25,7 @@ const KonkurExamView = lazy(() => import("./KonkurExamView"));
 // BlogView is imported eagerly: it is small (~10 kB gz) and a separate dynamic
 // chunk was failing behind the service worker when an edge served the SPA
 // fallback for a brand-new asset URL (poisoned cache-first /assets entry).
-const MobileDownloadView = lazy(() => import("./MobileDownloadView"));
+const StudyPlannerGenerator = lazy(() => import("./StudyPlannerGenerator"));
 
 export type RoleType = "student" | "parent" | "admin" | "counselor" | "teacher";
 
@@ -46,7 +46,7 @@ export const ALLOWED_VIEWS_BY_ROLE: Record<RoleType, string[]> = {
   student: [
     "welcome", "dashboard", "manova", "report", "schedule", "counselor", 
     "progress", "traps", "quiz", "psychology", "metacognition", "counseling", 
-    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download"
+    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download", "planner-gen"
   ],
   parent: [
     "welcome", "parents", "manova", "report", "psychology", "counseling", 
@@ -257,6 +257,9 @@ export default function ViewFactory({
 
     case "download":
       return <MobileDownloadView onNavigate={onNavigate} />;
+
+    case "planner-gen":
+      return <StudyPlannerGenerator student={student} onNavigate={onNavigate} />;
 
     case "contact":
       return (
