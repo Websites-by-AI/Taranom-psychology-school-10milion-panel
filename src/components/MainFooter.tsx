@@ -34,6 +34,9 @@ export default function MainFooter() {
               <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all">
                 <Instagram size={18} />
               </a>
+              <a href="https://t.me/taranom_mehr_bot" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all" title="ربات تلگرام ترنم مهر">
+                <MessageSquare size={18} />
+              </a>
               <a href="#" className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all">
                 <Github size={18} />
               </a>
