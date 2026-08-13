@@ -1614,6 +1614,7 @@ interface AuthStore {
   findUserByIdentifier(identifier: string): Promise<UserRow | null>;
   findUserById(id: string): Promise<UserRow | null>;
   countUsers(): Promise<number>;
+  listUsers(): Promise<UserRow[]>;
   upsertSession(s: SessionRow): Promise<void>;
   findSession(token: string): Promise<SessionRow | null>;
   deleteSession(token: string): Promise<void>;
@@ -1638,6 +1639,10 @@ class D1AuthStore implements AuthStore {
   async countUsers() {
     const r: any = await this.db.prepare("SELECT COUNT(*) as c FROM users").first();
     return Number(r?.c || 0);
+  }
+  async listUsers() {
+    const r = await this.db.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
+    return (r?.results || []) as UserRow[];
   }
   async upsertSession(s: SessionRow) {
     await this.db.prepare("INSERT OR REPLACE INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)")
@@ -1698,6 +1703,9 @@ class D1RestAuthStore implements AuthStore {
   async countUsers() {
     const rows = await this.query("SELECT COUNT(*) as c FROM users");
     return Number(rows[0]?.c || 0);
+  }
+  async listUsers() {
+    return (await this.query("SELECT * FROM users ORDER BY created_at DESC")) as UserRow[];
   }
   async upsertSession(s: SessionRow) {
     await this.query("INSERT OR REPLACE INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)", [s.token, s.user_id, s.created_at, s.expires_at]);
@@ -1949,6 +1957,11 @@ async function authCount(ctx: Ctx, store: AuthStore): Promise<Response> {
   return json({ count }, 200);
 }
 
+async function authList(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const users = await store.listUsers();
+  return json({ users: users.map(userToStudent) }, 200);
+}
+
 /* ----------------------------------------------------------------------------
  * Body parsing + router
  * ------------------------------------------------------------------------- */
@@ -1986,6 +1999,7 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         case "auth/me":             if (isGet)  return await authMe(ctx, store); break;
         case "auth/logout":         if (isPost) return await authLogout(ctx, store); break;
         case "auth/count":          if (isGet)  return await authCount(ctx, store); break;
+        case "auth/list":           if (isGet)  return await authList(ctx, store); break;
       }
       return json({ error: "Method not allowed", path, method }, 405);
     }
