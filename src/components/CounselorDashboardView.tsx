@@ -519,10 +519,34 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
                 </div>
               </div>
 
+              {/* NEW COUNSELOR STUDY PLAN REWRITE BUTTON */}
+              <div className="p-5 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl border border-indigo-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h4 className="text-xs font-black text-indigo-950">بازنویسی و تدوین دستی برنامه مطالعاتی داوطلب</h4>
+                  <p className="text-[10px] text-indigo-700 font-bold mt-0.5">اعمال پارت‌های جبرانی تخصصی بر اساس کارنامه و درخواست بازبینی دانش‌آموز.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert(`✅ برنامه مطالعاتی جدید برای داوطلب '${activeStudent.name}' با موفقیت توسط مشاور تدوین و روی پورتال او فعال گردید.`);
+                    try {
+                      localStorage.setItem(`taranom_custom_plan_${activeStudent.id}`, JSON.stringify({
+                        updatedAt: new Date().toISOString(),
+                        counselor: counselorProfile.name,
+                        status: "rewritten"
+                      }));
+                    } catch {}
+                  }}
+                  className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer shrink-0"
+                >
+                  بازنویسی و ارسال برنامه جدید
+                </button>
+              </div>
+
               <div className="pt-2">
                 <button
                   onClick={handleSaveComment}
-                  className="w-full md:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full md:w-auto px-6 py-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-black transition shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <CheckCircle2 size={16} />
                   <span>ثبت، همگام‌سازی و ارسال توصیه دیجیتال به داوطلب</span>

@@ -79,15 +79,39 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       {/* Header */}
       <div className="bg-gradient-to-br from-indigo-950 via-indigo-900 to-blue-950 rounded-[32px] p-8 text-right text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="space-y-3 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-indigo-200">
-            <Sparkles size={14} className="text-amber-400" />
-            <span>برنامه‌ریزی مطالعاتی هوشمند مبتنی بر کارنامه و دیتابیس</span>
+        <div className="space-y-4 relative z-10">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-black text-indigo-200">
+              <Sparkles size={14} className="text-amber-400" />
+              <span>برنامه‌ریزی مطالعاتی هوشمند مبتنی بر کارنامه و دیتابیس</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-2xl text-xs font-black text-amber-300">
+              <span>مشاور اختصاصی شما:</span>
+              <span className="text-white font-black">استاد مریم رحیمی (ارشد کایزن)</span>
+            </div>
           </div>
+
           <h1 className="text-2xl md:text-3xl font-black">طراح مهندسی برنامه و تحلیل عارضه‌یابی کارنامه</h1>
           <p className="text-xs md:text-sm text-indigo-200/90 font-medium leading-relaxed max-w-2xl">
             در این بخش نمرات، درصدها و وضعیت آسیب‌پذیری دروس شما از دیتابیس استخراج شده و برنامه مطالعاتی دقیقاً روی نقاط ضعف شما معماری می‌شود.
           </p>
+
+          <div className="pt-2 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => {
+                alert("✅ درخواست بازبینی و بازنویسی برنامه مطالعاتی با موفقیت برای مشاور اختصاصی شما (استاد مریم رحیمی) ارسال شد. مشاور به زودی پارت‌های جبرانی جدید را روی پنل شما اعمال خواهد کرد.");
+                try {
+                  const reqs = JSON.parse(localStorage.getItem("taranom_plan_revision_requests") || "[]");
+                  reqs.push({ date: new Date().toISOString(), student: student.name, field: student.field });
+                  localStorage.setItem("taranom_plan_revision_requests", JSON.stringify(reqs));
+                } catch {}
+              }}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 px-6 py-3 rounded-2xl text-xs font-black transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+            >
+              <UserCheck size={16} />
+              <span>درخواست بازبینی و بازنویسی برنامه از مشاور</span>
+            </button>
+          </div>
         </div>
       </div>
 
