@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { 
   Calendar, Clock, BookOpen, Target, Sparkles, CheckCircle2, Award, Zap, ArrowRight, 
-  Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users 
+  Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle
 } from "lucide-react";
 import { Student } from "../types";
 
@@ -19,32 +19,41 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   const [dailyLogSubmitted, setDailyLogSubmitted] = useState(false);
   const [dailyReportText, setDailyReportText] = useState("");
 
+  // Student mock grades / report card integration data
+  const studentGrades = [
+    { lesson: "زیست‌شناسی", percentage: 48, status: "warning", advice: "نیاز به مرور خط‌به‌خط کتاب درسی و تصاویر." },
+    { lesson: "شیمی تخصصی", percentage: 55, status: "warning", advice: "مسائل استوکیومتری نیازمند تست تمرکزی است." },
+    { lesson: "ریاضیات (حسابان)", percentage: 38, status: "critical", advice: "مبحث مشتق و تابع نقطه آسیب جدی کارنامه است." },
+    { lesson: "فیزیک پیشرفته", percentage: 65, status: "success", advice: "وضعیت مطلوب؛ حل تست‌های زمان‌دار ادامه یابد." },
+    { lesson: "ادبیات اختصاصی", percentage: 70, status: "success", advice: "قرابت معنایی و آرایه‌ها در سطح عالی." },
+  ];
+
   const handleGeneratePlan = () => {
     setIsGenerating(true);
     setTimeout(() => {
       const fieldName = student.field === "tajrobi" ? "علوم تجربی (پزشکی/دندان)" : student.field === "riazi" ? "ریاضی فیزیک (مهندسی شریف)" : "علوم انسانی (وکالت/روانشناسی)";
       
       setGeneratedPlan({
-        title: `نقشه راه و برنامه مهندسی‌شده کایزن برای ${student.name}`,
+        title: `نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه ${student.name}`,
         profile: fieldName,
         dailyHours: targetHours,
-        examStandard: selectedExamType === "konkur_master" ? "کنکور سراسری ۱۴۰۵ (سطح فوق سخت)" : "آزمون‌های آزمایشی جامع (سطح استاندارد)",
-        strategy: "تلفیق پارت‌های ۵۰ دقیقه‌ای پومودورو با تست‌های تله‌دار کایزن، پایش سلامت روان و گزارش خودکار به مشاور و والدین.",
+        examStandard: selectedExamType === "konkur_master" ? "کنکور سراسری ۱۴۰۵ (سطح فوق سخت)" : "آزمون‌های جامع آزمایشی (سطح استاندارد)",
+        strategy: "تلفیق پارت‌های ۵۰ دقیقه‌ای پومودورو با تمرکز ویژه روی دروس ضعیف کارنامه (ریاضی و زیست) و گزارش خودکار به مشاور و والدین.",
         warnings: [
-          "⚠️ هشدار عارضه‌یابی کارنامه: افت درصد در مباحث ژنتیک و استوکیومتری در آزمون قبل مشاهده شد؛ این پارت‌ها در برنامه امروز با ضریب اضطراری تکرار شده‌اند.",
-          "💡 پیشنهاد مشاور: در پارت عصرگاهی امروز، حتماً ۱۰ دقیقه استراحت چشم بدون گوشی داشته باشید تا فرسودگی توجه رخ ندهد."
+          "⚠️ هشدار عارضه‌یابی کارنامه: درس ریاضی (حسابان) با ۳۸٪ و زیست‌شناسی با ۴۸٪ در منطقه خطر تراز هستند؛ پارت‌های جبرانی در برنامه امروز تزریق شدند.",
+          "💡 پیشنهاد مشاور: حتماً در شیفت صبح از روش بازیابی (Active Recall) برای رفع اشکال ریاضی استفاده کنید."
         ],
         schedule: [
-          { day: "شنبه", morning: "مطالعه خط‌به‌خط کتاب درسی و تحلیل مفهومی زیست/ریاضی (۴ ساعت)", afternoon: "حل ۵۰ تست زمان‌دار تله‌دار + تحلیل غلط‌ها در دفتر اشتباهات", totalQ: 50 },
-          { day: "یکشنبه", morning: "مرور فرمول‌ها و حل مسائل محاسباتی پیشرفته فیزیک/شیمی (۴ ساعت)", afternoon: "آزمون موضوعی موازی و رفع اشکال عارضه‌یابی", totalQ: 45 },
-          { day: "دوشنبه", morning: "مطالعه دروس حفظی و خلاصه‌نویسی نموداری (۳ ساعت)", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
-          { day: "سه‌شنبه", morning: "شبیه‌ساز نیمه‌جامع کنکور سال‌های گذشته (۴ ساعت)", afternoon: "تحلیل موشکافانه تراز و مدیریت زمان ضربدر منها", totalQ: 60 },
-          { day: "چهارشنبه", morning: "رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای (۳ ساعت)", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
-          { day: "پنجشنبه", morning: "آزمون جامع آزمایشی آزمون‌محور (۴ ساعت)", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", totalQ: 50 },
-          { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "آماده‌سازی برای استریک هفته جدید و ارسال گزارش به مشاور", totalQ: 20 },
+          { day: "شنبه", morning: "پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت", afternoon: "حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات", totalQ: 40 },
+          { day: "یکشنبه", morning: "مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت", afternoon: "تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور", totalQ: 50 },
+          { day: "دوشنبه", morning: "مرور فرمول‌های فیزیک و شیمی - ۳ ساعت", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
+          { day: "سه‌شنبه", morning: "شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 60 },
+          { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
+          { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", totalQ: 50 },
+          { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
         ],
         extracurricular: [
-          "کارگاه آنلاین تحلیل تله‌های تستی زیست‌شناسی و شیمی (چهارشنبه‌ها ساعت ۱۸)",
+          "کارگاه رفع اشکال اضطراری ریاضی و مشتق (چهارشنبه‌ها ساعت ۱۷)",
           "جلسه مشاوره گروهی مدیریت استرس و بهداشت روان کنکور (پنج‌شنبه‌ها ساعت ۱۱)",
           "دوره حل مسائل سرعت محاسبات بدون چک‌نویس در ریاضی و فیزیک"
         ]
@@ -57,7 +66,6 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
     e.preventDefault();
     if (!dailyReportText.trim()) return;
     setDailyLogSubmitted(true);
-    // Save report in localStorage / database simulation
     try {
       const existing = JSON.parse(localStorage.getItem("taranom_daily_logs") || "[]");
       existing.push({ date: new Date().toISOString(), text: dailyReportText, student: student.name });
@@ -74,12 +82,49 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
         <div className="space-y-3 relative z-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-indigo-200">
             <Sparkles size={14} className="text-amber-400" />
-            <span>برنامه ریزی مطالعاتی هوشمند متصل به دیتابیس، مشاور و خانواده</span>
+            <span>برنامه‌ریزی مطالعاتی هوشمند مبتنی بر کارنامه و دیتابیس</span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-black">سیستم جامع مهندسی برنامه و مانیتورینگ عملکرد</h1>
+          <h1 className="text-2xl md:text-3xl font-black">طراح مهندسی برنامه و تحلیل عارضه‌یابی کارنامه</h1>
           <p className="text-xs md:text-sm text-indigo-200/90 font-medium leading-relaxed max-w-2xl">
-            این برنامه بر اساس آخرین کارنامه ثبت‌شده شما در دیتابیس ساخته شده، نقاط آسیب‌پذیر را هشدار می‌دهد و گزارش‌های روزانه را مستقیماً برای مشاور ارشد و والدین ارسال می‌کند.
+            در این بخش نمرات، درصدها و وضعیت آسیب‌پذیری دروس شما از دیتابیس استخراج شده و برنامه مطالعاتی دقیقاً روی نقاط ضعف شما معماری می‌شود.
           </p>
+        </div>
+      </div>
+
+      {/* 📊 Student Grades & Report Card Overview Section */}
+      <div className="bg-white rounded-[32px] p-8 border border-slate-150 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <h3 className="text-base font-black text-slate-900 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <BarChart3 size={18} />
+            </div>
+            <span>وضعیت نمرات و کارنامه فعلی داوطلب (استخراج از دیتابیس)</span>
+          </h3>
+          <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1 rounded-full font-mono">
+            میانگین تسلط: ۵۵٪
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {studentGrades.map((g, idx) => (
+            <div key={idx} className={`p-5 rounded-2xl border transition-all space-y-3 ${
+              g.status === "critical" ? "bg-rose-50/60 border-rose-200" :
+              g.status === "warning" ? "bg-amber-50/60 border-amber-200" : "bg-emerald-50/50 border-emerald-200"
+            }`}>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-black text-slate-900">{g.lesson}</span>
+                <span className={`text-xs font-black font-mono px-2 py-0.5 rounded-lg ${
+                  g.status === "critical" ? "bg-rose-100 text-rose-700" :
+                  g.status === "warning" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                }`}>
+                  {g.percentage}٪
+                </span>
+              </div>
+              <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
+                {g.advice}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -135,7 +180,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
         <button 
           onClick={handleGeneratePlan}
           disabled={isGenerating}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-4 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-4 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
           {isGenerating ? (
             <>
@@ -145,7 +190,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           ) : (
             <>
               <Sparkles size={16} />
-              <span>تولید و ساخت برنامه مطالعاتی هوشمند</span>
+              <span>تولید و ساخت برنامه مطالعاتی هوشمند بر اساس کارنامه</span>
             </>
           )}
         </button>
@@ -153,7 +198,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
 
       {/* Generated Plan Output & Warnings */}
       {generatedPlan && (
-        <div className="space-y-8 animate-in.fade-in slide-in-from-bottom-4">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
           
           {/* Warnings & Exam Damage Alerts */}
           <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-3 shadow-sm">
@@ -182,7 +227,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               
               <button 
                 onClick={() => alert("برنامه مطالعاتی با موفقیت در فرمت PDF دانلود شد.")}
-                className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black shadow-md hover:bg-slate-800 transition"
+                className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black shadow-md hover:bg-slate-800 transition cursor-pointer"
               >
                 <Download size={16} />
                 <span>دانلود PDF برنامه هفته</span>
@@ -263,7 +308,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
                 />
                 <button 
                   type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-6 py-3.5 rounded-2xl shadow-md transition flex items-center gap-2"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-6 py-3.5 rounded-2xl shadow-md transition flex items-center gap-2 cursor-pointer"
                 >
                   <MessageSquare size={16} />
                   <span>ثبت و ارسال گزارش به مشاور و خانواده</span>
@@ -279,7 +324,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       <div className="text-center">
         <button 
           onClick={() => onNavigate("dashboard")}
-          className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-xs font-black transition-all bg-white border border-indigo-200 px-6 py-3 rounded-2xl shadow-sm"
+          className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-xs font-black transition-all bg-white border border-indigo-200 px-6 py-3 rounded-2xl shadow-sm cursor-pointer"
         >
           <ArrowRight size={14} />
           <span>بازگشت به داشبورد اصلی</span>
