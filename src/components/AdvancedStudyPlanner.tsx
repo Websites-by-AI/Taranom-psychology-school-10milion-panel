@@ -30,7 +30,6 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       }
     } catch {}
 
-    // Default professional Konkur standard schedule featuring Pomodoro 50/10 cycles & AI diagnostic tips
     const fieldName = student.field === "tajrobi" ? "علوم تجربی (پزشکی/دندان)" : student.field === "riazi" ? "ریاضی فیزیک (مهندسی شریف)" : "علوم انسانی (وکالت/روانشناسی)";
     
     setGeneratedPlan({
@@ -46,42 +45,63 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       schedule: [
         { 
           day: "شنبه", 
+          emoji: "🚀",
+          color: "from-blue-500 to-indigo-600",
+          bgLight: "bg-blue-50/70 border-blue-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): مطالعه عمیق کتاب درسی + پارت پومودوروهای مفهومی (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): حل ۴۰ تست زمان‌دار تله‌دار + تحلیل غلط‌ها در دفتر اشتباهات", 
           totalQ: 40 
         },
         { 
           day: "یکشنبه", 
+          emoji: "⚡",
+          color: "from-indigo-500 to-purple-600",
+          bgLight: "bg-indigo-50/70 border-indigo-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): حل مسائل محاسباتی پیشرفته و فرمول‌شناسی (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): آزمون موضوعی موازی و رفع اشکال عارضه‌یابی تراز", 
           totalQ: 45 
         },
         { 
           day: "دوشنبه", 
+          emoji: "📚",
+          color: "from-purple-500 to-pink-600",
+          bgLight: "bg-purple-50/70 border-purple-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): مرور دروس حفظی، فرمول‌های فیزیک و خلاصه‌نویسی نموداری (۳ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تست‌زنی جامع موازی و بررسی پاسخ‌نامه تشریحی", 
           totalQ: 40 
         },
         { 
           day: "سه‌شنبه", 
+          emoji: "🎯",
+          color: "from-emerald-500 to-teal-600",
+          bgLight: "bg-emerald-50/70 border-emerald-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تحلیل موشکافانه تراز و تکنیک ضربدر منها", 
           totalQ: 60 
         },
         { 
           day: "چهارشنبه", 
+          emoji: "💡",
+          color: "from-amber-500 to-orange-600",
+          bgLight: "bg-amber-50/70 border-amber-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای (۳ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): حل تست‌های سطح المپیاد و تله‌های پرتکرار", 
           totalQ: 35 
         },
         { 
           day: "پنجشنبه", 
+          emoji: "🏆",
+          color: "from-rose-500 to-red-600",
+          bgLight: "bg-rose-50/70 border-rose-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): آزمون جامع آزمایشی شبیه‌ساز استاندارد (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تحلیل کارنامه و استراحت بازسازنده ذهن", 
           totalQ: 50 
         },
         { 
           day: "جمعه", 
+          emoji: "☕",
+          color: "from-slate-600 to-slate-800",
+          bgLight: "bg-slate-50/70 border-slate-200",
           morning: "شیفت اول (۰۹:۰۰ الی ۱۲:۰۰): مرور خلاصه‌های طلایی، استراحت و ریکاوری روحی کایزن", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۱۹:۰۰): ارسال گزارش هفتگی به مشاور ارشد و والدین", 
           totalQ: 20 
@@ -113,20 +133,20 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
         title: `نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه ${student.name}`,
         profile: fieldName,
         dailyHours: targetHours,
-        examStandard: selectedExamType === "konkur_master" ? "کنکور سراسری ۱۴۰۵ (سطح فوق سخت)" : "آزمون‌های جامع آزمایشی (سطح استاندارد)",
+        examStandard: selectedExamType === "konkur_master" ? "کنکور سراسری ۱۴۰۵ (سطح فوق سخت)" : "آزمون‌های جامع آزمایشی (استاندارد کشوری)",
         strategy: "تلفیق پارت‌های ۵۰ دقیقه‌ای پومودورو با تمرکز ویژه روی دروس ضعیف کارنامه و گزارش خودکار به مشاور و والدین.",
         warnings: [
           "⚠️ هشدار عارضه‌یابی کارنامه: درس ریاضی (حسابان) با ۳۸٪ و زیست‌شناسی با ۴۸٪ در منطقه خطر تراز هستند؛ پارت‌های جبرانی در برنامه امروز تزریق شدند.",
           "💡 پیشنهاد مشاور: حتماً در شیفت صبح از روش بازیابی (Active Recall) برای رفع اشکال ریاضی استفاده کنید."
         ],
         schedule: [
-          { day: "شنبه", morning: `شیفت اول: پارت جبرانی تخصصی (${targetHours} ساعت مطالعه متمرکز)`, afternoon: "حل تست‌های زمان‌دار تله‌دار + ثبت در دفتر اشتباهات", totalQ: 45 },
-          { day: "یکشنبه", morning: "شیفت اول: مطالعه مباحث پایه و حل مسائل تشریحی", afternoon: "آزمون موضوعی موازی و رفع اشکال عارضه‌یابی", totalQ: 40 },
-          { day: "دوشنبه", morning: "شیفت اول: مرور فرمول‌های فیزیک و شیمی و خلاصه‌نویسی", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
-          { day: "سه‌شنبه", morning: "شیفت اول: شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 55 },
-          { day: "چهارشنبه", morning: "شیفت اول: رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
-          { day: "پنجشنبه", morning: "شیفت اول: آزمون جامع آزمایشی شبیه‌ساز استاندارد", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهنی", totalQ: 50 },
-          { day: "جمعه", morning: "شیفت اول: مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
+          { day: "شنبه", emoji: "🚀", color: "from-blue-500 to-indigo-600", bgLight: "bg-blue-50/70 border-blue-200", morning: `شیفت اول: پارت جبرانی تخصصی (${targetHours} ساعت مطالعه متمرکز)`, afternoon: "حل تست‌های زمان‌دار تله‌دار + ثبت در دفتر اشتباهات", totalQ: 45 },
+          { day: "یکشنبه", emoji: "⚡", color: "from-indigo-500 to-purple-600", bgLight: "bg-indigo-50/70 border-indigo-200", morning: "شیفت اول: مطالعه مباحث پایه و حل مسائل تشریحی", afternoon: "آزمون موضوعی موازی و رفع اشکال عارضه‌یابی", totalQ: 40 },
+          { day: "دوشنبه", emoji: "📚", color: "from-purple-500 to-pink-600", bgLight: "bg-purple-50/70 border-purple-200", morning: "شیفت اول: مرور فرمول‌های فیزیک و شیمی و خلاصه‌نویسی", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
+          { day: "سه‌شنبه", emoji: "🎯", color: "from-emerald-500 to-teal-600", bgLight: "bg-emerald-50/70 border-emerald-200", morning: "شیفت اول: شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 55 },
+          { day: "چهارشنبه", emoji: "💡", color: "from-amber-500 to-orange-600", bgLight: "bg-amber-50/70 border-amber-200", morning: "شیفت اول: رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
+          { day: "پنجشنبه", emoji: "🏆", color: "from-rose-500 to-red-600", bgLight: "bg-rose-50/70 border-rose-200", morning: "شیفت اول: آزمون جامع آزمایشی شبیه‌ساز استاندارد", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهنی", totalQ: 50 },
+          { day: "جمعه", emoji: "☕", color: "from-slate-600 to-slate-800", bgLight: "bg-slate-50/70 border-slate-200", morning: "شیفت اول: مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
         ],
         extracurricular: [
           "کارگاه رفع اشکال اضطراری دروس تخصصی (با حضور مشاور)",
@@ -328,10 +348,11 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
             </div>
           </div>
 
+          {/* 🌈 BEAUTIFUL GAMIFIED & COLORFUL WEEKLY SCHEDULE CARDS */}
           <div className="bg-white rounded-[32px] p-8 border border-slate-150 shadow-sm space-y-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-6">
               <div className="space-y-1">
-                <span className="text-[10px] font-black px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-mono">
+                <span className="text-[10px] font-black px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full font-mono">
                   {generatedPlan.profile}
                 </span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">{generatedPlan.title}</h2>
@@ -347,31 +368,47 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               </button>
             </div>
 
-            {/* Weekly Schedule Table */}
+            {/* Weekly Schedule Colorful Grid */}
             <div className="space-y-4">
               <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
                 <Calendar size={16} className="text-indigo-600" />
-                <span>جدول زمان‌بندی پارت‌های مطالعاتی هفته</span>
+                <span>جدول رنگی و جذاب زمان‌بندی پارت‌های مطالعاتی هفته</span>
               </h4>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {generatedPlan.schedule.map((sch: any, idx: number) => (
-                  <div key={idx} className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-indigo-300 transition-all">
-                    <div className="flex items-center gap-3 w-32 shrink-0">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center justify-center font-mono">
-                        {sch.day}
+                  <div 
+                    key={idx} 
+                    className={`p-6 rounded-[28px] border transition-all shadow-sm hover:shadow-md relative overflow-hidden group bg-gradient-to-br from-white to-slate-50/80 ${sch.bgLight || 'border-slate-200'}`}
+                  >
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                    
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${sch.color || 'from-indigo-600 to-blue-600'} text-white font-black text-lg flex items-center justify-center shadow-md`}>
+                          {sch.emoji || '✨'}
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-black text-slate-900">{sch.day}</h5>
+                          <span className="text-[10px] text-indigo-600 font-extrabold font-mono">پنجره مطالعاتی کایزن</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-black text-slate-900">{sch.day}</span>
+                      <div className="px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-center shadow-xs">
+                        <span className="block text-[8px] text-slate-400 font-black">تست هدف</span>
+                        <span className="text-xs font-black text-indigo-950 font-mono">{sch.totalQ} تست</span>
+                      </div>
                     </div>
 
-                    <div className="flex-1 space-y-1 text-xs">
-                      <p className="font-bold text-slate-800"><span className="text-indigo-600 font-black">شیفت اول:</span> {sch.morning}</p>
-                      <p className="font-bold text-slate-600"><span className="text-emerald-600 font-black">شیفت دوم:</span> {sch.afternoon}</p>
-                    </div>
+                    <div className="space-y-2.5 pt-3 border-t border-slate-100 text-xs font-bold text-slate-700">
+                      <div className="bg-white/80 p-3 rounded-xl border border-slate-150 shadow-xs space-y-1">
+                        <span className="text-[9px] text-indigo-600 font-black block">🌅 شیفت اول (صبح):</span>
+                        <p className="text-slate-800 leading-relaxed font-semibold">{sch.morning}</p>
+                      </div>
 
-                    <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 text-center shrink-0">
-                      <span className="block text-[9px] text-slate-400 font-bold">تست هدف</span>
-                      <span className="text-xs font-black text-indigo-950 font-mono">{sch.totalQ} تست</span>
+                      <div className="bg-white/80 p-3 rounded-xl border border-slate-150 shadow-xs space-y-1">
+                        <span className="text-[9px] text-emerald-600 font-black block">🌆 شیفت دوم (عصر):</span>
+                        <p className="text-slate-800 leading-relaxed font-semibold">{sch.afternoon}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
