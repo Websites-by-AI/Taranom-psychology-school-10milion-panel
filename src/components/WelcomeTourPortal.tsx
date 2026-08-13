@@ -4,7 +4,7 @@ import {
   ArrowLeft, Activity, HelpCircle, CheckCircle,
   Zap, Phone, Globe, Mail, Clock, Award,
   Star, LayoutGrid, Fingerprint, Building2, BarChart3, Home, LayoutDashboard,
-  ShoppingBag, BookOpen, MessageCircle, Menu, X
+  ShoppingBag, BookOpen, MessageCircle, Menu, X, Check, CheckCircle2, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BRAND_CONFIG } from '../constants';
@@ -21,23 +21,18 @@ interface WelcomeTourPortalProps {
 
 export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRole }: WelcomeTourPortalProps) {
   // Simulator State
-  const [currentTraza, setCurrentTraza] = useState<number>(6200);
-  const [studyHours, setStudyHours] = useState<number>(7.5);
-  const [trapAccuracy, setTrapAccuracy] = useState<number>(45);
+  const [streakDays, setStreakDays] = useState<number>(14);
 
   // Character Toggle State
-  const [showConsultationForm, setShowConsultationForm] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // FAQ/Knowledge Base Tabs
-  const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
-
-  // Reservation Form State
-  const [studentName, setStudentName] = useState("");
-  const [studentPhone, setStudentPhone] = useState("");
-  const [fieldOfStudy, setFieldOfStudy] = useState("تجربی");
-  const [challengeMsg, setChallengeMsg] = useState("");
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  // Konkur Assessment Widget States (Inspired by Rabinedu)
+  const [quizStep, setQuizStep] = useState(1);
+  const [quizHours, setQuizHours] = useState("۵ تا ۸ ساعت");
+  const [quizChallenge, setQuizChallenge] = useState("کندخوانی / تست‌زنی ضعیف");
+  const [quizLevel, setQuizLevel] = useState("متوسط و خوب");
+  const [quizFinished, setQuizFinished] = useState(false);
+  const [quizAnalyzing, setQuizAnalyzing] = useState(false);
 
   // Handle simulated Quick Demo Login
   const handleDemoLogin = (studentId: string, roleType: "student" | "parent" | "admin" | "counselor" | "teacher", name: string, grade: string) => {
@@ -56,16 +51,12 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
     }
   };
 
-  const submitConsultation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!studentName || !studentPhone) return;
-    setIsSubmitted(true);
+  const handleRunQuizAnalysis = () => {
+    setQuizAnalyzing(true);
     setTimeout(() => {
-      setIsSubmitted(false);
-      setStudentName("");
-      setStudentPhone("");
-      setChallengeMsg("");
-    }, 4000);
+      setQuizAnalyzing(false);
+      setQuizFinished(true);
+    }, 1500);
   };
 
   // ورود به صفحه وبلاگ — در صورت داشتن slug، همان مقاله مستقیم باز می‌شود
@@ -76,7 +67,6 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
     onNavigate("blog");
   };
 
-  // Convert numbers to Persian characters visually
   const toPersianNum = (num: number | string) => {
     const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
     return num.toString().replace(/\d/g, (x) => persianDigits[parseInt(x)]);
@@ -85,7 +75,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans text-right selection:bg-indigo-100 selection:text-indigo-900 relative overflow-x-hidden" style={{ direction: 'rtl' }} id="welcome-portal-root">
       
-      {/* 🔮 Background Mesh Orbs (Enhanced Visual Depth) */}
+      {/* 🔮 Background Mesh Orbs */}
       <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
         <div className="absolute -top-[10%] -right-[5%] w-[40%] h-[40%] bg-indigo-50/50 rounded-full blur-[120px] animate-pulse" />
         <div className="absolute top-[20%] -left-[10%] w-[30%] h-[30%] bg-blue-50/40 rounded-full blur-[100px]" />
@@ -98,8 +88,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
           <div className="bg-white/70 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-sm hover:shadow-md transition-all duration-300 px-4 sm:px-6 h-16 flex items-center justify-between">
             
             <div className="flex items-center gap-8">
-              {/* Elegant Brand Identity */}
-              <div className="flex items-center gap-3 group cursor-pointer">
+              <div className="flex items-center gap-3 group cursor-pointer" onClick={() => onNavigate("welcome")}>
                 <div className="p-2 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform duration-500">
                   <Sparkles size={20} className="animate-pulse" />
                 </div>
@@ -109,15 +98,15 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 </div>
               </div>
 
-              {/* Enhanced Links */}
               <nav className="hidden lg:flex items-center gap-1 text-[11px] font-black text-slate-500">
                 {[
                   { id: "hero", label: "خانه", icon: Home },
                   { id: "features", label: "قابلیت‌ها", icon: Zap },
-                  { id: "plans", label: "خدمات", icon: LayoutGrid },
+                  { id: "quiz-section", label: "سنجش وضعیت", icon: Target },
+                  { id: "success-stories", label: "قبولی‌های برتر", icon: Award },
+                  { id: "comparison", label: "مقایسه روش‌ها", icon: BarChart3 },
                   { id: "shop", label: "فروشگاه", icon: ShoppingBag },
                   { id: "blog", label: "وبلاگ", icon: BookOpen },
-                  { id: "faq", label: "تماس با ما", icon: MessageCircle },
                 ].map((link) => (
                   <a 
                     key={link.id}
@@ -175,10 +164,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                   <Sparkles size={24} />
                   <span>ترنم همدلی</span>
                 </div>
-                <button 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 bg-slate-100 rounded-xl text-slate-500"
-                >
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 rounded-xl text-slate-500">
                   <X size={20} />
                 </button>
               </div>
@@ -187,10 +173,11 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 {[
                   { id: "hero", label: "خانه", icon: Home },
                   { id: "features", label: "قابلیت‌ها", icon: Zap },
-                  { id: "plans", label: "خدمات و پلن‌ها", icon: LayoutGrid },
-                  { id: "shop", label: "فروشگاه تخصصی", icon: ShoppingBag },
-                  { id: "blog", label: "وبلاگ و مقالات", icon: BookOpen },
-                  { id: "contact", label: "تماس با ما", icon: Phone },
+                  { id: "quiz-section", label: "سنجش وضعیت کنکوری", icon: Target },
+                  { id: "success-stories", label: "قبولی‌های درخشان", icon: Award },
+                  { id: "comparison", label: "مقایسه با روش سنتی", icon: BarChart3 },
+                  { id: "shop", label: "فروشگاه", icon: ShoppingBag },
+                  { id: "blog", label: "وبلاگ", icon: BookOpen },
                 ].map((link) => (
                   <a 
                     key={link.id}
@@ -208,19 +195,6 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                   </a>
                 ))}
               </nav>
-
-              <div className="mt-auto pt-6 border-t border-slate-100">
-                <button 
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    onNavigate("login");
-                  }}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-indigo-100"
-                >
-                  <User size={18} />
-                  <span>ورود به حساب کاربری</span>
-                </button>
-              </div>
             </motion.div>
           </motion.div>
         )}
@@ -231,7 +205,6 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center text-center space-y-12">
             
-            {/* AI Status Badge */}
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -242,11 +215,10 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
                 </span>
-                <span>هوش مصنوعی فعال — Gemini 2.0 Flash</span>
+                <span>هوش مصنوعی فعال — Gemini 2.0 Flash و Llama 3.3</span>
               </div>
             </motion.div>
 
-            {/* Main Heading with Dynamic Typography */}
             <div className="space-y-8 max-w-5xl">
               <motion.h1 
                 initial={{ opacity: 0, y: 30 }}
@@ -254,9 +226,9 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 viewport={{ once: true }}
                 className="text-5xl md:text-7xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight"
               >
-                با همدلی و همراهی علمی، <br />
+                انتخاب اول رتبه‌های برتر <br />
                 <span className="relative inline-block mt-4">
-                  <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-violet-600 to-indigo-700">چالش‌ها را حل کنیم ❤️</span>
+                  <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-violet-600 to-indigo-700">در سال‌های اخیر ❤️</span>
                   <div className="absolute -bottom-3 left-0 w-full h-5 bg-indigo-100/60 -rotate-1 -z-10 rounded-full blur-md" />
                 </span>
               </motion.h1>
@@ -268,12 +240,10 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                 viewport={{ once: true }}
                 className="text-lg md:text-2xl text-slate-600 font-bold max-w-3xl leading-relaxed mx-auto"
               >
-                معلم خصوصی هوشمندِ تو که ۲۴ ساعته کنارت هست. <br className="hidden md:block" />
-                درس‌ها رو برات ساده می‌کنیم، با هم برنامه می‌ریزیم و هر جا خسته شدی، بهت دل و جرات می‌دیم.
+                قبولی در رشته‌های تاپ (پزشکی، دندانپزشکی، مهندسی و حقوق) دیگر یک رویا نیست. با برنامه‌ریزی کاملاً شخصی‌سازی شده و پیگیری هرشبه!
               </motion.p>
             </div>
 
-            {/* Premium CTAs */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -283,35 +253,18 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
             >
               <button 
                 onClick={() => onNavigate("login")}
-                className="group px-12 py-6 bg-indigo-600 hover:bg-slate-900 text-white font-heavy rounded-[2.5rem] shadow-2xl shadow-indigo-200 hover:shadow-slate-300 transition-all duration-500 active:scale-95 flex items-center justify-center gap-4 overflow-hidden relative"
+                className="group px-12 py-6 bg-indigo-600 hover:bg-slate-900 text-white font-heavy rounded-[2.5rem] shadow-2xl shadow-indigo-200 hover:shadow-slate-300 transition-all duration-500 active:scale-95 flex items-center justify-center gap-4 overflow-hidden relative cursor-pointer"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                <span className="text-lg">رایگان شروع کنیم</span>
+                <span className="text-lg">ثبت درخواست مشاوره رایگان</span>
                 <ArrowLeft size={24} className="group-hover:-translate-x-2 transition-transform" />
               </button>
-              <button 
+              <a 
+                href="#quiz-section"
                 className="px-12 py-6 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-heavy rounded-[2.5rem] transition-all shadow-xl shadow-slate-100 active:scale-95 flex items-center justify-center gap-3"
               >
-                <HelpCircle size={22} className="text-indigo-500" />
-                <span className="text-lg">ببینیم چطور کار می‌کنه</span>
-              </button>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              viewport={{ once: true }}
-              className="flex flex-col items-center gap-4 pt-4"
-            >
-              <p className="text-[11px] text-slate-400 font-bold flex items-center gap-2">
-                <CheckCircle size={14} className="text-emerald-500" />
-                <span>بدون تبلیغات مزاحم — فقط تمرکز روی آینده‌ی تو</span>
-              </p>
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-50 rounded-full border border-slate-100">
-                <Users size={12} className="text-indigo-400" />
-                <span className="text-[10px] text-slate-500 font-black">بیش از ۱۰,۰۰۰ دانش‌آموز امسال با ما همراه شدند</span>
-              </div>
+                <Target size={22} className="text-indigo-500" />
+                <span className="text-lg">سنجش وضعیت کنکوری من</span>
+              </a>
             </motion.div>
 
             {/* Floating Trust Bar */}
@@ -333,12 +286,268 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
         </div>
       </section>
 
-      {/* 💎 Section 2: Smart Tools (Bento Grid Style) */}
-      <section className="py-16 relative overflow-hidden" id="features">
-        {/* Decorative background elements for this section */}
-        <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-indigo-50/30 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/4" />
-        <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-violet-50/20 rounded-full blur-[100px] translate-y-1/4 -translate-x-1/4" />
+      {/* 🎯 Section: Interactive Konkur Assessment Widget (Inspired by Rabinedu) */}
+      <section className="py-20 bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-950 text-white relative overflow-hidden" id="quiz-section">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-12">
+          
+          <div className="text-center space-y-4">
+            <span className="text-[10px] font-black text-amber-400 bg-white/10 px-4 py-1.5 rounded-full border border-white/10 tracking-widest uppercase">
+              ارزیابی هوشمند رابین و کایزن
+            </span>
+            <h2 className="text-3xl md:text-5xl font-black">سنجش وضعیت کنکوری شما</h2>
+            <p className="text-slate-300 text-xs md:text-sm font-medium">به ۳ سوال کوتاه پاسخ بده تا بهت بگیم دقیقاً چه پکیج و برنامه‌ای برات مناسبه!</p>
+          </div>
 
+          <div className="bg-white/10 backdrop-blur-xl border border-white/15 p-8 md:p-12 rounded-[3rem] shadow-2xl space-y-8">
+            {!quizFinished ? (
+              <div className="space-y-8">
+                <div className="flex justify-between items-center text-xs font-bold text-indigo-300 border-b border-white/10 pb-4">
+                  <span>سوال {toPersianNum(quizStep)} از ۳</span>
+                  <div className="w-32 bg-white/20 h-2 rounded-full overflow-hidden">
+                    <div className="bg-amber-400 h-full rounded-full transition-all duration-300" style={{ width: `${(quizStep / 3) * 100}%` }} />
+                  </div>
+                </div>
+
+                {quizStep === 1 && (
+                  <div className="space-y-6 text-right">
+                    <h3 className="text-lg md:text-xl font-black text-white">۱. در روز به طور میانگین چند ساعت درس می‌خوانی؟</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {["زیر ۵ ساعت", "بین ۵ تا ۸ ساعت", "بالای ۸ ساعت"].map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setQuizHours(opt)}
+                          className={`p-5 rounded-2xl border font-bold text-xs transition cursor-pointer text-center ${
+                            quizHours === opt ? "bg-amber-400 text-slate-950 border-amber-400 font-black shadow-lg" : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {quizStep === 2 && (
+                  <div className="space-y-6 text-right">
+                    <h3 className="text-lg md:text-xl font-black text-white">۲. بزرگترین مشکلت در مسیر کنکور چیه؟</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {["کندخوانی / تست‌زنی ضعیف", "نداشتن برنامه و بی‌نظمی", "عدم تمرکز و استرس", "نیاز به پیگیری و تلنگر"].map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setQuizChallenge(opt)}
+                          className={`p-5 rounded-2xl border font-bold text-xs transition cursor-pointer text-center ${
+                            quizChallenge === opt ? "bg-amber-400 text-slate-950 border-amber-400 font-black shadow-lg" : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {quizStep === 3 && (
+                  <div className="space-y-6 text-right">
+                    <h3 className="text-lg md:text-xl font-black text-white">۳. سطح فعلی درسی یا معدل سال قبلت چطوره؟</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {["متوسط رو پایین", "متوسط و خوب", "عالی (دنبال رتبه برترم)"].map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setQuizLevel(opt)}
+                          className={`p-5 rounded-2xl border font-bold text-xs transition cursor-pointer text-center ${
+                            quizLevel === opt ? "bg-amber-400 text-slate-950 border-amber-400 font-black shadow-lg" : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-6 border-t border-white/10">
+                  {quizStep > 1 ? (
+                    <button
+                      onClick={() => setQuizStep(prev => prev - 1)}
+                      className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      مرحله قبل
+                    </button>
+                  ) : <div />}
+
+                  {quizStep < 3 ? (
+                    <button
+                      onClick={() => setQuizStep(prev => prev + 1)}
+                      className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-md"
+                    >
+                      مرحله بعد
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleRunQuizAnalysis}
+                      disabled={quizAnalyzing}
+                      className="px-8 py-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition cursor-pointer shadow-xl flex items-center gap-2"
+                    >
+                      {quizAnalyzing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          <span>در حال تحلیل وضعیت با هوش مصنوعی...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} />
+                          <span>مشاهده نتیجه و پیشنهاد ویژه</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center space-y-6 py-4 animate-in zoom-in duration-300">
+                <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle size={40} />
+                </div>
+                <h3 className="text-2xl font-black text-white">شما پتانسیل بالایی برای قبولی در رشته‌های تاپ دارید!</h3>
+                <p className="text-slate-300 text-xs md:text-sm font-medium max-w-xl mx-auto leading-relaxed">
+                  با توجه به پاسخ‌های شما، مشکل اصلی «<span className="text-amber-300 font-bold">{quizChallenge}</span>» است. پیشنهاد ویژه ما برای شما **"طرح مربیگری VIP"** است تا با کمک رتبه‌های برتر، این ضعف‌ها به سرعت پوشش داده شوند.
+                </p>
+                <div className="pt-4 flex justify-center gap-4">
+                  <button
+                    onClick={() => onNavigate("login")}
+                    className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black shadow-lg transition cursor-pointer"
+                  >
+                    شروع طرح حرفه‌ای و ثبت‌نام
+                  </button>
+                  <button
+                    onClick={() => { setQuizFinished(false); setQuizStep(1); }}
+                    className="px-6 py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-xs font-bold transition cursor-pointer"
+                  >
+                    تست مجدد
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 🏆 Section: Success Stories / Top Rankers Showcase (Inspired by Rabinedu) */}
+      <section className="py-20 bg-slate-50" id="success-stories">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-full border border-indigo-100 uppercase tracking-widest leading-none">
+              Result & Trust
+            </span>
+            <h2 className="text-3xl md:text-5xl font-black text-slate-900">بخشی از قبولی‌های درخشان ترنم همدلی</h2>
+            <p className="text-slate-500 text-xs md:text-sm font-bold">نتیجه اعتماد به سیستم اصولی برنامه‌ریزی و پایش مداوم مربیان</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { name: "آیناز امیدی", rank: "رتبه ۱۷۱ کنکور تجربی", major: "پزشکی علوم پزشکی اصفهان", img: "https://rabinedu.com/wp-content/uploads/2026/06/ainaz-omidi.webp" },
+              { name: "حسین اکبری", rank: "رتبه ۷۰۵ کنکور تجربی", major: "دندانپزشکی ایلام", img: "https://rabinedu.com/wp-content/uploads/2026/06/hossein-akbari.webp" },
+              { name: "مائده مدنی", rank: "رتبه برتر کنکور تجربی", major: "گفتار درمانی علوم پزشکی ایران", img: "https://rabinedu.com/wp-content/uploads/2026/06/maedeh-madani.webp" },
+              { name: "مبینا عدالت‌خواه", rank: "رتبه برتر کنکور انسانی", major: "راهنمایی و مشاوره فرهنگیان", img: "https://rabinedu.com/wp-content/uploads/2026/06/mobina-edalat-khah.webp" }
+            ].map((stu, i) => (
+              <motion.div 
+                key={i}
+                whileHover={{ y: -6 }}
+                className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-xl transition-all text-center space-y-4 group overflow-hidden"
+              >
+                <div className="w-24 h-24 rounded-full mx-auto overflow-hidden border-4 border-indigo-50 shadow-md group-hover:scale-105 transition-transform duration-500">
+                  <img src={stu.img} alt={stu.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-black text-slate-900">{stu.name}</h4>
+                  <p className="text-[11px] text-indigo-600 font-extrabold">{stu.rank}</p>
+                  <p className="text-[10px] text-slate-400 font-bold">{stu.major}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 📊 Section: Comparison Table (Inspired by Rabinedu) */}
+      <section className="py-20 bg-white" id="comparison">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-full border border-indigo-100 uppercase tracking-widest leading-none">
+              Why Us
+            </span>
+            <h2 className="text-3xl md:text-5xl font-black text-slate-900">تفاوت ترنم همدلی با روش‌های سنتی</h2>
+            <p className="text-slate-500 text-xs md:text-sm font-bold">ما با سیستم‌های هوشمند، کیفیت را تضمین می‌کنیم. نظارت کامل در دست شماست.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+            
+            {/* Traditional Method */}
+            <div className="bg-slate-50 border border-slate-200 rounded-[3rem] p-8 md:p-10 space-y-6 text-right">
+              <div className="flex items-center gap-3 pb-6 border-b border-slate-200">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-black text-lg">✕</div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">سایر مشاوران / روش‌های سنتی</h3>
+                  <p className="text-xs text-slate-400 font-bold">معمولی، بدون پشتوانه تحلیلی و پراکنده</p>
+                </div>
+              </div>
+              <ul className="space-y-4 text-xs font-bold text-slate-600">
+                <li className="flex items-start gap-3">
+                  <span className="text-rose-500 font-black mt-0.5">✕</span>
+                  <span>برنامه‌های آماده و از پیش نوشته شده برای همه داوطلبان</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-rose-500 font-black mt-0.5">✕</span>
+                  <span>گزارش‌گیری سنتی (فقط پرسش تلفنی) بدون تحلیل آماری دقیق تله‌های تستی</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-rose-500 font-black mt-0.5">✕</span>
+                  <span>عدم نظارت بر کیفیت کار مشاور و نبود سیستم ارزیابی مستمر</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-rose-500 font-black mt-0.5">✕</span>
+                  <span>بی‌خبری والدین از وضعیت دقیق و ساعت مطالعه واقعی دانش‌آموز</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Taranom Hamdali Method */}
+            <div className="bg-gradient-to-br from-indigo-950 via-indigo-900 to-blue-950 text-white border border-indigo-900 rounded-[3rem] p-8 md:p-10 space-y-6 shadow-2xl text-right relative overflow-hidden">
+              <div className="absolute -top-10 -left-10 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="flex items-center gap-3 pb-6 border-b border-indigo-800/80">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-lg">✓</div>
+                <div>
+                  <h3 className="text-lg font-black text-white">گروه مشاوره‌ای ترنم همدلی</h3>
+                  <p className="text-xs text-indigo-200 font-bold">هوش مصنوعی + مشاور رتبه برتر + پایش والدین</p>
+                </div>
+              </div>
+              <ul className="space-y-4 text-xs font-bold text-indigo-100">
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 font-black mt-0.5">✓</span>
+                  <span>برنامه‌ریزی کاملاً شخصی و روزانه بر اساس کارنامه دیتابیس</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 font-black mt-0.5">✓</span>
+                  <span>ارائه کارنامه آماری دقیق و نمودار پیشرفت (هفتگی و روزانه) برای تحلیل تله‌ها</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 font-black mt-0.5">✓</span>
+                  <span>سیستم ارزیابی عملکرد مشاور و پیگیری هرشبه گزارش کار</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 font-black mt-0.5">✓</span>
+                  <span>داشبورد اختصاصی والدین برای نظارت مستمر و آرامش خاطر خانواده</span>
+                </li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* 💎 Section 2: Smart Tools (Bento Grid Style) */}
+      <section className="py-16 relative overflow-hidden bg-slate-50" id="features">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="flex flex-col items-center text-center space-y-6 mb-24 max-w-4xl mx-auto">
             <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-5 py-2 rounded-full border border-indigo-100 uppercase tracking-[0.2em] leading-none mb-2">
@@ -397,105 +606,10 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
         </div>
       </section>
 
-      {/* 🤝 Section 3: For Groups (SaaS Layers) */}
-      <section className="py-16 bg-slate-50 relative overflow-hidden" id="plans">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-20">
-          
-          <div className="max-w-2xl mx-auto space-y-4">
-            <h2 className="text-3xl md:text-4xl font-black text-slate-900">همراه شما در تمام سطوح</h2>
-            <p className="text-slate-500 font-bold">از فرد تا بزرگترین آکادمی‌های آموزشی ایران</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-            <PlanCard 
-              title="همراهی در یادگیری"
-              price="شروع منعطف"
-              features={["مشاور همراه محدود", "داشبورد پایه خودشناسی", "تحلیل تله‌های درسی", "همگامی روزانه"]}
-              btnText="شناخت بیشتر"
-              icon={<User size={24} />}
-              onNavigate={() => onNavigate("login")}
-            />
-            <PlanCard 
-              recommended
-              title="همیار خانواده و مربی"
-              price="اشتراک همدلی"
-              features={["مشاور همراه نامحدود", "آنالیز عمیق فراشناختی", "داشبورد مشترک خانواده", "راهنمای اختصاصی"]}
-              btnText="همگام شدن با کایزن"
-              icon={<Zap size={24} />}
-              onNavigate={() => handleDemoLogin("1", "student", "مریم حسینی", "دوازدهم تجربی")}
-            />
-            <PlanCard 
-              title="آکادمی‌ و مدارس"
-              price="پلن سازمانی"
-              features={["اتصال به سایت وردپرس شما", "داشبورد مرکزی مدیر", "مدیریت ۵۰۰+ دانش‌آموز", "برندینگ اختصاصی"]}
-              btnText="مشاوره همکاری"
-              icon={<Building2 size={24} />}
-              onNavigate={() => handleDemoLogin("admin", "admin", "مدیر سیستم", "مدیر آکادمی")}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* 💬 Section 4: Elegant Testimonials */}
-      <section className="py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
-             <div className="lg:col-span-5 space-y-8">
-                <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-full border border-indigo-100 uppercase tracking-widest leading-none">
-                  Success Stories
-                </span>
-                <h2 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight">صدای همسفرانی که <br /> این راه را <span className="text-indigo-600">پشت سر گذاشتند</span></h2>
-                <p className="text-base text-slate-500 font-bold leading-relaxed">
-                  بیش از ۱۰ هزار دانش‌آموز مثلِ تو امسال توانستند با اعتماد به نفس بیشتری در این مسیر قدم بردارند.
-                </p>
-                <div className="flex -space-x-3 rtl:space-x-reverse pt-4">
-                   {[1,2,3,4,5].map(i => (
-                     <div key={i} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 overflow-hidden shadow-sm">
-                       <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=user${i}`} alt="user" className="w-full h-full object-cover" />
-                     </div>
-                   ))}
-                   <div className="w-12 h-12 rounded-full border-4 border-white bg-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
-                     +10k
-                   </div>
-                </div>
-             </div>
-             
-             <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <TestimonialCardCompact 
-                  quote="ترنم همدلی برای من فراتر از یک اپلیکیشن بود؛ مثل یک برادر بزرگتر که همیشه مراقب بود عقب نیفتم."
-                  name="سارا احمدی"
-                  rank="رتبه ۱۵۸ تجربی"
-                />
-                <TestimonialCardCompact 
-                  className="sm:mt-8"
-                  quote="داشبورد والدین مانوا باعث شد خانواده‌ام به جای استرس دادن، من را در مسیر کنکور حمایت کنند."
-                  name="علی رضایی"
-                  rank="رتبه ۸۲ ریاضی"
-                />
-             </div>
-           </div>
-        </div>
-      </section>
-
-      {/* 🏫 Section 5: Trust Banner (Schools/Institutions) */}
-      <section className="py-16 bg-white relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-12">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">همکاران و مراکز علمی همراه</p>
-          <div className="flex flex-wrap justify-center items-center gap-12 opacity-50 grayscale hover:opacity-100 transition-all duration-700">
-             <div className="flex items-center gap-2 font-black text-xl text-slate-400"><Building2 size={24} /> <span>دبیرستان ماندگار البرز</span></div>
-             <div className="flex items-center gap-2 font-black text-xl text-slate-400"><Building2 size={24} /> <span>کانون فرهنگی آموزش</span></div>
-             <div className="flex items-center gap-2 font-black text-xl text-slate-400"><Building2 size={24} /> <span>مدرسه فرزانگان</span></div>
-             <div className="flex items-center gap-2 font-black text-xl text-slate-400"><Building2 size={24} /> <span>علامه حلی</span></div>
-          </div>
-        </div>
-      </section>
-
-      {/* 🛒 Section 6: Marketplace & Blog Preview (New) */}
-      <section className="py-16 bg-slate-50/50 relative border-y border-slate-100" id="shop">
+      {/* 🛒 Section: Marketplace & Blog Preview */}
+      <section className="py-16 bg-white relative border-y border-slate-100" id="shop">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row gap-12">
-            {/* Shop Preview */}
             <div className="lg:w-7/12 space-y-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-indigo-600">
@@ -510,38 +624,25 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                   { title: "کارت‌های یادگیری عمیق زیست", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&q=80&w=400" },
                   { title: "دفتر برنامه‌ریزی کایزن", price: "۹۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=400" },
                   { title: "بسته آزمون‌های جامع شبیه‌ساز", price: "۲۱۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=400" },
-                  { title: "کتاب کار عارضه‌یابی تحصیلی", price: "۱۲۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400" },
-                  { title: "پکیج فلش‌کارت‌های شیمی", price: "۱۶۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400" },
-                  { title: "جامدادی طرح کایزن", price: "۴۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&q=80&w=400" },
-                  { title: "دفترچه نکات رتبه برترها", price: "۷۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&q=80&w=400" },
-                  { title: "پوستر بودجه‌بندی کنکور", price: "۳۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1503596476-1c12a8ba09a9?auto=format&fit=crop&q=80&w=400" }
+                  { title: "کتاب کار عارضه‌یابی تحصیلی", price: "۱۲۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400" }
                 ].map((item, idx) => (
                   <motion.div 
                     key={idx} 
                     whileHover={{ y: -5 }}
-                    className="group cursor-pointer bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
+                    className="group cursor-pointer bg-slate-50 p-3 rounded-2xl border border-slate-150 shadow-sm hover:shadow-xl transition-all"
                   >
                     <div className="aspect-[4/3] rounded-xl overflow-hidden mb-3 relative shadow-sm border border-slate-50">
                       <img src={item.img} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     </div>
                     <div className="px-1">
                       <h4 className="text-[11px] font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors uppercase">{item.title}</h4>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-[10px] text-indigo-600 font-black">{item.price}</p>
-                        <ShoppingBag size={12} className="text-slate-300 group-hover:text-indigo-600 transition-colors" />
-                      </div>
+                      <p className="text-[10px] text-indigo-600 font-black mt-2">{item.price}</p>
                     </div>
                   </motion.div>
                 ))}
               </div>
-              <button className="text-xs font-black text-slate-900 flex items-center gap-3 hover:gap-4 transition-all px-1 py-2 group">
-                <span className="border-b-2 border-indigo-200 group-hover:border-indigo-600 transition-colors pb-1">مشاهده همه محصولات فروشگاه</span>
-                <ArrowLeft size={18} className="text-indigo-600" />
-              </button>
             </div>
 
-            {/* Blog Preview — اتصال به وبلاگ واقعی سایت */}
             <div className="lg:w-5/12 w-full space-y-8 lg:border-r lg:border-slate-200 lg:pr-12" id="blog">
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
@@ -557,57 +658,26 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
                   </button>
                 </div>
                 <h2 className="text-4xl font-black text-slate-900 leading-tight">یادداشت‌های <br /> نوین</h2>
-                <p className="text-sm text-slate-500 font-bold leading-relaxed">مقالات تخصصی مشاوره‌ای کنکور و آموزش کار با ماژول‌های سایت</p>
               </div>
 
               <div className="space-y-4">
-                {BLOG_ARTICLES.slice(0, 5).map((post) => (
+                {BLOG_ARTICLES.slice(0, 3).map((post) => (
                   <button
                     key={post.slug}
                     onClick={() => openBlog(post.slug)}
-                    className="w-full text-right p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center gap-5"
+                    className="w-full text-right p-4 bg-slate-50 rounded-2xl border border-slate-150 hover:border-indigo-200 shadow-sm transition-all cursor-pointer group flex items-center gap-4"
                   >
-                    <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-inner border border-slate-50 bg-gradient-to-br from-indigo-50 to-violet-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                      <span className="text-3xl" role="img" aria-hidden>{post.emoji}</span>
+                    <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 font-black text-lg">
+                      {post.emoji}
                     </div>
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-tighter whitespace-nowrap">{post.category}</span>
-                        <span className="text-[8px] text-slate-400 font-bold whitespace-nowrap">{post.date} · {toPersianNum(post.readMinutes)} دقیقه مطالعه</span>
-                      </div>
-                      <h4 className="text-[12px] font-black text-slate-800 group-hover:text-indigo-600 transition-colors leading-relaxed line-clamp-2">{post.title}</h4>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[8px] font-black text-indigo-500 uppercase">{post.category}</span>
+                      <h4 className="text-xs font-black text-slate-800 group-hover:text-indigo-600 transition-colors truncate">{post.title}</h4>
                     </div>
-                    <ArrowLeft size={16} className="text-slate-200 group-hover:text-indigo-600 group-hover:-translate-x-1 transition-all shrink-0" />
+                    <ArrowLeft size={16} className="text-slate-300 group-hover:text-indigo-600 shrink-0" />
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 🚀 Ready to Start Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="bg-slate-900 rounded-[3rem] p-8 md:p-16 text-center space-y-8 relative overflow-hidden">
-          {/* Decorative circles */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-          
-          <div className="relative z-10 space-y-6">
-            <h2 className="text-3xl md:text-5xl font-black text-white">آغاز مسیری آگاهانه و سرشار از همدلی</h2>
-            <p className="text-slate-400 font-bold text-base md:text-lg max-w-2xl mx-auto">
-              همین حالا به جمع همسفران ترنم همدلی بپیوندید و با آرامش خاطر گام در راه یادگیری بگذارید.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <button 
-                onClick={() => onNavigate("login")}
-                className="px-10 py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-heavy rounded-2xl shadow-xl shadow-indigo-600/20 transition-all active:scale-95"
-              >
-                همراهم باش
-              </button>
-              <button className="px-10 py-5 bg-white/10 hover:bg-white/20 text-white border border-white/10 font-heavy rounded-2xl transition-all active:scale-95">
-                رزرو وقت مشاوره حضوری
-              </button>
             </div>
           </div>
         </div>
@@ -617,8 +687,6 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
     </div>
   );
 }
-
-// --- High-Fidelity UI Components ---
 
 function BentoCard({ icon, title, desc, className, color, badge, image }: { 
   icon: React.ReactNode, 
@@ -640,7 +708,7 @@ function BentoCard({ icon, title, desc, className, color, badge, image }: {
   return (
     <motion.div 
       whileHover={{ y: -8 }}
-      className={`group bg-white p-10 rounded-[3rem] border border-slate-200/60 hover:border-indigo-200 shadow-sm hover:shadow-3xl hover:shadow-indigo-500/10 transition-all duration-700 overflow-hidden relative flex flex-col justify-between min-h-[340px] ${className}`}
+      className={`group bg-white p-10 rounded-[3rem] border border-slate-200/60 hover:border-indigo-200 shadow-sm hover:shadow-3xl transition-all duration-700 overflow-hidden relative flex flex-col justify-between min-h-[340px] ${className}`}
     >
       <div className="relative z-10 space-y-8">
         <div className="flex items-center justify-between">
@@ -661,8 +729,6 @@ function BentoCard({ icon, title, desc, className, color, badge, image }: {
            <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-transparent" />
         </div>
       )}
-
-      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/0 via-transparent to-indigo-500/0 group-hover:from-indigo-500/[0.03] group-hover:to-indigo-500/[0.05] transition-all duration-700 pointer-events-none" />
     </motion.div>
   );
 }
@@ -699,11 +765,6 @@ function PlanCard({ title, price, features, btnText, icon, recommended, onNaviga
           : 'bg-white text-slate-900 border-slate-150 shadow-lg shadow-slate-100 hover:shadow-xl'
       }`}
     >
-      {recommended && (
-        <div className="absolute -top-4 right-10 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-full shadow-lg">
-          پیشنهاد ویژه
-        </div>
-      )}
       <div className="space-y-6 mb-10 flex-grow">
         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${recommended ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
           {icon}
@@ -711,7 +772,6 @@ function PlanCard({ title, price, features, btnText, icon, recommended, onNaviga
         <div>
           <h3 className="text-xl font-black">{title}</h3>
           <div className="text-2xl font-black mt-1 mb-2">{price}</div>
-          <div className={`h-1 w-8 rounded-full ${recommended ? 'bg-indigo-500' : 'bg-indigo-100'}`} />
         </div>
         <ul className="space-y-4">
           {features.map((f, i) => (
@@ -734,35 +794,3 @@ function PlanCard({ title, price, features, btnText, icon, recommended, onNaviga
     </motion.div>
   );
 }
-
-function TestimonialCardCompact({ quote, name, rank, className }: { quote: string, name: string, rank: string, className?: string }) {
-  return (
-    <motion.div 
-      whileHover={{ scale: 1.02 }}
-      className={`bg-white p-8 rounded-[2.5rem] border border-slate-150 shadow-sm hover:shadow-xl transition-all duration-500 text-right space-y-6 ${className}`}
-    >
-      <div className="flex gap-1 text-amber-500">
-        {[1,2,3,4,5].map(i => <Star key={i} size={10} fill="currentColor" />)}
-      </div>
-      <p className="text-sm text-slate-600 font-bold leading-relaxed italic">"{quote}"</p>
-      <div className="flex items-center gap-4 pt-6 border-t border-slate-50">
-        <div className="w-12 h-12 rounded-2xl bg-indigo-50 p-0.5 overflow-hidden">
-           <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`} alt={name} className="w-full h-full object-cover" />
-        </div>
-        <div>
-          <h4 className="text-base font-black text-slate-900 leading-none">{name}</h4>
-          <p className="text-[10px] text-indigo-600 font-extrabold mt-2 underline decoration-indigo-200 underline-offset-4">{rank}</p>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function FooterIcon({ icon }: { icon: React.ReactNode }) {
-  return (
-    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-md transition-all cursor-pointer border border-slate-100">
-      {icon}
-    </div>
-  );
-}
-
