@@ -25,7 +25,7 @@ const KonkurExamView = lazy(() => import("./KonkurExamView"));
 // BlogView is imported eagerly: it is small (~10 kB gz) and a separate dynamic
 // chunk was failing behind the service worker when an edge served the SPA
 // fallback for a brand-new asset URL (poisoned cache-first /assets entry).
-const StudyPlannerGenerator = lazy(() => import("./StudyPlannerGenerator"));
+const AdvancedStudyPlanner = lazy(() => import("./AdvancedStudyPlanner"));
 
 export type RoleType = "student" | "parent" | "admin" | "counselor" | "teacher";
 
@@ -259,7 +259,7 @@ export default function ViewFactory({
       return <MobileDownloadView onNavigate={onNavigate} />;
 
     case "planner-gen":
-      return <StudyPlannerGenerator student={student} onNavigate={onNavigate} />;
+      return <AdvancedStudyPlanner student={student} onNavigate={onNavigate} />;
 
     case "contact":
       return (
