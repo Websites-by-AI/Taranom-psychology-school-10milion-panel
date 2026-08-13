@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Users, Sparkles, BookOpen, HeartPulse, Brain, Plus, Calendar, 
   Settings, Database, Compass, CheckCircle2, ChevronLeft, 
@@ -67,12 +67,40 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
   const [cWorkHours, setCWorkHours] = useState(counselorProfile.workHours);
   const [cSpecialty, setCSpecialty] = useState(counselorProfile.specialty);
   
-  // Custom manual study planner builder states for counselor
-  const [customPlanTitle, setCustomPlanTitle] = useState("برنامه جبرانی تخصصی عارضه‌یابی");
-  const [customPlanMorning, setCustomPlanMorning] = useState("مطالعه عمیق مباحث آسیب‌دیده کارنامه (۴ ساعت)");
-  const [customPlanAfternoon, setCustomPlanAfternoon] = useState("حل ۴۰ تست زمان‌دار تله‌دار و ثبت در دفتر اشتباهات");
-  const [customPlanTargetQ, setCustomPlanTargetQ] = useState(45);
+  // Custom manual study planner builder states for counselor (Synced with Student View exact schema)
+  const [customPlanTitle, setCustomPlanTitle] = useState("نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه");
+  const [morning1, setMorning1] = useState("پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت");
+  const [afternoon1, setAfternoon1] = useState("حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات");
+  
+  const [morning2, setMorning2] = useState("مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت");
+  const [afternoon2, setAfternoon2] = useState("تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور");
+
+  const [morning3, setMorning3] = useState("مرور فرمول‌های فیزیک و شیمی - ۳ ساعت");
+  const [afternoon3, setAfternoon3] = useState("تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی");
+
+  const [morning4, setMorning4] = useState("شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت");
+  const [afternoon4, setAfternoon4] = useState("تحلیل موشکافانه تراز و تکنیک ضربدر منها");
+
   const [planSuccessMsg, setPlanSuccessMsg] = useState("");
+
+  // Load existing manual plan if any
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`taranom_manual_study_plan_${activeStudent.id}`);
+      if (saved) {
+        const p = JSON.parse(saved);
+        if (p.title) setCustomPlanTitle(p.title);
+        if (p.schedule && p.schedule[0]) {
+          setMorning1(p.schedule[0].morning);
+          setAfternoon1(p.schedule[0].afternoon);
+        }
+        if (p.schedule && p.schedule[1]) {
+          setMorning2(p.schedule[1].morning);
+          setAfternoon2(p.schedule[1].afternoon);
+        }
+      }
+    } catch {}
+  }, [activeStudent.id]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +120,6 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
     alert("کارت عضویت و اطلاعات هویتی مشاور ارشد در سیستم مرکزی با موفقیت به‌روزرسانی شد!");
   };
 
-  const [severity, setSeverity] = useState<"critical" | "warning" | "mild">("warning");
   const [customAdvisorComment, setCustomAdvisorComment] = useState(() => {
     return localStorage.getItem(`taranom_advisor_comment_${activeStudent.id}`) || 
            "داوطلب کایزن درسی مناسبی دارد؛ اما برای فائق آمدن بر تله‌های مفهومی زیست، افزایش تحلیل پاسخ تشریحی ضروری است.";
@@ -117,16 +144,30 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
     e.preventDefault();
     const planPayload = {
       title: customPlanTitle,
-      morning: customPlanMorning,
-      afternoon: customPlanAfternoon,
-      targetQ: customPlanTargetQ,
       counselorName: counselorProfile.name,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      warnings: [
+        `⚠️ توصیه مشاور (${counselorProfile.name}): برنامه هفتگی شما به صورت اختصاصی بازنویسی و تنظیم شد.`,
+        "💡 لطفا تمامی پارت‌های شیفت صبح و عصر زیر را با دقت و متد پومودورو اجرا کنید."
+      ],
+      schedule: [
+        { day: "شنبه", morning: morning1, afternoon: afternoon1, totalQ: 40 },
+        { day: "یکشنبه", morning: morning2, afternoon: afternoon2, totalQ: 50 },
+        { day: "دوشنبه", morning: morning3, afternoon: afternoon3, totalQ: 40 },
+        { day: "سه‌شنبه", morning: morning4, afternoon: afternoon4, totalQ: 60 },
+        { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
+        { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", totalQ: 50 },
+        { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
+      ],
+      extracurricular: [
+        "کارگاه رفع اشکال اضطراری دروس تخصصی (با حضور مشاور)",
+        "جلسه مشاوره گروهی مدیریت استرس کنکور"
+      ]
     };
     try {
       localStorage.setItem(`taranom_manual_study_plan_${activeStudent.id}`, JSON.stringify(planPayload));
-      setPlanSuccessMsg(`✅ برنامه دستی جدید برای داوطلب '${activeStudent.name}' با موفقیت تدوین و مستقیماً بر روی پنل او اعمال شد!`);
-      setTimeout(() => setPlanSuccessMsg(""), 4000);
+      setPlanSuccessMsg(`✅ برنامه هفتگی جدید برای داوطلب '${activeStudent.name}' با موفقیت تدوین و مستقیماً روی جدول جدول دانش‌آموز بارگذاری شد!`);
+      setTimeout(() => setPlanSuccessMsg(""), 5000);
     } catch {
       alert("خطا در ذخیره‌سازی برنامه دستی.");
     }
@@ -285,33 +326,9 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
               })}
             </div>
           </div>
-
-          {/* Background Info */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-              <Database size={16} className="text-amber-500" />
-              <span>پیشینه خانوادگی و جو عاطفی منزل</span>
-            </h3>
-            <div className="space-y-3 text-xs">
-              <div className="p-3.5 bg-slate-50 rounded-2xl space-y-2 border border-slate-150">
-                <div className="flex justify-between font-bold text-slate-600">
-                  <span>کانون حیات والدین:</span>
-                  <span className="text-slate-900 font-black">
-                    {activeStudent.parentalContext?.fatherAlive ? "سایه پدر برقرار" : "فقدان همدم پدر"} | {activeStudent.parentalContext?.motherAlive ? "سایه مادر مستدام" : "فقدان مادر گرامی"}
-                  </span>
-                </div>
-                <div className="flex justify-between font-bold text-slate-600">
-                  <span>تمکن مالی خانواده:</span>
-                  <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-black">
-                    {activeStudent.parentalContext?.householdIncome === "excellent" ? "بسیار عالی" : "متوسط به بالا"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* LEFT COLUMN: Active Assessment & Manual Plan Builder Form */}
+        {/* LEFT COLUMN: Active Assessment & Manual Plan Builder Form (Synced with Student View exact schema) */}
         <div className="lg:col-span-8 space-y-6">
           
           {/* Main stats ribbon of selected student */}
@@ -336,15 +353,15 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
             </div>
           </div>
 
-          {/* 📝 FORM FOR MANUAL STUDY PLAN CREATION & REWRITE */}
+          {/* 📝 FORM FOR MANUAL STUDY PLAN CREATION & REWRITE (Exact Match with Student Schedule Grid) */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="space-y-1">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <ClipboardList size={20} className="text-indigo-600" />
-                  <span>فرم تدوین و بازنویسی دستی برنامه مطالعاتی برای {activeStudent.name}</span>
+                  <span>تدوین و بازنویسی جدول برنامه هفتگی برای {activeStudent.name}</span>
                 </h3>
-                <p className="text-xs text-slate-500 font-bold">بر اساس کارنامه، درصد دروس و درخواست بازبینی دانش‌آموز، برنامه جدید را بازنویسی کنید.</p>
+                <p className="text-xs text-slate-500 font-bold">این جدول دقیقاً همان ساختاری است که دانش‌آموز در پنل خود تحت عنوان «جدول زمان‌بندی پارت‌های مطالعاتی هفته» مشاهده می‌کند.</p>
               </div>
             </div>
 
@@ -354,100 +371,146 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
               </div>
             )}
 
-            <form onSubmit={handlePublishManualPlan} className="space-y-5">
+            <form onSubmit={handlePublishManualPlan} className="space-y-6">
               <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-700 block">عنوان برنامه مطالعاتی / هدر هفتگی:</label>
+                <label className="text-xs font-black text-slate-700 block">عنوان کلان برنامه مطالعاتی:</label>
                 <input 
                   type="text"
                   required
                   value={customPlanTitle}
                   onChange={e => setCustomPlanTitle(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600"
-                  placeholder="مثال: نقشه راه فشرده رفع اشکال زیست‌شناسی و ریاضی"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-black text-slate-700 block">پارت شیفت صبح (مفاهیم و کتاب درسی):</label>
-                  <input 
-                    type="text"
-                    required
-                    value={customPlanMorning}
-                    onChange={e => setCustomPlanMorning(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600"
-                    placeholder="مثال: مطالعه ژنتیک و حل تست‌های مکرر"
-                  />
+              {/* Day 1 (Saturday) Schedule */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">شنبه</div>
+                  <span>پارت‌های مطالعاتی روز شنبه</span>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={morning1}
+                      onChange={e => setMorning1(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={afternoon1}
+                      onChange={e => setAfternoon1(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-black text-slate-700 block">پارت شیفت عصر (تست‌زنی و تحلیل غلط‌ها):</label>
-                  <input 
-                    type="text"
-                    required
-                    value={customPlanAfternoon}
-                    onChange={e => setCustomPlanAfternoon(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600"
-                    placeholder="مثال: تحلیل ۵۰ تست تله‌دار + ثبت در دفتر اشتباهات"
-                  />
+              {/* Day 2 (Sunday) Schedule */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">یکشنبه</div>
+                  <span>پارت‌های مطالعاتی روز یکشنبه</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={morning2}
+                      onChange={e => setMorning2(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={afternoon2}
+                      onChange={e => setAfternoon2(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-black text-slate-700 block">تعداد تست هدف هفتگی:</label>
-                  <input 
-                    type="number"
-                    required
-                    value={customPlanTargetQ}
-                    onChange={e => setCustomPlanTargetQ(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 font-mono"
-                  />
+              {/* Day 3 (Monday) Schedule */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">دوشنبه</div>
+                  <span>پارت‌های مطالعاتی روز دوشنبه</span>
                 </div>
-
-                <div className="flex items-end">
-                  <button 
-                    type="submit"
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Send size={15} />
-                    <span>انتشار و ارسال برنامه جدید به پورتال داوطلب</span>
-                  </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={morning3}
+                      onChange={e => setMorning3(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={afternoon3}
+                      onChange={e => setAfternoon3(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Day 4 (Tuesday) Schedule */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">سه‌شنبه</div>
+                  <span>پارت‌های مطالعاتی روز سه‌شنبه</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={morning4}
+                      onChange={e => setMorning4(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
+                    <input 
+                      type="text"
+                      required
+                      value={afternoon4}
+                      onChange={e => setAfternoon4(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-4 px-6 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Send size={15} />
+                <span>انتشار و بارگذاری مستقیم برنامه در جدول دانش‌آموز</span>
+              </button>
             </form>
-          </div>
-
-          {/* Counselor Advice Editor */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                <ClipboardList size={18} className="text-indigo-600" />
-                <span>ثبت ارزیابی علمی و توصیه‌نامه کایزن مشاور</span>
-              </h3>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">توصیه راهبردی مربی برای داوطلب:</label>
-                <textarea
-                  value={customAdvisorComment}
-                  onChange={(e) => setCustomAdvisorComment(e.target.value)}
-                  rows={4}
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-350 leading-relaxed"
-                />
-              </div>
-
-              <div className="pt-2">
-                <button
-                  onClick={handleSaveComment}
-                  className="w-full md:w-auto px-6 py-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-black transition shadow-md cursor-pointer flex items-center gap-2"
-                >
-                  <CheckCircle2 size={16} />
-                  <span>ثبت و ارسال ارزیابی</span>
-                </button>
-              </div>
-            </div>
           </div>
 
         </div>
