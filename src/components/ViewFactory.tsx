@@ -25,7 +25,7 @@ const KonkurExamView = lazy(() => import("./KonkurExamView"));
 // BlogView is imported eagerly: it is small (~10 kB gz) and a separate dynamic
 // chunk was failing behind the service worker when an edge served the SPA
 // fallback for a brand-new asset URL (poisoned cache-first /assets entry).
-import BlogView from "./BlogView";
+const MobileDownloadView = lazy(() => import("./MobileDownloadView"));
 
 export type RoleType = "student" | "parent" | "admin" | "counselor" | "teacher";
 
@@ -46,21 +46,21 @@ export const ALLOWED_VIEWS_BY_ROLE: Record<RoleType, string[]> = {
   student: [
     "welcome", "dashboard", "manova", "report", "schedule", "counselor", 
     "progress", "traps", "quiz", "psychology", "metacognition", "counseling", 
-    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur"
+    "historical-db", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download"
   ],
   parent: [
     "welcome", "parents", "manova", "report", "psychology", "counseling", 
-    "historical-db", "shop", "blog", "contact", "konkur"
+    "historical-db", "shop", "blog", "contact", "konkur", "download"
   ],
   admin: [
-    "welcome", "admin", "manova", "shop", "blog", "contact"
+    "welcome", "admin", "manova", "shop", "blog", "contact", "download"
   ],
   counselor: [
     "welcome", "counselor-dashboard", "manova", "report", "psychology", 
-    "counselor-chat", "traps", "shop", "blog", "contact"
+    "counselor-chat", "traps", "shop", "blog", "contact", "download"
   ],
   teacher: [
-    "welcome", "teacher-dashboard", "report", "traps", "shop", "blog", "contact"
+    "welcome", "teacher-dashboard", "report", "traps", "shop", "blog", "contact", "download"
   ]
 };
 
@@ -254,6 +254,9 @@ export default function ViewFactory({
 
     case "blog":
       return <BlogView onNavigate={onNavigate} />;
+
+    case "download":
+      return <MobileDownloadView onNavigate={onNavigate} />;
 
     case "contact":
       return (
