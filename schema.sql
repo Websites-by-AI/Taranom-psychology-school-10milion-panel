@@ -1,6 +1,6 @@
 -- ============================================================
 -- Taranom Mehr — Cloudflare D1 schema
--- Run with:  npx wrangler d1 execute taranom-db --file=schema.sql --remote
+-- Run with:  npx wrangler d1 execute taranom-mehr-db --remote --file=./schema.sql
 -- (and again with --local for local dev)
 -- ============================================================
 
@@ -37,3 +37,13 @@ CREATE TABLE IF NOT EXISTS otp_codes (
 
 CREATE INDEX IF NOT EXISTS idx_users_email  ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_mobile ON users(mobile);
+
+-- Counselor-authored plans shared across counselor and student devices.
+CREATE TABLE IF NOT EXISTS study_plans (
+  student_id    TEXT PRIMARY KEY,
+  plan_json     TEXT NOT NULL,
+  counselor_id  TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_plans_counselor ON study_plans(counselor_id);

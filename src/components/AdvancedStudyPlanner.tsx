@@ -4,6 +4,7 @@ import {
   Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle, PhoneCall, Headphones, HelpCircle, Check, Flame, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Student } from "../types";
+import { motion } from "motion/react";
 
 interface AdvancedStudyPlannerProps {
   student: Student;

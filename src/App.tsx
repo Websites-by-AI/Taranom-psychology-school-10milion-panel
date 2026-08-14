@@ -55,7 +55,9 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
   const view = rawPath === "" || rawPath === "welcome" ? "welcome" : rawPath;
 
   const [student, setStudent] = useState<Student | null>(() => {
-    if (location.pathname === '/admin') return getHydratedStudent(mockStudents[0]);
+    // Admin routes never receive a synthetic user. They must be hydrated from
+    // a valid HttpOnly server session below.
+    if (location.pathname === '/admin') return null;
     const savedName = localStorage.getItem("arateb_student_profile_name");
     const savedGrade = localStorage.getItem("arateb_student_profile_grade");
     return getHydratedStudent({
@@ -68,10 +70,40 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
   });
 
   const [role, setRole] = useState<"student" | "parent" | "admin" | "counselor" | "teacher" | null>(() => {
-    if (location.pathname === '/admin') return "admin";
-    // Student is default role if not specifically logged in
+    if (location.pathname === '/admin') return null;
+    // Public demo starts as a student. Privileged roles come from /api/auth/me.
     return "student";
   });
+  const [authChecking, setAuthChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAuthChecking(true);
+    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
+      .then((res) => res.ok ? res.json() : Promise.reject(new Error("auth unavailable")))
+      .then((data) => {
+        if (cancelled || !data?.user) return;
+        const serverRole = (["student", "parent", "admin", "counselor", "teacher"].includes(data.user.accountRole)
+          ? data.user.accountRole
+          : "student") as RoleType;
+        setStudent(getHydratedStudent({
+          id: data.user.id,
+          name: data.user.name,
+          code: data.user.code || data.user.mobile || data.user.id,
+          field: data.user.field || "tajrobi",
+          grade: data.user.grade || "کاربر سامانه",
+          city: data.user.city,
+          age: data.user.age,
+          mobile: data.user.mobile,
+          accountRole: serverRole,
+        }));
+        setRole(serverRole);
+      })
+      .catch(() => {}) // no DB/session: retain public demo identity
+      .finally(() => { if (!cancelled) setAuthChecking(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem("taranom_app_theme") || "amber";
   });
@@ -394,6 +426,8 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
   };
 
   const handleLogout = () => {
+    // Invalidate the HttpOnly server session as well as resetting demo state.
+    fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     setStudent(getHydratedStudent({
       id: "guest",
       name: "کاربر مهمان (تست کایزن)",
@@ -407,6 +441,27 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
 
   // Auth checking and routing logic
   const isPublicRoute = view === "welcome" || view === "login";
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50" dir="rtl">
+        <div className="text-sm font-black text-slate-600">در حال بررسی نشست امن...</div>
+      </div>
+    );
+  }
+
+  // Hybrid mode: demo dashboards remain public, but admin always requires a
+  // server-authenticated account whose role was returned by /api/auth/me/login.
+  if (view === "admin" && (role !== "admin" || student?.accountRole !== "admin")) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between" id="admin-auth-required">
+        <main className="flex-grow flex items-center justify-center py-10">
+          <LoginView onLogin={handleLogin} onBackToHome={() => navigate("/welcome")} />
+        </main>
+        <MainFooter />
+      </div>
+    );
+  }
   
   if (view === "welcome") {
     return (

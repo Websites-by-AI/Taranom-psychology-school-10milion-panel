@@ -41,6 +41,10 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const [formError, setFormError] = useState("");
   const [devOtp, setDevOtp] = useState<string | null>(null);
 
+  // Demo fallbacks may preview non-sensitive role dashboards, but must never
+  // grant the administrator role without a server-authenticated admin account.
+  const safeDemoRole = activeTab === "admin" ? "student" : activeTab;
+
   // Helper helper function to retrieve custom local registrations
   const getLocalRegistrations = (): Student[] => {
     try {
@@ -98,6 +102,9 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
     age: u.age || 18,
     paymentStatus: "paid",
     subscriptionType: "free",
+    accountRole: (["student", "parent", "admin", "counselor", "teacher"].includes(u.accountRole)
+      ? u.accountRole
+      : "student") as Student["accountRole"],
   } as Student);
 
   // داوطلبان و لاین‌های فعال در ترنم مهر
@@ -229,7 +236,9 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       if (verified.ok && verified.data?.user) {
         const student = apiUserToStudent(verified.data.user);
         saveLocalRegistration(student);
-        onLogin(student, activeTab);
+        // Privileged roles always come from the authenticated server record,
+        // never from the role tab selected in the browser.
+        onLogin(student, student.accountRole || "student");
       } else {
         alert(verified.data?.error || "کد تایید نادرست است.");
       }
@@ -262,19 +271,19 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
           paymentStatus: userData.paymentStatus || "paid",
           subscriptionType: userData.subscriptionType || "vip"
         };
-        onLogin(student, activeTab);
+        onLogin(student, safeDemoRole);
       } else {
         // Fallback to mock for demo
         const localRegs = getLocalRegistrations();
         const matched = mockStudents.find(s => s.id === mobileNumber) || 
                         localRegs.find(s => s.mobile === mobileNumber) || 
                         mockStudents[0];
-        onLogin(matched, activeTab);
+        onLogin(matched, safeDemoRole);
       }
     } catch (err) {
       console.error("Login Error:", err);
       handleFirestoreError(err, OperationType.GET, "users");
-      onLogin(mockStudents[0], activeTab);
+      onLogin(mockStudents[0], safeDemoRole);
     } finally {
       setLoading(false);
     }
@@ -288,7 +297,8 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
     const login = await apiAuth("login", { identifier: email.trim(), password });
     if (login.available) {
       if (login.ok && login.data?.user) {
-        onLogin(apiUserToStudent(login.data.user), activeTab);
+        const authenticatedUser = apiUserToStudent(login.data.user);
+        onLogin(authenticatedUser, authenticatedUser.accountRole || "student");
       } else {
         alert(login.status === 404 || login.status === 401
           ? "نام کاربری یا رمز عبور اشتباه است."
@@ -323,7 +333,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
           paymentStatus: userData.paymentStatus || "paid",
           subscriptionType: userData.subscriptionType || "vip"
         };
-        onLogin(student, activeTab);
+        onLogin(student, safeDemoRole);
       } else {
         alert("نام کاربری یا رمز عبور اشتباه است.");
       }
@@ -357,13 +367,13 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
           paymentStatus: userData.paymentStatus || "paid",
           subscriptionType: userData.subscriptionType || "vip"
         };
-        onLogin(student, activeTab);
+        onLogin(student, safeDemoRole);
       } else {
-        onLogin(mockStudents[1], activeTab);
+        onLogin(mockStudents[1], safeDemoRole);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, "users");
-      onLogin(mockStudents[1], activeTab);
+      onLogin(mockStudents[1], safeDemoRole);
     } finally {
       setLoading(false);
     }
@@ -1175,7 +1185,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                   paymentStatus: "paid",
                   subscriptionType: "free"
                 };
-                onLogin(student, activeTab);
+                onLogin(student, safeDemoRole);
               }}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-4 rounded-xl transition text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 cursor-pointer"
             >

@@ -62,6 +62,8 @@ export interface Student {
   dashboardTier?: "light" | "medium" | "full"; // مدل پیچیدگی پنل داوطلب (سبک، متوسط، کامل)
   avatar?: string;
   mobile?: string;
+  /** Server-authoritative account role. Never derive privileged access from UI tabs. */
+  accountRole?: "student" | "parent" | "admin" | "counselor" | "teacher";
 }
 
 export interface ZarinPalConfig {

@@ -3,10 +3,11 @@ import { Student } from "../types";
 import { 
   BookOpen, Target, Volume2, VolumeX, BarChart3, Clock, Brain, Compass, 
   Sparkles, CheckCircle2, ChevronDown, Award, Play, Pause, RotateCcw, 
-  Flame, Search, Filter, Check, HelpCircle, AlertTriangle, UserCheck, ShieldAlert, ArrowRight, MessageSquare
+  Flame, Search, Filter, Check, HelpCircle, AlertTriangle, UserCheck, ShieldAlert, ArrowRight, MessageSquare, Calendar
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getProfileMetadata } from "../lib/userProfiles";
+import { loadStudyPlan, subscribeToStudyPlan, type StudyPlan } from "../lib/studyPlans";
 
 interface StudyDashboardProps {
   student: Student;
@@ -24,15 +25,20 @@ export default function StudyDashboardView({ student, onNavigate }: StudyDashboa
   const counselorName = counselor?.name || "استاد مریم رحیمی";
   const counselorSpecialty = counselor?.specialty || "ارشد کایزن و عارضه‌یابی تراز";
 
-  // Check if counselor published a custom manual plan
-  const [customPlan, setCustomPlan] = useState<any | null>(null);
+  // Load the counselor plan from D1 with local demo/offline fallback. The
+  // subscription updates this view instantly when both panels are open.
+  const [customPlan, setCustomPlan] = useState<StudyPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(true);
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`taranom_manual_study_plan_${student.id}`);
-      if (saved) {
-        setCustomPlan(JSON.parse(saved));
-      }
-    } catch {}
+    let active = true;
+    setPlanLoading(true);
+    loadStudyPlan(student.id)
+      .then((plan) => { if (active) setCustomPlan(plan); })
+      .finally(() => { if (active) setPlanLoading(false); });
+    const unsubscribe = subscribeToStudyPlan(student.id, (plan) => {
+      if (active) setCustomPlan(plan);
+    });
+    return () => { active = false; unsubscribe(); };
   }, [student.id]);
 
   // Default rich Kaizen study schedule
@@ -242,7 +248,7 @@ export default function StudyDashboardView({ student, onNavigate }: StudyDashboa
                   {isDone ? <CheckCircle2 size={14} className="text-emerald-600" /> : <span className="w-2 h-2 rounded-full bg-indigo-500" />}
                 </div>
                 <div className="text-[10px] font-bold opacity-80">
-                  {defaultWeeklySchedule[dayName]?.qCount || 40} تست هدف
+                  {customPlan?.schedule.find((d) => d.day === dayName)?.qCount ?? defaultWeeklySchedule[dayName]?.qCount ?? 40} تست هدف
                 </div>
               </button>
             );
@@ -260,7 +266,13 @@ export default function StudyDashboardView({ student, onNavigate }: StudyDashboa
             <h2 className="text-xl font-black text-slate-900 mt-2">
               جزئیات برنامه درسی روز {selectedDay} ({currentDayData.qCount} تست تخصصی)
             </h2>
-            <p className="text-xs text-slate-500 font-bold">سازمان‌دهی اتوماتیک بر پایه تراز هدفی ۷۲۰۰</p>
+            <p className="text-xs text-slate-500 font-bold">
+              {planLoading
+                ? "در حال همگام‌سازی برنامه با پنل مشاور..."
+                : customPlan
+                  ? `آخرین برنامه منتشرشده توسط ${customPlan.counselorName} • ${new Date(customPlan.updatedAt).toLocaleString("fa-IR")}`
+                  : "برنامه پیش‌فرض نمایشی؛ هنوز برنامه اختصاصی توسط مشاور منتشر نشده است."}
+            </p>
           </div>
 
           <button
@@ -323,7 +335,7 @@ export default function StudyDashboardView({ student, onNavigate }: StudyDashboa
             </button>
           </div>
           <p className="text-xs text-purple-900 font-bold leading-relaxed">
-            نقطه اصطکاک و ضعف (بر پایه هوش مصنوعی): <span className="underline">{currentDayData.trapTopic}</span>. این بخش مستقیماً به مبحث ضعیف شما پیوند دارد.
+            نقطه اصطکاک و ضعف (بر پایه هوش مصنوعی): <span className="underline">{currentDayData.trapTopic || "مرور اشتباهات ثبت‌شده و تحلیل تست‌های دشوار همان روز"}</span>. این بخش مستقیماً به مبحث ضعیف شما پیوند دارد.
           </p>
         </div>
 

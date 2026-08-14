@@ -27,6 +27,9 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Allow proxied Cloudflare/Arena preview hosts. Express still binds only
+      // to the configured public port and API authorization remains server-side.
+      allowedHosts: true as const,
       // Completely disable HMR or fallback gracefully with no overlay and silent client connection
       hmr: process.env.DISABLE_HMR === 'true' ? false : {
         overlay: false,

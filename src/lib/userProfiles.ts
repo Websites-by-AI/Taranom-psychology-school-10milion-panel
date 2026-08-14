@@ -137,6 +137,8 @@ export function getHydratedStudent(brief: Partial<Student> | null): Student {
       // Ensure key properties match brief
       if (brief.name && parsed.name !== brief.name) parsed.name = brief.name;
       if (brief.field && parsed.field !== brief.field) parsed.field = brief.field;
+      // Never let stale localStorage remove or elevate a server-provided role.
+      if (brief.accountRole) parsed.accountRole = brief.accountRole;
       return parsed;
     }
   } catch (e) {
@@ -223,7 +225,8 @@ export function getHydratedStudent(brief: Partial<Student> | null): Student {
     familyContext: brief.familyContext || "محیط خانه آرام و بستر مطالعه به طور کامل توأم با آرامش ذهنی و حامی کایزن مطالعاتی است.",
     additionalNotes: brief.additionalNotes || "برآورد فرسودگی توجه تحت تأثیر زمان‌های طولانی تکرار درسی قرار دارد.",
     paymentStatus: brief.paymentStatus || "paid",
-    subscriptionType: brief.subscriptionType || "vip"
+    subscriptionType: brief.subscriptionType || "vip",
+    accountRole: brief.accountRole
   };
 
   // Cache to localStorage

@@ -57,6 +57,8 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   /** Bale Bot Token for @taranom_hamdeli_bot */
   BALE_BOT_TOKEN?: string;
+  /** Local development only. Never set this to true in production. */
+  DEV_AUTH_CODES?: string;
 }
 
 interface Ctx {
@@ -1308,7 +1310,7 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
 
 async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
   const body = await readJson(ctx.request);
-  const token = ctx.env.TELEGRAM_BOT_TOKEN || "8905918951:AAFIO3Y0aGYgZREUFWUdDzEwyvOojZkURww";
+  const token = ctx.env.TELEGRAM_BOT_TOKEN;
   
   const message = body?.message || body?.edited_message;
   if (!message || !message.chat || !message.chat.id) {
@@ -1366,7 +1368,7 @@ async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
 
 async function baleWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
   const body = await readJson(ctx.request);
-  const token = ctx.env.BALE_BOT_TOKEN || "298530966:2r-M9wLle8BgMhleit2hBFZTg0_sXNdTg2E";
+  const token = ctx.env.BALE_BOT_TOKEN;
   
   const message = body?.message || body?.edited_message;
   if (!message || !message.chat || !message.chat.id) {
@@ -1620,6 +1622,7 @@ interface AuthStore {
   deleteSession(token: string): Promise<void>;
   upsertOtp(o: OtpRow): Promise<void>;
   findOtp(mobile: string): Promise<OtpRow | null>;
+  deleteOtp(mobile: string): Promise<void>;
 }
 
 /** D1-backed store (production). */
@@ -1660,6 +1663,9 @@ class D1AuthStore implements AuthStore {
   }
   async findOtp(mobile: string) {
     return (await this.db.prepare("SELECT * FROM otp_codes WHERE mobile = ?").bind(mobile).first()) as OtpRow | null;
+  }
+  async deleteOtp(mobile: string) {
+    await this.db.prepare("DELETE FROM otp_codes WHERE mobile = ?").bind(mobile).run();
   }
 }
 
@@ -1723,6 +1729,9 @@ class D1RestAuthStore implements AuthStore {
   async findOtp(mobile: string) {
     const rows = await this.query("SELECT * FROM otp_codes WHERE mobile = ?", [mobile]);
     return (rows[0] as OtpRow) || null;
+  }
+  async deleteOtp(mobile: string) {
+    await this.query("DELETE FROM otp_codes WHERE mobile = ?", [mobile]);
   }
 }
 
@@ -1897,19 +1906,23 @@ async function authOtpSend(ctx: Ctx, store: AuthStore): Promise<Response> {
   const body = await readJson(ctx.request);
   const mobile = (body?.mobile || "").toString().trim();
   if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست." }, 400);
+  if (ctx.env.DEV_AUTH_CODES !== "true") {
+    return json({ error: "ارسال پیامک هنوز پیکربندی نشده است؛ از ورود با رمز عبور استفاده کنید." }, 503);
+  }
 
   const code = generateOtp();
   const now = Date.now();
   await store.upsertOtp({ mobile, code, created_at: new Date(now).toISOString(), expires_at: new Date(now + OTP_TTL_MS).toISOString() });
 
-  // NOTE: No real SMS provider configured. We return the code so testing works.
-  // In production, wire Kavenegar/Farapayamak here and do NOT return the code.
+  // A code may only be echoed in an explicitly enabled local environment.
+  // Production must send it out-of-band through an SMS provider.
   const existing = await store.findUserByIdentifier(mobile);
-  return json({
+  const response: Record<string, unknown> = {
     sent: true,
-    devCode: code,
     message: existing ? "کد ورود ارسال شد." : "کد ورود ارسال شد. (شماره جدید = ثبت‌نام خودکار)",
-  });
+  };
+  if (ctx.env.DEV_AUTH_CODES === "true") response.devCode = code;
+  return json(response);
 }
 
 async function authOtpVerify(ctx: Ctx, store: AuthStore): Promise<Response> {
@@ -1921,6 +1934,9 @@ async function authOtpVerify(ctx: Ctx, store: AuthStore): Promise<Response> {
   const otp = await store.findOtp(mobile);
   if (!otp || Date.now() > new Date(otp.expires_at).getTime()) return json({ error: "کد منقضی شده است. دوباره درخواست کنید." }, 410);
   if (!safeEqual(otp.code, code)) return json({ error: "کد نادرست است." }, 401);
+
+  // OTPs are single-use. Consume before creating the session to prevent replay.
+  await store.deleteOtp(mobile);
 
   let user = await store.findUserByIdentifier(mobile);
   if (!user) {
@@ -1958,8 +1974,76 @@ async function authCount(ctx: Ctx, store: AuthStore): Promise<Response> {
 }
 
 async function authList(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+  if (requester.role !== "admin" && requester.role !== "counselor") {
+    return json({ error: "Counselor or administrator access required" }, 403);
+  }
   const users = await store.listUsers();
-  return json({ users: users.map(userToStudent) }, 200);
+  // Staff dashboards only need student accounts, never password/session fields.
+  return json({ users: users.filter((u) => u.role === "student").map(userToStudent) }, 200);
+}
+
+function validateStudyPlan(raw: any): any | null {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.schedule)) return null;
+  if (raw.schedule.length < 1 || raw.schedule.length > 7) return null;
+  const schedule = raw.schedule.map((day: any) => ({
+    day: String(day?.day || "").slice(0, 20),
+    morning: String(day?.morning || "").slice(0, 2000),
+    afternoon: String(day?.afternoon || "").slice(0, 2000),
+    qCount: Math.max(0, Math.min(1000, Number(day?.qCount ?? day?.totalQ ?? 0) || 0)),
+    trapTopic: day?.trapTopic ? String(day.trapTopic).slice(0, 1000) : undefined,
+    advice: day?.advice ? String(day.advice).slice(0, 1000) : undefined,
+  }));
+  if (schedule.some((d: any) => !d.day || !d.morning || !d.afternoon)) return null;
+  return {
+    title: String(raw.title || "برنامه هفتگی اختصاصی").slice(0, 500),
+    counselorName: String(raw.counselorName || "مشاور تحصیلی").slice(0, 200),
+    updatedAt: new Date().toISOString(),
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.slice(0, 10).map((x: any) => String(x).slice(0, 1000)) : [],
+    extracurricular: Array.isArray(raw.extracurricular) ? raw.extracurricular.slice(0, 20).map((x: any) => String(x).slice(0, 1000)) : [],
+    schedule,
+  };
+}
+
+async function studyPlanRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "Native D1 binding is required for study-plan sync" }, 503);
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+
+  if (method === "GET") {
+    const studentId = (new URL(ctx.request.url).searchParams.get("studentId") || requester.id).trim();
+    const canRead = requester.role === "admin" || requester.role === "counselor" ||
+      (requester.role === "student" && requester.id === studentId);
+    if (!canRead) return json({ error: "Access denied" }, 403);
+    const row: any = await ctx.env.DB.prepare("SELECT plan_json, updated_at FROM study_plans WHERE student_id = ?")
+      .bind(studentId).first();
+    if (!row) return json({ error: "Study plan not found" }, 404);
+    try {
+      return json({ plan: JSON.parse(row.plan_json), updatedAt: row.updated_at });
+    } catch {
+      return json({ error: "Stored study plan is invalid" }, 500);
+    }
+  }
+
+  if (method === "POST") {
+    if (requester.role !== "admin" && requester.role !== "counselor") {
+      return json({ error: "Counselor or administrator access required" }, 403);
+    }
+    const body = await readJson(ctx.request);
+    const studentId = String(body?.studentId || "").trim();
+    const plan = validateStudyPlan(body?.plan);
+    if (!studentId || studentId.length > 128 || !plan) return json({ error: "Invalid studentId or plan" }, 400);
+    const student = await store.findUserById(studentId);
+    if (!student || student.role !== "student") return json({ error: "Student not found" }, 404);
+    await ctx.env.DB.prepare(
+      "INSERT INTO study_plans (student_id,plan_json,counselor_id,updated_at) VALUES (?,?,?,?) " +
+      "ON CONFLICT(student_id) DO UPDATE SET plan_json=excluded.plan_json,counselor_id=excluded.counselor_id,updated_at=excluded.updated_at"
+    ).bind(studentId, JSON.stringify(plan), requester.id, plan.updatedAt).run();
+    return json({ ok: true, plan });
+  }
+
+  return json({ error: "Method not allowed" }, 405);
 }
 
 /* ----------------------------------------------------------------------------
@@ -2002,6 +2086,12 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         case "auth/list":           if (isGet)  return await authList(ctx, store); break;
       }
       return json({ error: "Method not allowed", path, method }, 405);
+    }
+
+    if (path === "study-plan") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await studyPlanRoute(ctx, store, method);
     }
 
     switch (path) {

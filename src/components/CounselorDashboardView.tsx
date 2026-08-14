@@ -8,7 +8,8 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
-import { getCounselorProfile, saveCounselorProfile, CounselorProfile, getProfileMetadata, getHydratedStudent } from "../lib/userProfiles";
+import { saveCounselorProfile, CounselorProfile, getProfileMetadata, getHydratedStudent } from "../lib/userProfiles";
+import { loadStudyPlan, saveStudyPlan } from "../lib/studyPlans";
 
 const getSupervisedStudents = (): Student[] => {
   const baseStudents = [
@@ -49,10 +50,32 @@ interface CounselorDashboardViewProps {
 }
 
 export default function CounselorDashboardView({ student, onNavigate, onUpdateStudent }: CounselorDashboardViewProps) {
-  const studentsUnderSupervision = getSupervisedStudents();
-  const [activeStudent, setActiveStudent] = useState<Student>(() => {
-    return getHydratedStudent(student);
-  });
+  const [studentsUnderSupervision, setStudentsUnderSupervision] = useState<Student[]>(() => getSupervisedStudents());
+  const [activeStudent, setActiveStudent] = useState<Student>(() => getSupervisedStudents()[0]);
+
+  // In production, load real student accounts from D1. Demo/offline mode keeps
+  // the local sample list. The API only allows counselor/admin sessions.
+  useEffect(() => {
+    fetch("/api/auth/list", { credentials: "include", cache: "no-store" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!Array.isArray(data?.users) || data.users.length === 0) return;
+        const remoteStudents = data.users.map((u: any) => getHydratedStudent({
+          id: u.id,
+          name: u.name,
+          code: u.code || u.mobile || u.id,
+          field: u.field || "tajrobi",
+          grade: u.grade || "دانش‌آموز ثبت‌شده",
+          city: u.city,
+          age: u.age,
+          mobile: u.mobile,
+          accountRole: "student",
+        }));
+        setStudentsUnderSupervision(remoteStudents);
+        setActiveStudent((current) => remoteStudents.find((s: Student) => s.id === current.id) || remoteStudents[0]);
+      })
+      .catch(() => {});
+  }, []);
   
   const [counselorProfile, setCounselorProfile] = useState<CounselorProfile>(() => {
     return getProfileMetadata("counselor") as CounselorProfile;
@@ -83,23 +106,26 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
 
   const [planSuccessMsg, setPlanSuccessMsg] = useState("");
 
-  // Load existing manual plan if any
+  // Load every editable day when switching students. Resetting first prevents
+  // one student's plan leaking into another student's form.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`taranom_manual_study_plan_${activeStudent.id}`);
-      if (saved) {
-        const p = JSON.parse(saved);
-        if (p.title) setCustomPlanTitle(p.title);
-        if (p.schedule && p.schedule[0]) {
-          setMorning1(p.schedule[0].morning);
-          setAfternoon1(p.schedule[0].afternoon);
-        }
-        if (p.schedule && p.schedule[1]) {
-          setMorning2(p.schedule[1].morning);
-          setAfternoon2(p.schedule[1].afternoon);
-        }
-      }
-    } catch {}
+    let active = true;
+    const defaults = [
+      ["پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت", "حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات"],
+      ["مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت", "تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور"],
+      ["مرور فرمول‌های فیزیک و شیمی - ۳ ساعت", "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی"],
+      ["شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت", "تحلیل موشکافانه تراز و تکنیک ضربدر منها"],
+    ];
+    loadStudyPlan(activeStudent.id).then((plan) => {
+      if (!active) return;
+      const day = (index: number) => plan?.schedule[index];
+      setCustomPlanTitle(plan?.title || "نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه");
+      setMorning1(day(0)?.morning || defaults[0][0]); setAfternoon1(day(0)?.afternoon || defaults[0][1]);
+      setMorning2(day(1)?.morning || defaults[1][0]); setAfternoon2(day(1)?.afternoon || defaults[1][1]);
+      setMorning3(day(2)?.morning || defaults[2][0]); setAfternoon3(day(2)?.afternoon || defaults[2][1]);
+      setMorning4(day(3)?.morning || defaults[3][0]); setAfternoon4(day(3)?.afternoon || defaults[3][1]);
+    });
+    return () => { active = false; };
   }, [activeStudent.id]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -140,8 +166,9 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
     alert("توصیه‌نامه و گزارش ارزیابی مشاور با موفقیت ذخیره گردید و به پورتال داوطلب ارسال شد!");
   };
 
-  const handlePublishManualPlan = (e: React.FormEvent) => {
+  const handlePublishManualPlan = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPlanSuccessMsg("در حال ذخیره و همگام‌سازی برنامه...");
     const planPayload = {
       title: customPlanTitle,
       counselorName: counselorProfile.name,
@@ -151,13 +178,13 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
         "💡 لطفا تمامی پارت‌های شیفت صبح و عصر زیر را با دقت و متد پومودورو اجرا کنید."
       ],
       schedule: [
-        { day: "شنبه", morning: morning1, afternoon: afternoon1, totalQ: 40 },
-        { day: "یکشنبه", morning: morning2, afternoon: afternoon2, totalQ: 50 },
-        { day: "دوشنبه", morning: morning3, afternoon: afternoon3, totalQ: 40 },
-        { day: "سه‌شنبه", morning: morning4, afternoon: afternoon4, totalQ: 60 },
-        { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
-        { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", totalQ: 50 },
-        { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
+        { day: "شنبه", morning: morning1, afternoon: afternoon1, qCount: 40 },
+        { day: "یکشنبه", morning: morning2, afternoon: afternoon2, qCount: 50 },
+        { day: "دوشنبه", morning: morning3, afternoon: afternoon3, qCount: 40 },
+        { day: "سه‌شنبه", morning: morning4, afternoon: afternoon4, qCount: 60 },
+        { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", qCount: 35 },
+        { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", qCount: 50 },
+        { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", qCount: 20 },
       ],
       extracurricular: [
         "کارگاه رفع اشکال اضطراری دروس تخصصی (با حضور مشاور)",
@@ -165,11 +192,14 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
       ]
     };
     try {
-      localStorage.setItem(`taranom_manual_study_plan_${activeStudent.id}`, JSON.stringify(planPayload));
-      setPlanSuccessMsg(`✅ برنامه هفتگی جدید برای داوطلب '${activeStudent.name}' با موفقیت تدوین و مستقیماً روی جدول جدول دانش‌آموز بارگذاری شد!`);
-      setTimeout(() => setPlanSuccessMsg(""), 5000);
-    } catch {
-      alert("خطا در ذخیره‌سازی برنامه دستی.");
+      const result = await saveStudyPlan(activeStudent.id, planPayload);
+      setPlanSuccessMsg(result.synced
+        ? `✅ برنامه «${activeStudent.name}» در D1 ذخیره شد و اکنون در پنل دانش‌آموز قابل مشاهده است.`
+        : `✅ برنامه «${activeStudent.name}» در حالت دمو روی این مرورگر ذخیره شد. برای همگام‌سازی بین دستگاه‌ها با حساب مشاور وارد شوید.`);
+      setTimeout(() => setPlanSuccessMsg(""), 7000);
+    } catch (error: any) {
+      setPlanSuccessMsg("");
+      alert(error?.message || "خطا در ذخیره‌سازی برنامه دستی.");
     }
   };
 
