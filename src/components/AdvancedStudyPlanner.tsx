@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Calendar, Clock, BookOpen, Target, Sparkles, CheckCircle2, Award, Zap, ArrowRight, 
-  Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle
+  Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle, PhoneCall, Headphones, HelpCircle
 } from "lucide-react";
 import { Student } from "../types";
 
@@ -18,6 +18,9 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   const [isGenerating, setIsGenerating] = useState(false);
   const [dailyLogSubmitted, setDailyLogSubmitted] = useState(false);
   const [dailyReportText, setDailyReportText] = useState("");
+  const [consultationType, setConsultationType] = useState<"single" | "continuous">("single");
+  const [bookingSubmitted, setBookingSubmitted] = useState(false);
+  const [bookingTime, setBookingTime] = useState("عصر امروز (۱۸ الی ۲۰)");
 
   // Load counselor manual plan or fallback to professional Konkur standard schedule
   useEffect(() => {
@@ -115,7 +118,6 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
     });
   }, [student.id, student.field]);
 
-  // Student mock grades / report card integration data
   const studentGrades = [
     { lesson: "زیست‌شناسی", percentage: 48, status: "warning", advice: "نیاز به مرور خط‌به‌خط کتاب درسی و تصاویر." },
     { lesson: "شیمی تخصصی", percentage: 55, status: "warning", advice: "مسائل استوکیومتری نیازمند تست تمرکزی است." },
@@ -155,12 +157,18 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       };
 
       setGeneratedPlan(newPlan);
-      try {
-        localStorage.setItem(`taranom_manual_study_plan_${student.id}`, JSON.stringify(newPlan));
-      } catch {}
-
       setIsGenerating(false);
     }, 1200);
+  };
+
+  const handleBookConsultation = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBookingSubmitted(true);
+    try {
+      const bookings = JSON.parse(localStorage.getItem("taranom_consultation_requests") || "[]");
+      bookings.push({ date: new Date().toISOString(), type: consultationType, slot: bookingTime, student: student.name });
+      localStorage.setItem("taranom_consultation_requests", JSON.stringify(bookings));
+    } catch {}
   };
 
   const handleSendReportToCounselorAndFamily = (e: React.FormEvent) => {
@@ -222,6 +230,82 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
             </button>
           </div>
         </div>
+      </div>
+
+      {/* 📞 Consultation Booking Section */}
+      <div className="bg-white rounded-[32px] p-8 border border-slate-150 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <h3 className="text-base font-black text-slate-900 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Headphones size={18} />
+            </div>
+            <span>رزرو جلسه مشاوره تخصصی (موردی یا همراهی مستمر)</span>
+          </h3>
+          <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full font-mono">
+            پشتیبانی ۲۴ ساعته
+          </span>
+        </div>
+
+        {bookingSubmitted ? (
+          <div className="p-6 bg-emerald-50 text-emerald-900 rounded-3xl border border-emerald-200 text-xs font-black text-center space-y-2">
+            <p className="text-sm">✅ درخواست مشاوره شما با موفقیت ثبت شد!</p>
+            <p className="text-slate-600 font-bold">مشاور ارشد (استاد مریم رحیمی) در بازه زمانی «{bookingTime}» برای بررسی کارنامه و برنامه با شما تماس خواهد گرفت.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleBookConsultation} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-700">نوع خدمت مشاوره مورد نیاز</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConsultationType("single")}
+                    className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
+                      consultationType === "single" ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-black shadow-xs" : "bg-slate-50 border-slate-200 text-slate-600"
+                    }`}
+                  >
+                    <span className="block text-xs font-black mb-1">جلسه مشاوره موردی</span>
+                    <span className="text-[10px] text-slate-400 block">برای حل یک مسئله خاص یا رفع ابهام منابع</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConsultationType("continuous")}
+                    className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
+                      consultationType === "continuous" ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-black shadow-xs" : "bg-slate-50 border-slate-200 text-slate-600"
+                    }`}
+                  >
+                    <span className="block text-xs font-black mb-1">همراهی و طرح مستمر</span>
+                    <span className="text-[10px] text-slate-400 block">برنامه هفتگی، گزارش هرشبه و تحلیل کارنامه</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-700">انتخاب بازه زمانی تماس و جلسه</label>
+                <select 
+                  value={bookingTime}
+                  onChange={e => setBookingTime(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 cursor-pointer"
+                >
+                  <option value="صبح فردا (۱۰ الی ۱۲)">صبح فردا (۱۰ الی ۱۲)</option>
+                  <option value="عصر امروز (۱۸ الی ۲۰)">عصر امروز (۱۸ الی ۲۰)</option>
+                  <option value="پنج‌شنبه (۱۱ الی ۱۳)">پنج‌شنبه (۱۱ الی ۱۳)</option>
+                </select>
+              </div>
+
+            </div>
+
+            <button 
+              type="submit"
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-8 py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <PhoneCall size={16} />
+              <span>ثبت درخواست نهایی مشاوره و رزرو وقت</span>
+            </button>
+          </form>
+        )}
       </div>
 
       {/* 📊 Student Grades & Report Card Overview Section */}
@@ -348,11 +432,10 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
             </div>
           </div>
 
-          {/* 🌈 BEAUTIFUL GAMIFIED & COLORFUL WEEKLY SCHEDULE CARDS */}
           <div className="bg-white rounded-[32px] p-8 border border-slate-150 shadow-sm space-y-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-6">
               <div className="space-y-1">
-                <span className="text-[10px] font-black px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full font-mono">
+                <span className="text-[10px] font-black px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-mono">
                   {generatedPlan.profile}
                 </span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">{generatedPlan.title}</h2>
@@ -368,7 +451,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               </button>
             </div>
 
-            {/* Weekly Schedule Colorful Grid */}
+            {/* Weekly Schedule Table (Gamified & Colorful Cards) */}
             <div className="space-y-4">
               <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
                 <Calendar size={16} className="text-indigo-600" />
