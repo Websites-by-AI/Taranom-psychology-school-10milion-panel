@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Users, BarChart, UploadCloud, Activity, ShieldCheck, Database, TrendingUp, Sparkles,
-  RefreshCw, Target, UserPlus, Globe, HelpCircle, FileText, Settings2, Table, Palette, Terminal, AlertCircle
+  RefreshCw, Target, UserPlus, Globe, HelpCircle, FileText, Settings2, Table, Palette, Terminal, AlertCircle, FlaskConical
 } from "lucide-react";
 import { Student } from "../types";
 import { addSystemLog } from "../lib/syslogs";
@@ -17,6 +17,7 @@ import { saveApiKeyWithValidation } from "../lib/apiKeyValidation";
 // Sub-components
 import CentralDatabase from "./admin/CentralDatabase";
 import SystemDiagnostics from "./admin/SystemDiagnostics";
+import DevTestingSection from "./DevTestingSection";
 import IntegrationsPanel from "./admin/IntegrationsPanel";
 import StudentManagement from "./admin/StudentManagement";
 
@@ -142,6 +143,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
           />
         );
       case "system_connectivity": return <SystemConnectivityWidget />;
+      case "dev_testing": return <DevTestingSection />;
       case "registration_form": return <StudentRegistrationForm onSuccess={() => setActiveTab("students")} />;
       case "investment": return <InvestmentView />;
       case "audit": return <ContentAuditModule />;
@@ -161,6 +163,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
         {[
           { id: "system_connectivity", label: "وضعیت سیستم", icon: Activity },
+          { id: "dev_testing", label: "توسعه و تست", icon: FlaskConical },
           { id: "central_database", label: "بانک اطلاعاتی", icon: Database },
           { id: "students", label: "داوطلبان", icon: Users },
           { id: "diagnostics", label: "عیب‌یابی", icon: Terminal },
