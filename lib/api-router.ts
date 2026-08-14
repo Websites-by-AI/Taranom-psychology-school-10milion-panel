@@ -2046,6 +2046,80 @@ async function studyPlanRoute(ctx: Ctx, store: AuthStore, method: string): Promi
   return json({ error: "Method not allowed" }, 405);
 }
 
+/* --- Student → counselor reverse sync (task ticks + daily reports) --- */
+
+async function taskProgressRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "Native D1 binding is required for task progress" }, 503);
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+
+  if (method === "GET") {
+    const studentId = (new URL(ctx.request.url).searchParams.get("studentId") || requester.id).trim();
+    const canRead = requester.role === "admin" || requester.role === "counselor" ||
+      (requester.role === "student" && requester.id === studentId);
+    if (!canRead) return json({ error: "Access denied" }, 403);
+    const row: any = await ctx.env.DB.prepare("SELECT progress_json, updated_at FROM task_progress WHERE student_id = ?")
+      .bind(studentId).first();
+    if (!row) return json({ progress: null, updatedAt: null });
+    try {
+      return json({ progress: JSON.parse(row.progress_json), updatedAt: row.updated_at });
+    } catch {
+      return json({ error: "Stored progress is invalid" }, 500);
+    }
+  }
+
+  if (method === "POST") {
+    // Only the student themselves may mark tasks done.
+    if (requester.role !== "student") return json({ error: "Only students update their own progress" }, 403);
+    const body = await readJson(ctx.request);
+    const progress = body?.progress;
+    if (!progress || typeof progress !== "object" || Array.isArray(progress)) {
+      return json({ error: "Invalid progress payload" }, 400);
+    }
+    const now = new Date().toISOString();
+    await ctx.env.DB.prepare(
+      "INSERT INTO task_progress (student_id,progress_json,updated_at) VALUES (?,?,?) " +
+      "ON CONFLICT(student_id) DO UPDATE SET progress_json=excluded.progress_json, updated_at=excluded.updated_at"
+    ).bind(requester.id, JSON.stringify(progress), now).run();
+    return json({ ok: true, updatedAt: now });
+  }
+
+  return json({ error: "Method not allowed" }, 405);
+}
+
+async function dailyReportRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "Native D1 binding is required for daily reports" }, 503);
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+
+  if (method === "GET") {
+    const studentId = (new URL(ctx.request.url).searchParams.get("studentId") || requester.id).trim();
+    const canRead = requester.role === "admin" || requester.role === "counselor" ||
+      (requester.role === "student" && requester.id === studentId);
+    if (!canRead) return json({ error: "Access denied" }, 403);
+    const res = await ctx.env.DB.prepare(
+      "SELECT id, student_id, student_name, text, created_at FROM daily_reports WHERE student_id = ? ORDER BY created_at DESC LIMIT 100"
+    ).bind(studentId).all();
+    return json({ reports: res.results || [] });
+  }
+
+  if (method === "POST") {
+    if (requester.role !== "student") return json({ error: "Only students submit reports" }, 403);
+    const body = await readJson(ctx.request);
+    const text = String(body?.text || "").trim();
+    if (!text) return json({ error: "Report text is required" }, 400);
+    if (text.length > 4000) return json({ error: "Report text is too long" }, 400);
+    const now = new Date().toISOString();
+    const id = randomToken(16);
+    await ctx.env.DB.prepare(
+      "INSERT INTO daily_reports (id,student_id,student_name,text,created_at) VALUES (?,?,?,?,?)"
+    ).bind(id, requester.id, requester.name, text, now).run();
+    return json({ ok: true, id, createdAt: now });
+  }
+
+  return json({ error: "Method not allowed" }, 405);
+}
+
 /* ----------------------------------------------------------------------------
  * Body parsing + router
  * ------------------------------------------------------------------------- */
@@ -2092,6 +2166,18 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await studyPlanRoute(ctx, store, method);
+    }
+
+    if (path === "task-progress") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await taskProgressRoute(ctx, store, method);
+    }
+
+    if (path === "daily-report") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await dailyReportRoute(ctx, store, method);
     }
 
     switch (path) {

@@ -3,13 +3,14 @@ import {
   Users, Sparkles, BookOpen, HeartPulse, Brain, Plus, Calendar, 
   Settings, Database, Compass, CheckCircle2, ChevronLeft, 
   HelpCircle, UserCheck, GraduationCap, AlertCircle, ClipboardList, FileSpreadsheet, Target,
-  Edit2, Shield, Award, Briefcase, MapPin, Clock, Send
+  Edit2, Shield, Award, Briefcase, MapPin, Clock, Send, MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
 import { saveCounselorProfile, CounselorProfile, getProfileMetadata, getHydratedStudent } from "../lib/userProfiles";
 import { loadStudyPlan, saveStudyPlan } from "../lib/studyPlans";
+import { loadDailyReports, loadTaskProgress, type DailyReport, type TaskProgress } from "../lib/studentSync";
 
 const getSupervisedStudents = (): Student[] => {
   const baseStudents = [
@@ -105,6 +106,27 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
   const [afternoon4, setAfternoon4] = useState("تحلیل موشکافانه تراز و تکنیک ضربدر منها");
 
   const [planSuccessMsg, setPlanSuccessMsg] = useState("");
+
+  // Student → counselor reverse sync: daily reports + task completion ticks.
+  const [studentReports, setStudentReports] = useState<DailyReport[]>([]);
+  const [studentProgress, setStudentProgress] = useState<TaskProgress | null>(null);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReportsLoading(true);
+    (async () => {
+      const [reports, progress] = await Promise.all([
+        loadDailyReports(activeStudent.id),
+        loadTaskProgress(activeStudent.id),
+      ]);
+      if (cancelled) return;
+      setStudentReports(reports);
+      setStudentProgress(progress);
+      setReportsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [activeStudent.id]);
 
   // Load every editable day when switching students. Resetting first prevents
   // one student's plan leaking into another student's form.
@@ -541,6 +563,78 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
                 <span>انتشار و بارگذاری مستقیم برنامه در جدول دانش‌آموز</span>
               </button>
             </form>
+          </div>
+
+          {/* 📬 Student → counselor reverse sync: progress + daily reports */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <FileSpreadsheet size={20} className="text-emerald-600" />
+                <span>گزارش روزانه و پیشرفت {activeStudent.name}</span>
+              </h3>
+              <span className="text-[9px] bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-black border border-emerald-100">
+                همگام‌سازی زنده از D1
+              </span>
+            </div>
+
+            {reportsLoading ? (
+              <p className="text-xs text-slate-400 text-center py-4">در حال دریافت گزارش‌ها…</p>
+            ) : (
+              <>
+                {/* Task progress summary */}
+                <div>
+                  <h4 className="text-xs font-black text-slate-600 mb-2 flex items-center gap-1.5">
+                    <CheckCircle2 size={14} className="text-indigo-500" /> وضعیت تکمیل پارت‌ها
+                  </h4>
+                  {studentProgress ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {Object.entries(studentProgress).map(([day, shifts]) => {
+                        const done = Object.values(shifts || {}).filter(Boolean).length;
+                        const total = Object.keys(shifts || {}).length || 2;
+                        return (
+                          <div key={day} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                            <span className="text-[10px] font-black text-slate-600 block mb-1">{day}</span>
+                            <span className={`text-xs font-black ${done === total && total > 0 ? "text-emerald-600" : "text-indigo-600"}`}>
+                              {done}/{total} پارت
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 bg-slate-50 rounded-xl p-3 text-center">
+                      دانش‌آموز هنوز هیچ پارت مطالعه‌ای را تیک نزده است.
+                    </p>
+                  )}
+                </div>
+
+                {/* Daily reports */}
+                <div>
+                  <h4 className="text-xs font-black text-slate-600 mb-2 flex items-center gap-1.5">
+                    <MessageSquare size={14} className="text-amber-500" /> گزارش‌های روزانه دانش‌آموز
+                  </h4>
+                  {studentReports.length > 0 ? (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {studentReports.map(r => (
+                        <div key={r.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-black text-indigo-700">{r.student_name || "دانش‌آموز"}</span>
+                            <span className="text-[9px] text-slate-400 font-mono" dir="ltr">
+                              {new Date(r.created_at).toLocaleDateString("fa-IR")}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 leading-relaxed">{r.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 bg-slate-50 rounded-xl p-3 text-center">
+                      هنوز گزارشی از این دانش‌آموز دریافت نشده است.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
         </div>

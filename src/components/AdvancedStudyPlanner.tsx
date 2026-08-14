@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Student } from "../types";
 import { motion } from "motion/react";
+import { saveTaskProgress, loadTaskProgress, submitDailyReport, type TaskProgress } from "../lib/studentSync";
 
 interface AdvancedStudyPlannerProps {
   student: Student;
@@ -35,6 +36,22 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   });
 
   const [expandedDay, setExpandedDay] = useState<string | null>("شنبه");
+
+  // Restore saved task progress from D1 (auth) or localStorage (demo/offline).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const remote = await loadTaskProgress();
+      if (!cancelled && remote) setCompletedTasks(remote);
+      else {
+        try {
+          const local = localStorage.getItem("taranom_task_progress");
+          if (local && !cancelled) setCompletedTasks(JSON.parse(local));
+        } catch {}
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load counselor manual plan or fallback to professional Konkur standard schedule
   useEffect(() => {
@@ -176,13 +193,20 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   };
 
   const toggleTask = (day: string, shift: 'morning' | 'afternoon') => {
-    setCompletedTasks(prev => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        [shift]: !prev[day]?.[shift]
-      }
-    }));
+    setCompletedTasks(prev => {
+      const next = {
+        ...prev,
+        [day]: {
+          ...prev[day],
+          [shift]: !prev[day]?.[shift]
+        }
+      };
+      // Persist locally (offline/demo fallback) AND sync to D1 so the counselor
+      // sees the student's progress live.
+      try { localStorage.setItem("taranom_task_progress", JSON.stringify(next)); } catch {}
+      saveTaskProgress(next);
+      return next;
+    });
   };
 
   const handleBookConsultation = (e: React.FormEvent) => {
@@ -204,6 +228,8 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       existing.push({ date: new Date().toISOString(), text: dailyReportText, student: student.name });
       localStorage.setItem("taranom_daily_logs", JSON.stringify(existing));
     } catch {}
+    // Sync to D1 so the counselor and parents can read it from their own devices.
+    submitDailyReport(dailyReportText.trim());
   };
 
   return (

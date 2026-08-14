@@ -47,3 +47,23 @@ CREATE TABLE IF NOT EXISTS study_plans (
 );
 
 CREATE INDEX IF NOT EXISTS idx_study_plans_counselor ON study_plans(counselor_id);
+
+-- Student → counselor reverse sync.
+-- Task completion ticks (per student, whole map as JSON keyed by day/shift).
+CREATE TABLE IF NOT EXISTS task_progress (
+  student_id    TEXT PRIMARY KEY,
+  progress_json TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+-- Daily reports submitted by students, readable by counselor/admin (and parents).
+CREATE TABLE IF NOT EXISTS daily_reports (
+  id           TEXT PRIMARY KEY,
+  student_id   TEXT NOT NULL,
+  student_name TEXT,
+  text         TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_reports_student ON daily_reports(student_id);
+CREATE INDEX IF NOT EXISTS idx_daily_reports_created ON daily_reports(created_at);
