@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Calendar, Clock, BookOpen, Target, Sparkles, CheckCircle2, Award, Zap, ArrowRight, 
-  Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle, PhoneCall, Headphones, HelpCircle
+  Download, AlertTriangle, ShieldAlert, HeartPulse, UserCheck, MessageSquare, Users, BarChart3, FileText, CheckCircle, PhoneCall, Headphones, HelpCircle, Check, Flame, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Student } from "../types";
 
@@ -21,6 +21,19 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
   const [consultationType, setConsultationType] = useState<"single" | "continuous">("single");
   const [bookingSubmitted, setBookingSubmitted] = useState(false);
   const [bookingTime, setBookingTime] = useState("عصر امروز (۱۸ الی ۲۰)");
+
+  // Interactive task completion state per day
+  const [completedTasks, setCompletedTasks] = useState<Record<string, Record<string, boolean>>>({
+    "شنبه": { morning: false, afternoon: false },
+    "یکشنبه": { morning: false, afternoon: false },
+    "دوشنبه": { morning: false, afternoon: false },
+    "سه‌شنبه": { morning: false, afternoon: false },
+    "چهارشنبه": { morning: false, afternoon: false },
+    "پنجشنبه": { morning: false, afternoon: false },
+    "جمعه": { morning: false, afternoon: false },
+  });
+
+  const [expandedDay, setExpandedDay] = useState<string | null>("شنبه");
 
   // Load counselor manual plan or fallback to professional Konkur standard schedule
   useEffect(() => {
@@ -50,7 +63,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "شنبه", 
           emoji: "🚀",
           color: "from-blue-500 to-indigo-600",
-          bgLight: "bg-blue-50/70 border-blue-200",
+          accentBg: "bg-blue-50/50 border-blue-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): مطالعه عمیق کتاب درسی + پارت پومودوروهای مفهومی (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): حل ۴۰ تست زمان‌دار تله‌دار + تحلیل غلط‌ها در دفتر اشتباهات", 
           totalQ: 40 
@@ -59,7 +72,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "یکشنبه", 
           emoji: "⚡",
           color: "from-indigo-500 to-purple-600",
-          bgLight: "bg-indigo-50/70 border-indigo-200",
+          accentBg: "bg-indigo-50/50 border-indigo-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): حل مسائل محاسباتی پیشرفته و فرمول‌شناسی (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): آزمون موضوعی موازی و رفع اشکال عارضه‌یابی تراز", 
           totalQ: 45 
@@ -68,7 +81,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "دوشنبه", 
           emoji: "📚",
           color: "from-purple-500 to-pink-600",
-          bgLight: "bg-purple-50/70 border-purple-200",
+          accentBg: "bg-purple-50/50 border-purple-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): مرور دروس حفظی، فرمول‌های فیزیک و خلاصه‌نویسی نموداری (۳ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تست‌زنی جامع موازی و بررسی پاسخ‌نامه تشریحی", 
           totalQ: 40 
@@ -77,7 +90,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "سه‌شنبه", 
           emoji: "🎯",
           color: "from-emerald-500 to-teal-600",
-          bgLight: "bg-emerald-50/70 border-emerald-200",
+          accentBg: "bg-emerald-50/50 border-emerald-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تحلیل موشکافانه تراز و تکنیک ضربدر منها", 
           totalQ: 60 
@@ -86,7 +99,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "چهارشنبه", 
           emoji: "💡",
           color: "from-amber-500 to-orange-600",
-          bgLight: "bg-amber-50/70 border-amber-200",
+          accentBg: "bg-amber-50/50 border-amber-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای (۳ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): حل تست‌های سطح المپیاد و تله‌های پرتکرار", 
           totalQ: 35 
@@ -95,7 +108,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "پنجشنبه", 
           emoji: "🏆",
           color: "from-rose-500 to-red-600",
-          bgLight: "bg-rose-50/70 border-rose-200",
+          accentBg: "bg-rose-50/50 border-rose-200",
           morning: "شیفت اول (۰۸:۰۰ الی ۱۳:۰۰): آزمون جامع آزمایشی شبیه‌ساز استاندارد (۴ ساعت)", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۲۰:۰۰): تحلیل کارنامه و استراحت بازسازنده ذهن", 
           totalQ: 50 
@@ -104,7 +117,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           day: "جمعه", 
           emoji: "☕",
           color: "from-slate-600 to-slate-800",
-          bgLight: "bg-slate-50/70 border-slate-200",
+          accentBg: "bg-slate-50/50 border-slate-200",
           morning: "شیفت اول (۰۹:۰۰ الی ۱۲:۰۰): مرور خلاصه‌های طلایی، استراحت و ریکاوری روحی کایزن", 
           afternoon: "شیفت دوم (۱۶:۰۰ الی ۱۹:۰۰): ارسال گزارش هفتگی به مشاور ارشد و والدین", 
           totalQ: 20 
@@ -142,13 +155,13 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
           "💡 پیشنهاد مشاور: حتماً در شیفت صبح از روش بازیابی (Active Recall) برای رفع اشکال ریاضی استفاده کنید."
         ],
         schedule: [
-          { day: "شنبه", emoji: "🚀", color: "from-blue-500 to-indigo-600", bgLight: "bg-blue-50/70 border-blue-200", morning: `شیفت اول: پارت جبرانی تخصصی (${targetHours} ساعت مطالعه متمرکز)`, afternoon: "حل تست‌های زمان‌دار تله‌دار + ثبت در دفتر اشتباهات", totalQ: 45 },
-          { day: "یکشنبه", emoji: "⚡", color: "from-indigo-500 to-purple-600", bgLight: "bg-indigo-50/70 border-indigo-200", morning: "شیفت اول: مطالعه مباحث پایه و حل مسائل تشریحی", afternoon: "آزمون موضوعی موازی و رفع اشکال عارضه‌یابی", totalQ: 40 },
-          { day: "دوشنبه", emoji: "📚", color: "from-purple-500 to-pink-600", bgLight: "bg-purple-50/70 border-purple-200", morning: "شیفت اول: مرور فرمول‌های فیزیک و شیمی و خلاصه‌نویسی", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
-          { day: "سه‌شنبه", emoji: "🎯", color: "from-emerald-500 to-teal-600", bgLight: "bg-emerald-50/70 border-emerald-200", morning: "شیفت اول: شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 55 },
-          { day: "چهارشنبه", emoji: "💡", color: "from-amber-500 to-orange-600", bgLight: "bg-amber-50/70 border-amber-200", morning: "شیفت اول: رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
-          { day: "پنجشنبه", emoji: "🏆", color: "from-rose-500 to-red-600", bgLight: "bg-rose-50/70 border-rose-200", morning: "شیفت اول: آزمون جامع آزمایشی شبیه‌ساز استاندارد", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهنی", totalQ: 50 },
-          { day: "جمعه", emoji: "☕", color: "from-slate-600 to-slate-800", bgLight: "bg-slate-50/70 border-slate-200", morning: "شیفت اول: مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
+          { day: "شنبه", emoji: "🚀", color: "from-blue-500 to-indigo-600", accentBg: "bg-blue-50/50 border-blue-200", morning: `شیفت اول: پارت جبرانی تخصصی (${targetHours} ساعت مطالعه متمرکز)`, afternoon: "حل تست‌های زمان‌دار تله‌دار + ثبت در دفتر اشتباهات", totalQ: 45 },
+          { day: "یکشنبه", emoji: "⚡", color: "from-indigo-500 to-purple-600", accentBg: "bg-indigo-50/50 border-indigo-200", morning: "شیفت اول: مطالعه مباحث پایه و حل مسائل تشریحی", afternoon: "آزمون موضوعی موازی و رفع اشکال عارضه‌یابی", totalQ: 40 },
+          { day: "دوشنبه", emoji: "📚", color: "from-purple-500 to-pink-600", accentBg: "bg-purple-50/50 border-purple-200", morning: "شیفت اول: مرور فرمول‌های فیزیک و شیمی و خلاصه‌نویسی", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", totalQ: 40 },
+          { day: "سه‌شنبه", emoji: "🎯", color: "from-emerald-500 to-teal-600", accentBg: "bg-emerald-50/50 border-emerald-200", morning: "شیفت اول: شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", totalQ: 55 },
+          { day: "چهارشنبه", emoji: "💡", color: "from-amber-500 to-orange-600", accentBg: "bg-amber-50/50 border-amber-200", morning: "شیفت اول: رفع اشکال مباحث آسیب‌دیده و مرور دوره‌ای", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", totalQ: 35 },
+          { day: "پنجشنبه", emoji: "🏆", color: "from-rose-500 to-red-600", accentBg: "bg-rose-50/70 border-rose-200", morning: "شیفت اول: آزمون جامع آزمایشی شبیه‌ساز استاندارد", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهنی", totalQ: 50 },
+          { day: "جمعه", emoji: "☕", color: "from-slate-600 to-slate-800", accentBg: "bg-slate-50/70 border-slate-200", morning: "شیفت اول: مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", totalQ: 20 },
         ],
         extracurricular: [
           "کارگاه رفع اشکال اضطراری دروس تخصصی (با حضور مشاور)",
@@ -159,6 +172,16 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
       setGeneratedPlan(newPlan);
       setIsGenerating(false);
     }, 1200);
+  };
+
+  const toggleTask = (day: string, shift: 'morning' | 'afternoon') => {
+    setCompletedTasks(prev => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        [shift]: !prev[day]?.[shift]
+      }
+    }));
   };
 
   const handleBookConsultation = (e: React.FormEvent) => {
@@ -451,50 +474,105 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               </button>
             </div>
 
-            {/* Weekly Schedule Table (Gamified & Colorful Cards) */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                <Calendar size={16} className="text-indigo-600" />
-                <span>جدول رنگی و جذاب زمان‌بندی پارت‌های مطالعاتی هفته</span>
-              </h4>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {generatedPlan.schedule.map((sch: any, idx: number) => (
-                  <div 
-                    key={idx} 
-                    className={`p-6 rounded-[28px] border transition-all shadow-sm hover:shadow-md relative overflow-hidden group bg-gradient-to-br from-white to-slate-50/80 ${sch.bgLight || 'border-slate-200'}`}
-                  >
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-bl-full pointer-events-none" />
-                    
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${sch.color || 'from-indigo-600 to-blue-600'} text-white font-black text-lg flex items-center justify-center shadow-md`}>
-                          {sch.emoji || '✨'}
-                        </div>
-                        <div>
-                          <h5 className="text-sm font-black text-slate-900">{sch.day}</h5>
-                          <span className="text-[10px] text-indigo-600 font-extrabold font-mono">پنجره مطالعاتی کایزن</span>
-                        </div>
-                      </div>
-                      <div className="px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-center shadow-xs">
-                        <span className="block text-[8px] text-slate-400 font-black">تست هدف</span>
-                        <span className="text-xs font-black text-indigo-950 font-mono">{sch.totalQ} تست</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2.5 pt-3 border-t border-slate-100 text-xs font-bold text-slate-700">
-                      <div className="bg-white/80 p-3 rounded-xl border border-slate-150 shadow-xs space-y-1">
-                        <span className="text-[9px] text-indigo-600 font-black block">🌅 شیفت اول (صبح):</span>
-                        <p className="text-slate-800 leading-relaxed font-semibold">{sch.morning}</p>
-                      </div>
-
-                      <div className="bg-white/80 p-3 rounded-xl border border-slate-150 shadow-xs space-y-1">
-                        <span className="text-[9px] text-emerald-600 font-black block">🌆 شیفت دوم (عصر):</span>
-                        <p className="text-slate-800 leading-relaxed font-semibold">{sch.afternoon}</p>
-                      </div>
-                    </div>
+            {/* 🌟 ULTRA-POLISHED TOP-TIER NOTION / KOREAN STUDY PLANNER SCHEDULE TABLE */}
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h4 className="text-base font-black text-slate-900 flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Calendar size={18} />
                   </div>
-                ))}
+                  <span>جدول زمان‌بندی و پارت‌های مطالعاتی هفته (طرح رتبه برتر)</span>
+                </h4>
+                <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50/80 border border-indigo-200 px-4 py-1.5 rounded-xl font-mono">
+                  تیک‌زدن پارت‌ها جهت ثبت گزارش کار
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {generatedPlan.schedule.map((sch: any, idx: number) => {
+                  const dayName = sch.day;
+                  const isMorningDone = completedTasks[dayName]?.morning || false;
+                  const isAfternoonDone = completedTasks[dayName]?.afternoon || false;
+
+                  return (
+                    <motion.div 
+                      key={idx} 
+                      whileHover={{ y: -3 }}
+                      className={`p-6 rounded-[28px] border transition-all shadow-sm hover:shadow-md relative overflow-hidden bg-white ${sch.accentBg || 'border-slate-200'}`}
+                    >
+                      {/* Top Banner Accent */}
+                      <div className={`absolute top-0 right-0 left-0 h-1.5 bg-gradient-to-r ${sch.color || 'from-indigo-600 to-blue-600'}`} />
+
+                      <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-3.5">
+                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${sch.color || 'from-indigo-600 to-blue-600'} text-white font-black text-xl flex items-center justify-center shadow-md`}>
+                            {sch.emoji || '✨'}
+                          </div>
+                          <div>
+                            <h5 className="text-base font-black text-slate-900">{sch.day}</h5>
+                            <span className="text-[10px] text-indigo-600 font-extrabold font-mono">برنامه اختصاصی کایزن</span>
+                          </div>
+                        </div>
+
+                        <div className="px-3.5 py-2 bg-slate-50 rounded-2xl border border-slate-200 text-center shadow-2xs">
+                          <span className="block text-[8.5px] text-slate-400 font-black uppercase">تست هدف</span>
+                          <span className="text-xs font-black text-indigo-950 font-mono">{sch.totalQ} تست</span>
+                        </div>
+                      </div>
+
+                      {/* Shift 1: Morning */}
+                      <div className={`p-4 rounded-2xl border transition-all mb-3 ${
+                        isMorningDone 
+                          ? "bg-emerald-50/60 border-emerald-200 opacity-80" 
+                          : "bg-slate-50/80 border-slate-200/80 hover:border-indigo-300"
+                      }`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 flex-1">
+                            <span className="text-[9.5px] text-indigo-600 font-black block">🌅 شیفت اول (صبح - مطالعه عمیق):</span>
+                            <p className={`text-xs font-bold leading-relaxed ${isMorningDone ? "text-slate-500 line-through" : "text-slate-800"}`}>
+                              {sch.morning}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleTask(dayName, 'morning')}
+                            className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer mt-0.5 ${
+                              isMorningDone ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 bg-white text-transparent"
+                            }`}
+                          >
+                            <Check size={14} strokeWidth={3} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Shift 2: Afternoon */}
+                      <div className={`p-4 rounded-2xl border transition-all ${
+                        isAfternoonDone 
+                          ? "bg-emerald-50/60 border-emerald-200 opacity-80" 
+                          : "bg-slate-50/80 border-slate-200/80 hover:border-indigo-300"
+                      }`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 flex-1">
+                            <span className="text-[9.5px] text-emerald-600 font-black block">🌆 شیفت دوم (عصر - تست‌زنی و مرور):</span>
+                            <p className={`text-xs font-bold leading-relaxed ${isAfternoonDone ? "text-slate-500 line-through" : "text-slate-800"}`}>
+                              {sch.afternoon}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleTask(dayName, 'afternoon')}
+                            className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer mt-0.5 ${
+                              isAfternoonDone ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 bg-white text-transparent"
+                            }`}
+                          >
+                            <Check size={14} strokeWidth={3} />
+                          </button>
+                        </div>
+                      </div>
+
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
 
