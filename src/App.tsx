@@ -61,9 +61,9 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     const savedName = localStorage.getItem("arateb_student_profile_name");
     const savedGrade = localStorage.getItem("arateb_student_profile_grade");
     return getHydratedStudent({
-      id: "guest",
-      name: savedName || "کاربر مهمان (تست کایزن)",
-      code: "guest",
+      id: "1",
+      name: savedName || "مریم حسینی",
+      code: "9812405",
       field: "tajrobi",
       grade: savedGrade || "دوازدهم تجربی - تراز فرضی ۷۲۰۰"
     });
@@ -429,9 +429,9 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     // Invalidate the HttpOnly server session as well as resetting demo state.
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     setStudent(getHydratedStudent({
-      id: "guest",
-      name: "کاربر مهمان (تست کایزن)",
-      code: "guest",
+      id: "1",
+      name: "مریم حسینی",
+      code: "9812405",
       field: "tajrobi",
       grade: "دوازدهم تجربی - تراز فرضی ۷۲۰۰"
     }));
