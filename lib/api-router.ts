@@ -1601,6 +1601,55 @@ const SESSION_COOKIE = "taranom_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 const OTP_TTL_MS = 1000 * 60 * 5; // 5 minutes
 
+/* --- Rate limiting (brute-force protection) --- */
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;   // 15 minutes
+const LOGIN_MAX_ATTEMPTS = 5;             // per identifier (account)
+const LOGIN_IP_MAX_ATTEMPTS = 20;         // per client IP (distributed attempts)
+const OTP_SEND_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_SEND_MAX = 3;                   // OTP sends per mobile
+const OTP_VERIFY_WINDOW_MS = 10 * 60 * 1000;
+const OTP_VERIFY_MAX = 5;                 // OTP verify attempts per mobile
+
+function getClientIp(req: Request): string {
+  const raw = req.headers.get("CF-Connecting-IP") || req.headers.get("x-forwarded-for") || "unknown";
+  return raw.split(",")[0].trim();
+}
+
+async function rateLimitStatus(store: AuthStore, key: string, windowMs: number, max: number):
+  Promise<{ blocked: boolean; retryAfterSec: number }> {
+  const row = await store.getRateLimit(key);
+  if (!row) return { blocked: false, retryAfterSec: 0 };
+  const elapsed = Date.now() - new Date(row.window_start).getTime();
+  if (elapsed >= windowMs) return { blocked: false, retryAfterSec: 0 }; // window expired
+  if (row.count >= max) {
+    return { blocked: true, retryAfterSec: Math.ceil((windowMs - elapsed) / 1000) };
+  }
+  return { blocked: false, retryAfterSec: 0 };
+}
+
+async function recordRateLimit(store: AuthStore, key: string, windowMs: number): Promise<void> {
+  const row = await store.getRateLimit(key);
+  const now = Date.now();
+  let count = 1;
+  let windowStart = new Date(now).toISOString();
+  if (row) {
+    const elapsed = now - new Date(row.window_start).getTime();
+    if (elapsed < windowMs) {
+      count = row.count + 1;
+      windowStart = row.window_start;
+    }
+  }
+  await store.upsertRateLimit(key, count, windowStart);
+}
+
+function rateLimited(retryAfterSec: number): Response {
+  return json(
+    { error: "تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً کمی بعد دوباره تلاش کنید.", retryAfter: retryAfterSec },
+    429,
+    { "Retry-After": String(retryAfterSec) }
+  );
+}
+
 interface UserRow {
   id: string; email: string | null; mobile: string | null; name: string;
   password_hash: string; password_salt: string; role: string; field: string;
@@ -1623,6 +1672,16 @@ interface AuthStore {
   upsertOtp(o: OtpRow): Promise<void>;
   findOtp(mobile: string): Promise<OtpRow | null>;
   deleteOtp(mobile: string): Promise<void>;
+  getRateLimit(key: string): Promise<RateLimitRow | null>;
+  upsertRateLimit(key: string, count: number, windowStart: string): Promise<void>;
+  deleteRateLimit(key: string): Promise<void>;
+}
+
+interface RateLimitRow {
+  key: string;
+  count: number;
+  window_start: string;
+  updated_at: string;
 }
 
 /** D1-backed store (production). */
@@ -1666,6 +1725,19 @@ class D1AuthStore implements AuthStore {
   }
   async deleteOtp(mobile: string) {
     await this.db.prepare("DELETE FROM otp_codes WHERE mobile = ?").bind(mobile).run();
+  }
+  async getRateLimit(key: string) {
+    return (await this.db.prepare("SELECT * FROM rate_limits WHERE key = ?").bind(key).first()) as RateLimitRow | null;
+  }
+  async upsertRateLimit(key: string, count: number, windowStart: string) {
+    const now = new Date().toISOString();
+    await this.db.prepare(
+      "INSERT INTO rate_limits (key,count,window_start,updated_at) VALUES (?,?,?,?) " +
+      "ON CONFLICT(key) DO UPDATE SET count=excluded.count, window_start=excluded.window_start, updated_at=excluded.updated_at"
+    ).bind(key, count, windowStart, now).run();
+  }
+  async deleteRateLimit(key: string) {
+    await this.db.prepare("DELETE FROM rate_limits WHERE key = ?").bind(key).run();
   }
 }
 
@@ -1732,6 +1804,20 @@ class D1RestAuthStore implements AuthStore {
   }
   async deleteOtp(mobile: string) {
     await this.query("DELETE FROM otp_codes WHERE mobile = ?", [mobile]);
+  }
+  async getRateLimit(key: string) {
+    const rows = await this.query("SELECT * FROM rate_limits WHERE key = ?", [key]);
+    return (rows[0] as RateLimitRow) || null;
+  }
+  async upsertRateLimit(key: string, count: number, windowStart: string) {
+    const now = new Date().toISOString();
+    await this.query(
+      "INSERT INTO rate_limits (key,count,window_start,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count, window_start=excluded.window_start, updated_at=excluded.updated_at",
+      [key, count, windowStart, now]
+    );
+  }
+  async deleteRateLimit(key: string) {
+    await this.query("DELETE FROM rate_limits WHERE key = ?", [key]);
   }
 }
 
@@ -1889,11 +1975,36 @@ async function authLogin(ctx: Ctx, store: AuthStore): Promise<Response> {
   const password = (body?.password || "").toString();
   if (!identifier || !password) return json({ error: "ایمیل/موبایل و رمز عبور الزامی است." }, 400);
 
+  const ip = getClientIp(ctx.request);
+  const accKey = `login:${identifier}`;
+  const ipKey = `login-ip:${ip}`;
+
+  // Rate-limit check (per account + per IP) before authenticating.
+  const accSt = await rateLimitStatus(store, accKey, LOGIN_WINDOW_MS, LOGIN_MAX_ATTEMPTS);
+  if (accSt.blocked) return rateLimited(accSt.retryAfterSec);
+  const ipSt = await rateLimitStatus(store, ipKey, LOGIN_WINDOW_MS, LOGIN_IP_MAX_ATTEMPTS);
+  if (ipSt.blocked) return rateLimited(ipSt.retryAfterSec);
+
   const user = await store.findUserByIdentifier(identifier);
-  if (!user || !user.password_hash) return json({ error: "کاربری با این مشخصات یافت نشد." }, 404);
+  // Unified error message to avoid account enumeration (no 404 vs 401 difference).
+  const invalid = () => json({ error: "نام کاربری یا رمز عبور اشتباه است." }, 401);
+
+  if (!user || !user.password_hash) {
+    await recordRateLimit(store, accKey, LOGIN_WINDOW_MS);
+    await recordRateLimit(store, ipKey, LOGIN_WINDOW_MS);
+    return invalid();
+  }
 
   const candidate = await pbkdf2(password, user.password_salt);
-  if (!safeEqual(candidate, user.password_hash)) return json({ error: "رمز عبور نادرست است." }, 401);
+  if (!safeEqual(candidate, user.password_hash)) {
+    await recordRateLimit(store, accKey, LOGIN_WINDOW_MS);
+    await recordRateLimit(store, ipKey, LOGIN_WINDOW_MS);
+    return invalid();
+  }
+
+  // Success → clear any accumulated failures.
+  await store.deleteRateLimit(accKey);
+  await store.deleteRateLimit(ipKey);
 
   const token = randomToken(32);
   const now = Date.now();
@@ -1906,13 +2017,23 @@ async function authOtpSend(ctx: Ctx, store: AuthStore): Promise<Response> {
   const body = await readJson(ctx.request);
   const mobile = (body?.mobile || "").toString().trim();
   if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست." }, 400);
+
+  // OTP is disabled unless explicitly enabled for local/dev — return early
+  // WITHOUT touching the database (prevents anonymous DB-query abuse).
   if (ctx.env.DEV_AUTH_CODES !== "true") {
     return json({ error: "ارسال پیامک هنوز پیکربندی نشده است؛ از ورود با رمز عبور استفاده کنید." }, 503);
   }
 
+  // Rate limit OTP sends per mobile (prevents SMS flooding) — dev mode only.
+  const sendSt = await rateLimitStatus(store, `otp-send:${mobile}`, OTP_SEND_WINDOW_MS, OTP_SEND_MAX);
+  if (sendSt.blocked) return rateLimited(sendSt.retryAfterSec);
+
   const code = generateOtp();
   const now = Date.now();
   await store.upsertOtp({ mobile, code, created_at: new Date(now).toISOString(), expires_at: new Date(now + OTP_TTL_MS).toISOString() });
+
+  // Record the send (counts toward the per-mobile OTP send limit).
+  await recordRateLimit(store, `otp-send:${mobile}`, OTP_SEND_WINDOW_MS);
 
   // A code may only be echoed in an explicitly enabled local environment.
   // Production must send it out-of-band through an SMS provider.
@@ -1931,9 +2052,23 @@ async function authOtpVerify(ctx: Ctx, store: AuthStore): Promise<Response> {
   const code = (body?.code || "").toString().trim();
   if (!/^09\d{9}$/.test(mobile) || !code) return json({ error: "موبایل و کد الزامی است." }, 400);
 
+  // Rate limit OTP verify attempts per mobile (prevents code guessing).
+  const verifyKey = `otp-verify:${mobile}`;
+  const verifySt = await rateLimitStatus(store, verifyKey, OTP_VERIFY_WINDOW_MS, OTP_VERIFY_MAX);
+  if (verifySt.blocked) return rateLimited(verifySt.retryAfterSec);
+
   const otp = await store.findOtp(mobile);
-  if (!otp || Date.now() > new Date(otp.expires_at).getTime()) return json({ error: "کد منقضی شده است. دوباره درخواست کنید." }, 410);
-  if (!safeEqual(otp.code, code)) return json({ error: "کد نادرست است." }, 401);
+  if (!otp || Date.now() > new Date(otp.expires_at).getTime()) {
+    await recordRateLimit(store, verifyKey, OTP_VERIFY_WINDOW_MS);
+    return json({ error: "کد منقضی شده است. دوباره درخواست کنید." }, 410);
+  }
+  if (!safeEqual(otp.code, code)) {
+    await recordRateLimit(store, verifyKey, OTP_VERIFY_WINDOW_MS);
+    return json({ error: "کد نادرست است." }, 401);
+  }
+
+  // Success → clear accumulated verify attempts.
+  await store.deleteRateLimit(verifyKey);
 
   // OTPs are single-use. Consume before creating the session to prevent replay.
   await store.deleteOtp(mobile);

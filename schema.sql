@@ -67,3 +67,11 @@ CREATE TABLE IF NOT EXISTS daily_reports (
 
 CREATE INDEX IF NOT EXISTS idx_daily_reports_student ON daily_reports(student_id);
 CREATE INDEX IF NOT EXISTS idx_daily_reports_created ON daily_reports(created_at);
+
+-- Rate limiting (brute-force protection for login / OTP).
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key          TEXT PRIMARY KEY,
+  count        INTEGER NOT NULL,
+  window_start TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
