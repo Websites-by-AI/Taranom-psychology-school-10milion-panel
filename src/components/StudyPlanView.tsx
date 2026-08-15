@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
   Sparkles, CheckCircle2, RefreshCw, Calendar, Clock, 
   BookOpen, ArrowUp, ArrowDown, Brain, ExternalLink, 
@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { DailyPlan, Student } from "../types";
 import PomodoroTimer from "./PomodoroTimer";
+import { loadStudyPlan, subscribeToStudyPlan } from "../lib/studyPlans";
 
 interface StudyPlanViewProps {
   student?: Student;
@@ -138,6 +139,31 @@ export default function StudyPlanView({ student, onNavigate }: StudyPlanViewProp
   };
 
   const [plans, setPlans] = useState<DailyPlan[]>(() => getFieldBasedPlans(currentStudent.field));
+
+  // Override the hardcoded default schedule with the counselor-published plan
+  // from D1 (cross-device sync). This is what makes a counselor's change appear
+  // in the student panel.
+  useEffect(() => {
+    let cancelled = false;
+    const applyPlan = (plan: any) => {
+      if (!plan || !Array.isArray(plan.schedule) || plan.schedule.length === 0) return;
+      setPlans(plan.schedule.map((s: any) => ({
+        day: s.day,
+        morningPlan: s.morning || "",
+        afternoonPlan: s.afternoon || "",
+        totalQuestions: Math.max(0, Number(s.qCount ?? s.totalQ ?? 0) || 0),
+        completed: false,
+      })));
+    };
+    loadStudyPlan(currentStudent.id).then((plan) => {
+      if (!cancelled && plan) applyPlan(plan);
+    });
+    const unsubscribe = subscribeToStudyPlan(currentStudent.id, (plan) => {
+      if (plan) applyPlan(plan);
+    });
+    return () => { cancelled = true; unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStudent.id]);
 
   const handleToggleTask = (index: number) => {
     const updated = [...plans];
