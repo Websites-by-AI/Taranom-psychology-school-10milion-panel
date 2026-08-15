@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student, DailyPlan } from "../types";
+import { loadStudyPlan, subscribeToStudyPlan } from "../lib/studyPlans";
 
 interface DashboardViewProps {
   student: Student;
@@ -44,6 +45,39 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // First try the counselor-published plan from D1. If present, it REPLACES
+    // the hardcoded default tasks — this is what makes a counselor's change
+    // visible on the student's main dashboard.
+    const applyCounselorPlan = (plan: any) => {
+      if (!plan || !Array.isArray(plan.schedule) || plan.schedule.length === 0) return;
+      const tasks: DailyPlan[] = plan.schedule.map((s: any) => ({
+        day: s.day,
+        morningPlan: s.morning || "",
+        afternoonPlan: s.afternoon || "",
+        totalQuestions: Math.max(0, Number(s.qCount ?? s.totalQ ?? 0) || 0),
+        completed: false,
+      }));
+      setTodayTasks(tasks);
+    };
+
+    loadStudyPlan(student.id).then((plan) => {
+      if (!cancelled && plan) {
+        applyCounselorPlan(plan);
+      } else if (!cancelled) {
+        loadDefaultTasks();
+      }
+    });
+    const unsubscribe = subscribeToStudyPlan(student.id, (plan) => {
+      if (plan) applyCounselorPlan(plan);
+    });
+
+    return () => { cancelled = true; unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student.id, student.field]);
+
+  const loadDefaultTasks = () => {
     if (student.field === "riazi") {
       setTodayTasks([
         { day: "امروز", morningPlan: "مطالعه دقیق مبحث نظریه اعداد و ترکیبیات گسسته", afternoonPlan: "حل تشریحی ۴۰ تست زمان‌دار فیزیک پایه و دوازدهم", totalQuestions: 40, completed: false },
@@ -63,7 +97,7 @@ export default function DashboardView({ student, onNavigate }: DashboardViewProp
         { day: "امروز", morningPlan: "مرور لغات عربی کنکور", afternoonPlan: "تست‌زنی جامع موازی زیست‌شناسی", totalQuestions: 40, completed: false }
       ]);
     }
-  }, [student.field]);
+  };
 
   const toggleTask = (index: number) => {
     const updated = [...todayTasks];
