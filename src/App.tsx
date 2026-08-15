@@ -46,6 +46,16 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
+  // Handle hash fragments (e.g. #planner-gen, #admin, #counselor) so legacy or shared hash links route properly
+  useEffect(() => {
+    if (window.location.hash) {
+      const cleanPath = window.location.hash.replace('#', '');
+      if (cleanPath) {
+        navigate('/' + cleanPath, { replace: true });
+      }
+    }
+  }, []);
+
   const mockStudents: Student[] = [
     { id: "1", name: "مریم حسینی (رشته علوم تجربی - هدف پزشکی تهران)", code: "9812405", field: "tajrobi", grade: "رتبه فرضی ۴۷ کشوری - تراز ۱۰/۴۵۰" }
   ];
