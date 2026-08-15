@@ -57,6 +57,10 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   /** Bale Bot Token for @taranom_hamdeli_bot */
   BALE_BOT_TOKEN?: string;
+  /** Kavenegar API key for OTP SMS. */
+  KAVENEGAR_API_KEY?: string;
+  /** Kavenegar sender line number (e.g. \"10004346\"). */
+  KAVENEGAR_SENDER?: string;
   /** Local development only. Never set this to true in production. */
   DEV_AUTH_CODES?: string;
 }
@@ -1854,6 +1858,30 @@ function generateOtp(): string {
   return n.toString().padStart(6, "0");
 }
 
+/** Send an OTP via Kavenegar. Returns true if the SMS was accepted. */
+async function sendSmsOtp(env: Env, mobile: string, code: string): Promise<boolean> {
+  const apiKey = env.KAVENEGAR_API_KEY;
+  const sender = env.KAVENEGAR_SENDER || "";
+  if (!apiKey) return false;
+  try {
+    const resp = await fetch(`https://api.kavenegar.com/v1/${apiKey}/sms/send.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        receptor: mobile,
+        sender,
+        message: `کد ورود ترنم همدلی: ${code}\nاین کد ۵ دقیقه معتبر است.`,
+      }),
+    });
+    if (!resp.ok) return false;
+    const data: any = await resp.json();
+    // Kavenegar returns { return: { status: 200 } } on success.
+    return data?.return?.status === 200;
+  } catch {
+    return false;
+  }
+}
+
 async function pbkdf2(password: string, saltHex: string): Promise<string> {
   const keyMaterial = await crypto.subtle.importKey("raw", textEncoder.encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
@@ -2018,13 +2046,16 @@ async function authOtpSend(ctx: Ctx, store: AuthStore): Promise<Response> {
   const mobile = (body?.mobile || "").toString().trim();
   if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست." }, 400);
 
-  // OTP is disabled unless explicitly enabled for local/dev — return early
-  // WITHOUT touching the database (prevents anonymous DB-query abuse).
-  if (ctx.env.DEV_AUTH_CODES !== "true") {
+  // OTP is enabled only when a real SMS provider (Kavenegar) is configured,
+  // OR in explicit local-dev mode. Otherwise return early WITHOUT touching the
+  // database (prevents anonymous DB-query abuse).
+  const smsConfigured = !!ctx.env.KAVENEGAR_API_KEY;
+  const devMode = ctx.env.DEV_AUTH_CODES === "true";
+  if (!smsConfigured && !devMode) {
     return json({ error: "ارسال پیامک هنوز پیکربندی نشده است؛ از ورود با رمز عبور استفاده کنید." }, 503);
   }
 
-  // Rate limit OTP sends per mobile (prevents SMS flooding) — dev mode only.
+  // Rate limit OTP sends per mobile (prevents SMS flooding).
   const sendSt = await rateLimitStatus(store, `otp-send:${mobile}`, OTP_SEND_WINDOW_MS, OTP_SEND_MAX);
   if (sendSt.blocked) return rateLimited(sendSt.retryAfterSec);
 
@@ -2032,17 +2063,23 @@ async function authOtpSend(ctx: Ctx, store: AuthStore): Promise<Response> {
   const now = Date.now();
   await store.upsertOtp({ mobile, code, created_at: new Date(now).toISOString(), expires_at: new Date(now + OTP_TTL_MS).toISOString() });
 
+  // Send the code out-of-band. In production it goes via Kavenegar SMS.
+  let smsSent = false;
+  if (smsConfigured) smsSent = await sendSmsOtp(ctx.env, mobile, code);
+
   // Record the send (counts toward the per-mobile OTP send limit).
   await recordRateLimit(store, `otp-send:${mobile}`, OTP_SEND_WINDOW_MS);
 
-  // A code may only be echoed in an explicitly enabled local environment.
-  // Production must send it out-of-band through an SMS provider.
+  // The code may only be echoed back in an explicitly enabled local environment.
   const existing = await store.findUserByIdentifier(mobile);
   const response: Record<string, unknown> = {
     sent: true,
     message: existing ? "کد ورود ارسال شد." : "کد ورود ارسال شد. (شماره جدید = ثبت‌نام خودکار)",
   };
-  if (ctx.env.DEV_AUTH_CODES === "true") response.devCode = code;
+  if (smsConfigured && !smsSent) {
+    return json({ error: "ارسال پیامک ناموفق بود. لطفاً دوباره تلاش کنید." }, 502);
+  }
+  if (devMode) response.devCode = code;
   return json(response);
 }
 
