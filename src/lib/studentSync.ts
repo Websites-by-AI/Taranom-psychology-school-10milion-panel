@@ -72,3 +72,29 @@ export async function loadDailyReports(studentId?: string): Promise<DailyReport[
     return [];
   }
 }
+
+/** A student as returned by /api/auth/list (real D1 accounts). */
+export interface D1Student {
+  id: string;
+  name: string;
+  code?: string;
+  field?: string;
+  grade?: string;
+  city?: string;
+  age?: number;
+  email?: string;
+  mobile?: string;
+  accountRole?: string;
+}
+
+/** Load real registered students from D1 (counselor/admin only). */
+export async function loadD1Students(): Promise<D1Student[]> {
+  try {
+    const res = await fetch("/api/auth/list", { credentials: "include", cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.users) ? data.users : [];
+  } catch {
+    return [];
+  }
+}

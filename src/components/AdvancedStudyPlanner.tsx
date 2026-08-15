@@ -6,6 +6,7 @@ import {
 import { Student } from "../types";
 import { motion } from "motion/react";
 import { saveTaskProgress, loadTaskProgress, submitDailyReport, type TaskProgress } from "../lib/studentSync";
+import { loadStudyPlan, subscribeToStudyPlan, type StudyPlan } from "../lib/studyPlans";
 
 interface AdvancedStudyPlannerProps {
   student: Student;
@@ -53,17 +54,28 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
     return () => { cancelled = true; };
   }, []);
 
-  // Load counselor manual plan or fallback to professional Konkur standard schedule
+  // Load counselor manual plan from D1 (cross-device sync) with localStorage
+  // fallback. This is the SAME source the counselor panel writes to, so any
+  // change the counselor publishes shows up here.
   useEffect(() => {
-    try {
-      const savedManualPlan = localStorage.getItem(`taranom_manual_study_plan_${student.id}`);
-      if (savedManualPlan) {
-        const parsed = JSON.parse(savedManualPlan);
-        setGeneratedPlan(parsed);
+    let cancelled = false;
+    (async () => {
+      const plan = await loadStudyPlan(student.id);
+      if (cancelled) return;
+      if (plan) {
+        setGeneratedPlan(plan);
         return;
       }
-    } catch {}
+      buildDefaultPlan();
+    })();
+    const unsubscribe = subscribeToStudyPlan(student.id, (plan) => {
+      if (plan) setGeneratedPlan(plan);
+    });
+    return () => { cancelled = true; unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student.id, student.field]);
 
+  const buildDefaultPlan = () => {
     const fieldName = student.field === "tajrobi" ? "علوم تجربی (پزشکی/دندان)" : student.field === "riazi" ? "ریاضی فیزیک (مهندسی شریف)" : "علوم انسانی (وکالت/روانشناسی)";
     
     setGeneratedPlan({
@@ -147,7 +159,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
         "دوره حل مسائل سرعت محاسبات بدون چک‌نویس در ریاضی و فیزیک"
       ]
     });
-  }, [student.id, student.field]);
+  };
 
   const studentGrades = [
     { lesson: "زیست‌شناسی", percentage: 48, status: "warning", advice: "نیاز به مرور خط‌به‌خط کتاب درسی و تصاویر." },
@@ -474,7 +486,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               <span>هشدارهای عارضه‌یابی کارنامه و آسیب‌شناسی درسی:</span>
             </h4>
             <div className="space-y-2">
-              {generatedPlan.warnings.map((warn: string, i: number) => (
+              {(generatedPlan.warnings || []).map((warn: string, i: number) => (
                 <p key={i} className="text-xs font-bold text-amber-800 bg-white/80 p-3 rounded-xl border border-amber-100">
                   {warn}
                 </p>
@@ -486,10 +498,10 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-6">
               <div className="space-y-1">
                 <span className="text-[10px] font-black px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-mono">
-                  {generatedPlan.profile}
+                  {generatedPlan.profile || "برنامه اختصاصی مشاور"}
                 </span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">{generatedPlan.title}</h2>
-                <p className="text-xs text-slate-500 font-bold">{generatedPlan.strategy}</p>
+                <p className="text-xs text-slate-500 font-bold">{generatedPlan.strategy || ""}</p>
               </div>
               
               <button 
@@ -516,7 +528,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {generatedPlan.schedule.map((sch: any, idx: number) => {
+                {(generatedPlan.schedule || []).map((sch: any, idx: number) => {
                   const dayName = sch.day;
                   const isMorningDone = completedTasks[dayName]?.morning || false;
                   const isAfternoonDone = completedTasks[dayName]?.afternoon || false;
@@ -543,7 +555,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
 
                         <div className="px-3.5 py-2 bg-slate-50 rounded-2xl border border-slate-200 text-center shadow-2xs">
                           <span className="block text-[8.5px] text-slate-400 font-black uppercase">تست هدف</span>
-                          <span className="text-xs font-black text-indigo-950 font-mono">{sch.totalQ} تست</span>
+                          <span className="text-xs font-black text-indigo-950 font-mono">{sch.qCount ?? sch.totalQ ?? 0} تست</span>
                         </div>
                       </div>
 
@@ -610,7 +622,7 @@ export default function AdvancedStudyPlanner({ student, onNavigate }: AdvancedSt
                 <span>کلاس‌های فوق‌برنامه و همایش‌های تخصصی الحاقی به برنامه:</span>
               </h4>
               <ul className="space-y-2.5">
-                {generatedPlan.extracurricular.map((extra: string, i: number) => (
+                {(generatedPlan.extracurricular || []).map((extra: string, i: number) => (
                   <li key={i} className="flex items-center gap-2.5 text-xs font-bold text-indigo-900/80">
                     <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
                     <span>{extra}</span>
