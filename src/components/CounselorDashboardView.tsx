@@ -3,7 +3,7 @@ import {
   Users, Sparkles, BookOpen, HeartPulse, Brain, Plus, Calendar, 
   Settings, Database, Compass, CheckCircle2, ChevronLeft, 
   HelpCircle, UserCheck, GraduationCap, AlertCircle, ClipboardList, FileSpreadsheet, Target,
-  Edit2, Shield, Award, Briefcase, MapPin, Clock, Send, MessageSquare, RefreshCw
+  Edit2, Shield, Award, Briefcase, MapPin, Clock, Send, MessageSquare, RefreshCw, ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "../types";
@@ -113,6 +113,7 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
   const [planErrorMsg, setPlanErrorMsg] = useState("");
   const [advisorComment, setAdvisorComment] = useState("");
   const [commentSavedMsg, setCommentSavedMsg] = useState("");
+  const [expandedDay, setExpandedDay] = useState<number | null>(0); // فقط روز اول باز
 
   const updatePlanDay = (index: number, patch: Partial<PlanDayInput>) => {
     setPlanDays(prev => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
@@ -453,48 +454,78 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
                 />
               </div>
 
-              {/* All 7 days, editable */}
-              <div className="space-y-3">
-                {planDays.map((d, i) => (
-                  <div key={d.day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">{d.day.slice(0, 1)}</div>
-                        <span>پارت‌های مطالعاتی روز {d.day}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black text-slate-400">تعداد تست:</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={d.qCount}
-                          onChange={e => updatePlanDay(i, { qCount: Math.max(0, Number(e.target.value) || 0) })}
-                          className="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1 text-center text-xs font-mono font-black text-indigo-700 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
+              {/* All 7 days, editable — collapsible accordion */}
+              <div className="space-y-2">
+                {planDays.map((d, i) => {
+                  const isOpen = expandedDay === i;
+                  const hasContent = d.morning.trim() || d.afternoon.trim();
+                  return (
+                    <div key={d.day} className={`rounded-2xl border overflow-hidden transition-all ${isOpen ? "bg-slate-50 border-indigo-300 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                      {/* Header (click to toggle) */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedDay(isOpen ? null : i)}
+                        className="w-full flex items-center justify-between gap-2 px-4 py-3 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black font-mono shrink-0 ${isOpen ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-700 border border-indigo-100"}`}>
+                            {d.day.slice(0, 1)}
+                          </div>
+                          <div className="text-right min-w-0">
+                            <span className="text-xs font-black text-slate-800 block">روز {d.day}</span>
+                            {!isOpen && (
+                              <span className="text-[10px] text-slate-400 font-bold block truncate max-w-[220px]">
+                                {hasContent ? (d.morning || d.afternoon) : "خالی — برای تنظیم کلیک کنید"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!isOpen && (
+                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-mono">{d.qCount} تست</span>
+                          )}
+                          <ChevronDown size={16} className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </div>
+                      </button>
+
+                      {/* Body (only when open) */}
+                      {isOpen && (
+                        <div className="px-4 pb-4 space-y-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black text-slate-500">تعداد تست هدف:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={d.qCount}
+                              onChange={e => updatePlanDay(i, { qCount: Math.max(0, Number(e.target.value) || 0) })}
+                              className="w-20 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-center text-xs font-mono font-black text-indigo-700 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
+                              <textarea
+                                rows={2}
+                                value={d.morning}
+                                onChange={e => updatePlanDay(i, { morning: e.target.value })}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold resize-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
+                              <textarea
+                                rows={2}
+                                value={d.afternoon}
+                                onChange={e => updatePlanDay(i, { afternoon: e.target.value })}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold resize-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
-                        <input
-                          type="text"
-                          value={d.morning}
-                          onChange={e => updatePlanDay(i, { morning: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
-                        <input
-                          type="text"
-                          value={d.afternoon}
-                          onChange={e => updatePlanDay(i, { afternoon: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {planErrorMsg && (
