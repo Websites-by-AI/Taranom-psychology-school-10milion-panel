@@ -78,9 +78,9 @@ export default function DbStatusAlert({ role }: DbStatusAlertProps) {
         )}
         <button
           onClick={checkDb}
-          className="mt-1 flex items-center gap-1 text-[10px] font-black underline opacity-70 hover:opacity-100 transition cursor-pointer"
+          className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-black underline opacity-70 hover:opacity-100 transition cursor-pointer min-h-[40px] px-2"
         >
-          <RefreshCw size={11} /> بررسی مجدد
+          <RefreshCw size={14} /> بررسی مجدد
         </button>
       </div>
     </div>

@@ -149,7 +149,7 @@ export default function RoleManagement() {
                           key={r}
                           onClick={() => changeRole(u.id, r)}
                           disabled={u.role === r}
-                          className={`px-2 py-1 rounded-lg text-[9px] font-black border transition cursor-pointer disabled:opacity-30 disabled:cursor-default ${u.role === r ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"}`}
+                          className={`px-2.5 py-2 rounded-lg text-[10px] font-black border transition cursor-pointer min-h-[40px] disabled:opacity-30 disabled:cursor-default ${u.role === r ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"}`}
                         >
                           {ROLE_META[r].label}
                         </button>

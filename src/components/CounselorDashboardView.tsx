@@ -465,7 +465,7 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
                       <button
                         type="button"
                         onClick={() => setExpandedDay(isOpen ? null : i)}
-                        className="w-full flex items-center justify-between gap-2 px-4 py-3 cursor-pointer"
+                        className="w-full flex items-center justify-between gap-2 px-4 py-3 min-h-[52px] cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black font-mono shrink-0 ${isOpen ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-700 border border-indigo-100"}`}>
