@@ -3,7 +3,7 @@ import {
   Users, Sparkles, BookOpen, HeartPulse, Brain, Plus, Calendar, 
   Settings, Database, Compass, CheckCircle2, ChevronLeft, 
   HelpCircle, UserCheck, GraduationCap, AlertCircle, ClipboardList, FileSpreadsheet, Target,
-  Edit2, Shield, Award, Briefcase, MapPin, Clock, Send, MessageSquare
+  Edit2, Shield, Award, Briefcase, MapPin, Clock, Send, MessageSquare, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "../types";
@@ -94,20 +94,34 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
   const [cSpecialty, setCSpecialty] = useState(counselorProfile.specialty);
   
   // Custom manual study planner builder states for counselor (Synced with Student View exact schema)
+  // All 7 days are editable (morning / afternoon / test count) — data-driven array.
+  interface PlanDayInput { day: string; morning: string; afternoon: string; qCount: number; }
+
+  const DEFAULT_PLAN_DAYS: PlanDayInput[] = [
+    { day: "شنبه", morning: "پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت", afternoon: "حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات", qCount: 40 },
+    { day: "یکشنبه", morning: "مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت", afternoon: "تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور", qCount: 50 },
+    { day: "دوشنبه", morning: "مرور فرمول‌های فیزیک و شیمی - ۳ ساعت", afternoon: "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی", qCount: 40 },
+    { day: "سه‌شنبه", morning: "شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت", afternoon: "تحلیل موشکافانه تراز و تکنیک ضربدر منها", qCount: 60 },
+    { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", qCount: 35 },
+    { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", qCount: 50 },
+    { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", qCount: 20 },
+  ];
+
   const [customPlanTitle, setCustomPlanTitle] = useState("نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه");
-  const [morning1, setMorning1] = useState("پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت");
-  const [afternoon1, setAfternoon1] = useState("حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات");
-  
-  const [morning2, setMorning2] = useState("مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت");
-  const [afternoon2, setAfternoon2] = useState("تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور");
-
-  const [morning3, setMorning3] = useState("مرور فرمول‌های فیزیک و شیمی - ۳ ساعت");
-  const [afternoon3, setAfternoon3] = useState("تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی");
-
-  const [morning4, setMorning4] = useState("شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت");
-  const [afternoon4, setAfternoon4] = useState("تحلیل موشکافانه تراز و تکنیک ضربدر منها");
-
+  const [planDays, setPlanDays] = useState<PlanDayInput[]>(DEFAULT_PLAN_DAYS);
   const [planSuccessMsg, setPlanSuccessMsg] = useState("");
+  const [planErrorMsg, setPlanErrorMsg] = useState("");
+  const [advisorComment, setAdvisorComment] = useState("");
+  const [commentSavedMsg, setCommentSavedMsg] = useState("");
+
+  const updatePlanDay = (index: number, patch: Partial<PlanDayInput>) => {
+    setPlanDays(prev => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  };
+
+  const resetPlan = () => {
+    setCustomPlanTitle("نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه");
+    setPlanDays(DEFAULT_PLAN_DAYS);
+  };
 
   // Student → counselor reverse sync: daily reports + task completion ticks.
   const [studentReports, setStudentReports] = useState<DailyReport[]>([]);
@@ -134,20 +148,19 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
   // one student's plan leaking into another student's form.
   useEffect(() => {
     let active = true;
-    const defaults = [
-      ["پارت جبرانی ریاضی (مشتق و تابع) - ۴ ساعت", "حل ۴۰ تست زمان‌دار تله‌دار ریاضی + ثبت در دفتر اشتباهات"],
-      ["مطالعه ژنتیک و غشای سلولی زیست‌شناسی - ۴ ساعت", "تحلیل ۵۰ تست تله‌دار زیست‌شناسی کنکور"],
-      ["مرور فرمول‌های فیزیک و شیمی - ۳ ساعت", "تست‌زنی جامع و بررسی پاسخ‌نامه تشریحی"],
-      ["شبیه‌ساز نیمه‌جامع کنکور با رویکرد مدیریت زمان - ۴ ساعت", "تحلیل موشکافانه تراز و تکنیک ضربدر منها"],
-    ];
     loadStudyPlan(activeStudent.id).then((plan) => {
       if (!active) return;
-      const day = (index: number) => plan?.schedule[index];
       setCustomPlanTitle(plan?.title || "نقشه راه و برنامه مهندسی‌شده کایزن بر اساس کارنامه");
-      setMorning1(day(0)?.morning || defaults[0][0]); setAfternoon1(day(0)?.afternoon || defaults[0][1]);
-      setMorning2(day(1)?.morning || defaults[1][0]); setAfternoon2(day(1)?.afternoon || defaults[1][1]);
-      setMorning3(day(2)?.morning || defaults[2][0]); setAfternoon3(day(2)?.afternoon || defaults[2][1]);
-      setMorning4(day(3)?.morning || defaults[3][0]); setAfternoon4(day(3)?.afternoon || defaults[3][1]);
+      if (plan && Array.isArray(plan.schedule) && plan.schedule.length > 0) {
+        setPlanDays(plan.schedule.map((s: any, i: number) => ({
+          day: s.day || DEFAULT_PLAN_DAYS[i]?.day || `روز ${i + 1}`,
+          morning: s.morning || "",
+          afternoon: s.afternoon || "",
+          qCount: Math.max(0, Number(s.qCount ?? s.totalQ ?? 0) || 0),
+        })));
+      } else {
+        setPlanDays(DEFAULT_PLAN_DAYS);
+      }
     });
     return () => { active = false; };
   }, [activeStudent.id]);
@@ -167,7 +180,6 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
     saveCounselorProfile(updated);
     setCounselorProfile(updated);
     setIsEditingProfile(false);
-    alert("کارت عضویت و اطلاعات هویتی مشاور ارشد در سیستم مرکزی با موفقیت به‌روزرسانی شد!");
   };
 
   const [customAdvisorComment, setCustomAdvisorComment] = useState(() => {
@@ -187,11 +199,14 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
 
   const handleSaveComment = () => {
     localStorage.setItem(`taranom_advisor_comment_${activeStudent.id}`, customAdvisorComment);
-    alert("توصیه‌نامه و گزارش ارزیابی مشاور با موفقیت ذخیره گردید و به پورتال داوطلب ارسال شد!");
+    setCommentSavedMsg("توصیه‌نامه با موفقیت ذخیره شد.");
+    setTimeout(() => setCommentSavedMsg(""), 4000);
   };
 
   const handlePublishManualPlan = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPlanSuccessMsg("");
+    setPlanErrorMsg("");
     setPlanSuccessMsg("در حال ذخیره و همگام‌سازی برنامه...");
     const planPayload = {
       title: customPlanTitle,
@@ -201,15 +216,12 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
         `⚠️ توصیه مشاور (${counselorProfile.name}): برنامه هفتگی شما به صورت اختصاصی بازنویسی و تنظیم شد.`,
         "💡 لطفا تمامی پارت‌های شیفت صبح و عصر زیر را با دقت و متد پومودورو اجرا کنید."
       ],
-      schedule: [
-        { day: "شنبه", morning: morning1, afternoon: afternoon1, qCount: 40 },
-        { day: "یکشنبه", morning: morning2, afternoon: afternoon2, qCount: 50 },
-        { day: "دوشنبه", morning: morning3, afternoon: afternoon3, qCount: 40 },
-        { day: "سه‌شنبه", morning: morning4, afternoon: afternoon4, qCount: 60 },
-        { day: "چهارشنبه", morning: "مرور دروس حفظی و ادبیات اختصاصی - ۳ ساعت", afternoon: "حل تست‌های سطح المپیاد و تله‌های پرتکرار", qCount: 35 },
-        { day: "پنجشنبه", morning: "آزمون جامع آزمایشی شبیه‌ساز - ۴ ساعت", afternoon: "تحلیل کارنامه و استراحت بازسازنده ذهن", qCount: 50 },
-        { day: "جمعه", morning: "مرور خلاصه‌ها، استراحت و ریکاوری روحی کایزن", afternoon: "ارسال گزارش هفتگی به مشاور و والدین", qCount: 20 },
-      ],
+      schedule: planDays.map(d => ({
+        day: d.day,
+        morning: d.morning,
+        afternoon: d.afternoon,
+        qCount: d.qCount,
+      })),
       extracurricular: [
         "کارگاه رفع اشکال اضطراری دروس تخصصی (با حضور مشاور)",
         "جلسه مشاوره گروهی مدیریت استرس کنکور"
@@ -219,11 +231,12 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
       const result = await saveStudyPlan(activeStudent.id, planPayload);
       setPlanSuccessMsg(result.synced
         ? `✅ برنامه «${activeStudent.name}» در D1 ذخیره شد و اکنون در پنل دانش‌آموز قابل مشاهده است.`
-        : `✅ برنامه «${activeStudent.name}» در حالت دمو روی این مرورگر ذخیره شد. برای همگام‌سازی بین دستگاه‌ها با حساب مشاور وارد شوید.`);
+        : `✅ برنامه «${activeStudent.name}» ذخیره شد. برای همگام‌سازی بین دستگاه‌ها با حساب مشاور وارد شوید.`);
       setTimeout(() => setPlanSuccessMsg(""), 7000);
     } catch (error: any) {
       setPlanSuccessMsg("");
-      alert(error?.message || "خطا در ذخیره‌سازی برنامه دستی.");
+      setPlanErrorMsg(error?.message || "خطا در ذخیره‌سازی برنامه.");
+      setTimeout(() => setPlanErrorMsg(""), 7000);
     }
   };
 
@@ -440,133 +453,73 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
                 />
               </div>
 
-              {/* Day 1 (Saturday) Schedule */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">شنبه</div>
-                  <span>پارت‌های مطالعاتی روز شنبه</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={morning1}
-                      onChange={e => setMorning1(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
+              {/* All 7 days, editable */}
+              <div className="space-y-3">
+                {planDays.map((d, i) => (
+                  <div key={d.day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">{d.day.slice(0, 1)}</div>
+                        <span>پارت‌های مطالعاتی روز {d.day}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black text-slate-400">تعداد تست:</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={d.qCount}
+                          onChange={e => updatePlanDay(i, { qCount: Math.max(0, Number(e.target.value) || 0) })}
+                          className="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1 text-center text-xs font-mono font-black text-indigo-700 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
+                        <input
+                          type="text"
+                          value={d.morning}
+                          onChange={e => updatePlanDay(i, { morning: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
+                        <input
+                          type="text"
+                          value={d.afternoon}
+                          onChange={e => updatePlanDay(i, { afternoon: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={afternoon1}
-                      onChange={e => setAfternoon1(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* Day 2 (Sunday) Schedule */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">یکشنبه</div>
-                  <span>پارت‌های مطالعاتی روز یکشنبه</span>
+              {planErrorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl text-center">
+                  {planErrorMsg}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={morning2}
-                      onChange={e => setMorning2(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={afternoon2}
-                      onChange={e => setAfternoon2(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
+              )}
 
-              {/* Day 3 (Monday) Schedule */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">دوشنبه</div>
-                  <span>پارت‌های مطالعاتی روز دوشنبه</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={morning3}
-                      onChange={e => setMorning3(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={afternoon3}
-                      onChange={e => setAfternoon3(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button 
+                  type="submit"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-4 px-6 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Send size={15} />
+                  <span>انتشار و بارگذاری برنامه برای دانش‌آموز</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={resetPlan}
+                  className="px-4 py-4 bg-white border border-slate-200 text-slate-500 hover:text-slate-700 font-black text-xs rounded-2xl transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <RefreshCw size={15} />
+                  <span>ریست</span>
+                </button>
               </div>
-
-              {/* Day 4 (Tuesday) Schedule */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">سه‌شنبه</div>
-                  <span>پارت‌های مطالعاتی روز سه‌شنبه</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت اول (صبح):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={morning4}
-                      onChange={e => setMorning4(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1">شیفت دوم (عصر):</label>
-                    <input 
-                      type="text"
-                      required
-                      value={afternoon4}
-                      onChange={e => setAfternoon4(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-4 px-6 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Send size={15} />
-                <span>انتشار و بارگذاری مستقیم برنامه در جدول دانش‌آموز</span>
-              </button>
             </form>
           </div>
 
