@@ -36,6 +36,8 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   ZARINPAL_MERCHANT_ID?: string;
   ZARINPAL_CALLBACK_URL?: string;
+  /** Set to "true" to use the Zarinpal sandbox API (test payments). */
+  ZARINPAL_SANDBOX?: string;
   APP_URL?: string;
   /** Cloudflare D1 database binding (set in wrangler.json). */
   DB?: any;
@@ -1062,10 +1064,12 @@ JSON schema:
 async function paymentRequest(ctx: Ctx): Promise<Response> {
   const body = await readJson(ctx.request);
   if (body?.testPing) return json({ status: "ok" });
-  const { amount, description, mobile, email } = body;
+  const { amount, description, mobile, email, studentId } = body;
   const merchantId = ctx.env.ZARINPAL_MERCHANT_ID;
   const callbackUrl = ctx.env.ZARINPAL_CALLBACK_URL || `${ctx.env.APP_URL || ""}/api/payment/verify`;
 
+  // Amount is required for a real payment (in Rial — Zarinpal uses Rial).
+  const amountRial = Number(amount);
   if (!merchantId || merchantId === "" || merchantId === "undefined") {
     return json({
       status: 100,
@@ -1074,15 +1078,30 @@ async function paymentRequest(ctx: Ctx): Promise<Response> {
     });
   }
 
+  if (!amountRial || amountRial <= 0) {
+    return json({ error: "مبلغ پرداخت نامعتبر است." }, 400);
+  }
+
+  // Sandbox mode: ZARINPAL_SANDBOX=true → use the sandbox API host.
+  const apiHost = ctx.env.ZARINPAL_SANDBOX === "true" ? "sandbox.zarinpal.com" : "api.zarinpal.com";
+
   try {
-    const resp = await fetch("https://api.zarinpal.com/pg/v4/payment/request.json", {
+    const resp = await fetch(`https://${apiHost}/pg/v4/payment/request.json`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ merchant_id: merchantId, amount, callback_url: callbackUrl, description, metadata: { mobile, email } }),
+      body: JSON.stringify({ merchant_id: merchantId, amount: amountRial, callback_url: callbackUrl, description, metadata: { mobile, email } }),
     });
     const data: any = await resp.json();
     if (data?.data && data.data.code === 100) {
-      return json({ status: 100, authority: data.data.authority, url: `https://www.zarinpal.com/pg/StartPay/${data.data.authority}` });
+      // Persist the amount keyed by authority so verify can confirm the exact amount.
+      if (ctx.env.DB) {
+        try {
+          await ctx.env.DB.prepare(
+            "INSERT INTO payment_sessions (authority, amount, student_id, created_at) VALUES (?,?,?,?)"
+          ).bind(data.data.authority, amountRial, studentId || null, new Date().toISOString()).run();
+        } catch (_) {}
+      }
+      return json({ status: 100, authority: data.data.authority, url: `https://${apiHost}/pg/StartPay/${data.data.authority}` });
     }
     return json({ error: "Failed to generate payment authority", details: data }, 400);
   } catch (error: any) {
@@ -1102,14 +1121,32 @@ async function paymentVerify(ctx: Ctx): Promise<Response> {
     return Response.redirect(`${url.origin}/?payment=success&refid=MOCK_REF_${Date.now()}`, 302);
   }
 
+  // Recover the original amount for this authority from D1.
+  let amount = 0;
+  if (ctx.env.DB) {
+    try {
+      const row: any = await ctx.env.DB.prepare(
+        "SELECT amount FROM payment_sessions WHERE authority = ?"
+      ).bind(Authority).first();
+      amount = Number(row?.amount || 0);
+    } catch (_) {}
+  }
+  if (!amount) return Response.redirect(`${url.origin}/?payment=error`, 302);
+
+  const apiHost = ctx.env.ZARINPAL_SANDBOX === "true" ? "sandbox.zarinpal.com" : "api.zarinpal.com";
+
   try {
-    const resp = await fetch("https://api.zarinpal.com/pg/v4/payment/verify.json", {
+    const resp = await fetch(`https://${apiHost}/pg/v4/payment/verify.json`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ merchant_id: merchantId, amount: 10000, authority: Authority }),
+      body: JSON.stringify({ merchant_id: merchantId, amount, authority: Authority }),
     });
     const data: any = await resp.json();
-    if (data?.data && data.data.code === 100) {
+    if (data?.data && (data.data.code === 100 || data.data.code === 101)) {
+      // Clean up the stored session after successful verification.
+      if (ctx.env.DB) {
+        try { await ctx.env.DB.prepare("DELETE FROM payment_sessions WHERE authority = ?").bind(Authority).run(); } catch (_) {}
+      }
       return Response.redirect(`${url.origin}/?payment=success&refid=${data.data.ref_id}`, 302);
     }
     return Response.redirect(`${url.origin}/?payment=failed`, 302);

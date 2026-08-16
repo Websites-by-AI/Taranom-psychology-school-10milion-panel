@@ -75,3 +75,12 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );
+
+-- Zarinpal payment sessions: store the amount per authority so verify can
+-- confirm the exact amount (Zarinpal requires the same amount at verify time).
+CREATE TABLE IF NOT EXISTS payment_sessions (
+  authority  TEXT PRIMARY KEY,
+  amount     INTEGER NOT NULL,
+  student_id TEXT,
+  created_at TEXT NOT NULL
+);
