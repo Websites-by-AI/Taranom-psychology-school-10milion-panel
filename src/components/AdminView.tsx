@@ -18,6 +18,7 @@ import { saveApiKeyWithValidation } from "../lib/apiKeyValidation";
 import CentralDatabase from "./admin/CentralDatabase";
 import SystemDiagnostics from "./admin/SystemDiagnostics";
 import DevTestingSection from "./DevTestingSection";
+import RoleManagement from "./admin/RoleManagement";
 import IntegrationsPanel from "./admin/IntegrationsPanel";
 import StudentManagement from "./admin/StudentManagement";
 
@@ -144,6 +145,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
         );
       case "system_connectivity": return <SystemConnectivityWidget />;
       case "dev_testing": return <DevTestingSection />;
+      case "roles": return <RoleManagement />;
       case "registration_form": return <StudentRegistrationForm onSuccess={() => setActiveTab("students")} />;
       case "investment": return <InvestmentView />;
       case "audit": return <ContentAuditModule />;
@@ -163,6 +165,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
         {[
           { id: "system_connectivity", label: "وضعیت سیستم", icon: Activity },
+          { id: "roles", label: "مدیریت نقش‌ها", icon: ShieldCheck },
           { id: "dev_testing", label: "توسعه و تست", icon: FlaskConical },
           { id: "central_database", label: "بانک اطلاعاتی", icon: Database },
           { id: "students", label: "داوطلبان", icon: Users },

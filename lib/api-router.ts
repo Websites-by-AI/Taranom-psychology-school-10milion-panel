@@ -1670,6 +1670,7 @@ interface AuthStore {
   findUserById(id: string): Promise<UserRow | null>;
   countUsers(): Promise<number>;
   listUsers(): Promise<UserRow[]>;
+  updateUserRole(id: string, role: string): Promise<void>;
   upsertSession(s: SessionRow): Promise<void>;
   findSession(token: string): Promise<SessionRow | null>;
   deleteSession(token: string): Promise<void>;
@@ -1709,6 +1710,9 @@ class D1AuthStore implements AuthStore {
   async listUsers() {
     const r = await this.db.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
     return (r?.results || []) as UserRow[];
+  }
+  async updateUserRole(id: string, role: string) {
+    await this.db.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   }
   async upsertSession(s: SessionRow) {
     await this.db.prepare("INSERT OR REPLACE INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)")
@@ -1788,6 +1792,9 @@ class D1RestAuthStore implements AuthStore {
   }
   async listUsers() {
     return (await this.query("SELECT * FROM users ORDER BY created_at DESC")) as UserRow[];
+  }
+  async updateUserRole(id: string, role: string) {
+    await this.query("UPDATE users SET role = ? WHERE id = ?", [role, id]);
   }
   async upsertSession(s: SessionRow) {
     await this.query("INSERT OR REPLACE INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)", [s.token, s.user_id, s.created_at, s.expires_at]);
@@ -2156,6 +2163,35 @@ async function authList(ctx: Ctx, store: AuthStore): Promise<Response> {
   return json({ users: users.filter((u) => u.role === "student").map(userToStudent) }, 200);
 }
 
+// List ALL users (with roles) — admin only, for role management.
+async function authListAll(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+  if (requester.role !== "admin") return json({ error: "Administrator access required" }, 403);
+  const users = await store.listUsers();
+  return json({ users: users.map(u => ({ ...userToStudent(u), role: u.role })) }, 200);
+}
+
+// Change a user's role — admin only.
+async function authUpdateRole(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+  if (requester.role !== "admin") return json({ error: "Administrator access required" }, 403);
+  const body = await readJson(ctx.request);
+  const userId = String(body?.userId || "").trim();
+  const role = String(body?.role || "").trim();
+  const allowed = ["student", "counselor", "teacher", "admin"];
+  if (!userId || !allowed.includes(role)) return json({ error: "Invalid userId or role" }, 400);
+  // Prevent an admin from demoting themselves (lockout protection).
+  if (userId === requester.id && role !== "admin") {
+    return json({ error: "نمی‌توانید نقش خودتان را تغییر دهید." }, 400);
+  }
+  const target = await store.findUserById(userId);
+  if (!target) return json({ error: "کاربر یافت نشد." }, 404);
+  await store.updateUserRole(userId, role);
+  return json({ ok: true, userId, role });
+}
+
 function validateStudyPlan(raw: any): any | null {
   if (!raw || typeof raw !== "object" || !Array.isArray(raw.schedule)) return null;
   if (raw.schedule.length < 1 || raw.schedule.length > 7) return null;
@@ -2330,6 +2366,8 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         case "auth/logout":         if (isPost) return await authLogout(ctx, store); break;
         case "auth/count":          if (isGet)  return await authCount(ctx, store); break;
         case "auth/list":           if (isGet)  return await authList(ctx, store); break;
+        case "auth/list-all":       if (isGet)  return await authListAll(ctx, store); break;
+        case "auth/update-role":    if (isPost) return await authUpdateRole(ctx, store); break;
       }
       return json({ error: "Method not allowed", path, method }, 405);
     }
