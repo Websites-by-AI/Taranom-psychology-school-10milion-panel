@@ -11,6 +11,7 @@ import { BRAND_CONFIG } from "../constants";
 import { saveCounselorProfile, CounselorProfile, getProfileMetadata, getHydratedStudent } from "../lib/userProfiles";
 import { loadStudyPlan, saveStudyPlan } from "../lib/studyPlans";
 import { loadDailyReports, loadTaskProgress, type DailyReport, type TaskProgress } from "../lib/studentSync";
+import DbStatusAlert from "./DbStatusAlert";
 
 const getSupervisedStudents = (): Student[] => {
   const baseStudents = [
@@ -46,11 +47,12 @@ const getSupervisedStudents = (): Student[] => {
 
 interface CounselorDashboardViewProps {
   student: Student;
+  role?: string | null;
   onNavigate: (view: any) => void;
   onUpdateStudent?: (updated: Student) => void;
 }
 
-export default function CounselorDashboardView({ student, onNavigate, onUpdateStudent }: CounselorDashboardViewProps) {
+export default function CounselorDashboardView({ student, role, onNavigate, onUpdateStudent }: CounselorDashboardViewProps) {
   const [studentsUnderSupervision, setStudentsUnderSupervision] = useState<Student[]>(() => getSupervisedStudents());
   const [activeStudent, setActiveStudent] = useState<Student>(() => getSupervisedStudents()[0]);
 
@@ -227,6 +229,9 @@ export default function CounselorDashboardView({ student, onNavigate, onUpdateSt
 
   return (
     <div className="space-y-8 animate-fade-in text-right" style={{ direction: "rtl" }} id="counselor-portal-hub">
+      {/* وضعیت اتصال به دیتابیس — فقط برای ادمین/مشاور */}
+      <DbStatusAlert role={role} />
+
       {/* Hero Welcome banner */}
       <div className="bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 rounded-[35px] p-8 text-white relative overflow-hidden shadow-xl border border-white/5">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[80px]" />

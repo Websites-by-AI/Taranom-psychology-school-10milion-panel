@@ -212,6 +212,7 @@ export default function ViewFactory({
       return (
         <CounselorDashboardView 
           student={student} 
+          role={role}
           onNavigate={onNavigate} 
           onUpdateStudent={onUpdateStudent} 
         />
