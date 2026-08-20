@@ -380,7 +380,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   };
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 gap-4">
+    <div className="min-h-[85vh] flex items-center justify-center p-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1099,53 +1099,6 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
               </button>
             </div>
           </div>
-        </div>
-      </motion.div>
-
-      {/* بنر استارتاپ: فراخوان‌های بین‌المللی + جذب هم‌بنیان‌گذار */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.25 }}
-        className="w-full max-w-md bg-gradient-to-tr from-slate-950 via-indigo-950 to-slate-900 rounded-[2rem] border border-indigo-500/20 p-6 text-white shadow-xl"
-        dir="rtl"
-        id="startup-calls-banner"
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-lg">🚀</span>
-          <h3 className="text-sm font-black">ترنم همدلی در مسیر استارتاپ جهانی</h3>
-        </div>
-        <p className="text-[10px] text-slate-300 leading-relaxed mb-3">
-          در حال ثبت‌نام در <strong className="text-amber-300">۱۰ فراخوان بین‌المللی</strong> (شتاب‌دهنده و رویداد) هستیم — از جمله
-          <strong className="text-emerald-300"> Y Combinator، MassChallenge سوئیس، Hub71 ابوظبی، ITU Çekirdek استانبول و EAAI-27 مونترال</strong>.
-          فراخوان‌های انتخابی ریموت یا بدون نیاز به ویزا/اقامت هستند.
-        </p>
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="bg-white/5 rounded-xl p-2 text-center border border-white/10">
-            <span className="text-base font-black text-amber-300 block">۱۸۸۶</span>
-            <span className="text-[8px] text-slate-400 font-bold">سوال کنکور در RAG</span>
-          </div>
-          <div className="bg-white/5 rounded-xl p-2 text-center border border-white/10">
-            <span className="text-base font-black text-emerald-300 block">۹۶٪</span>
-            <span className="text-[8px] text-slate-400 font-bold">دقت شناسایی سال</span>
-          </div>
-          <div className="bg-white/5 rounded-xl p-2 text-center border border-white/10">
-            <span className="text-base font-black text-sky-300 block">۱۰</span>
-            <span className="text-[8px] text-slate-400 font-bold">فراخوان فعال</span>
-          </div>
-        </div>
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-          <p className="text-[10px] font-black text-amber-300 mb-1">🤝 دنبال هم‌بنیان‌گذار و همکار هستیم</p>
-          <p className="text-[9px] text-slate-300 leading-relaxed mb-2">
-            اگر توسعه‌دهنده، متخصص AI/NLP، مشاور تحصیلی یا علاقه‌مند به رشد محصول هستی، به تیم بپیوند.
-          </p>
-          <a
-            href="mailto:soheil.power@gmail.com?subject=همکاری با استارتاپ ترنم همدلی&body=سلام، مایل به همکاری هستم.%0A%0Aتخصص من:%0Aسوابق:%0Aشماره تماس:"
-            className="inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black transition-all"
-          >
-            📧 soheil.power@gmail.com
-          </a>
-          <span className="text-[9px] text-slate-400 font-bold block mt-1.5" dir="ltr">☎ +1-208-503-3653</span>
         </div>
       </motion.div>
 

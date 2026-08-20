@@ -337,6 +337,46 @@ export default function StartupCallsTracker() {
       </div>
 
 
+      {/* 🚀 وضعیت استارتاپ + جذب هم‌بنیان‌گذار (فقط ادمین — از صفحه عمومی برداشته شد) */}
+      <div className="bg-gradient-to-tr from-slate-950 via-indigo-950 to-slate-900 rounded-[28px] border border-indigo-500/20 p-6 text-white">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🚀</span>
+          <h3 className="text-sm font-black">ترنم همدلی در مسیر استارتاپ جهانی</h3>
+        </div>
+        <p className="text-[11px] text-slate-300 leading-relaxed mb-4">
+          در حال ثبت‌نام در <strong className="text-amber-300">۱۰ فراخوان بین‌المللی</strong> (شتاب‌دهنده و رویداد) هستیم — از جمله
+          <strong className="text-emerald-300"> Y Combinator، MassChallenge سوئیس، Hub71 ابوظبی، ITU Çekirdek استانبول و EAAI-27 مونترال</strong>.
+          فراخوان‌های انتخابی ریموت یا بدون نیاز به ویزا/اقامت هستند.
+        </p>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+            <span className="text-xl font-black text-amber-300 block">۱۸۸۶</span>
+            <span className="text-[9px] text-slate-400 font-bold">سوال کنکور در RAG</span>
+          </div>
+          <div className="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+            <span className="text-xl font-black text-emerald-300 block">۹۶٪</span>
+            <span className="text-[9px] text-slate-400 font-bold">دقت شناسایی سال</span>
+          </div>
+          <div className="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+            <span className="text-xl font-black text-sky-300 block">۱۰</span>
+            <span className="text-[9px] text-slate-400 font-bold">فراخوان فعال</span>
+          </div>
+        </div>
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+          <p className="text-[11px] font-black text-amber-300 mb-1.5">🤝 دنبال هم‌بنیان‌گذار و همکار هستیم</p>
+          <p className="text-[10px] text-slate-300 leading-relaxed mb-2.5">
+            اگر توسعه‌دهنده، متخصص AI/NLP، مشاور تحصیلی یا علاقه‌مند به رشد محصول هستی، به تیم بپیوند.
+          </p>
+          <a
+            href="mailto:soheil.power@gmail.com?subject=همکاری با استارتاپ ترنم همدلی&body=سلام، مایل به همکاری هستم.%0A%0Aتخصص من:%0Aسوابق:%0Aشماره تماس:"
+            className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black transition-all"
+          >
+            📧 soheil.power@gmail.com
+          </a>
+          <span className="text-[9px] text-slate-400 font-bold block mt-2" dir="ltr">☎ +1-208-503-3653</span>
+        </div>
+      </div>
+
       {/* 🔗 جدول لینک‌های مستقیم ثبت‌نام — یک کلیک تا فرم */}
       <div className="bg-white rounded-[28px] border-2 border-indigo-200 shadow-sm overflow-hidden">
         <div className="bg-indigo-50 px-5 py-3 border-b border-indigo-100 flex items-center justify-between">
