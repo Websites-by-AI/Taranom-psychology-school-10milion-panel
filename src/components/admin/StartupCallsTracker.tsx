@@ -20,6 +20,8 @@ const APPLICANT_PHONE = "+1-208-5033653";
 interface StartupCall {
   id: string;
   name: string;
+  nameEn: string;            // English name (bilingual table)
+  match: number;             // درصد مناسب‌بودن برای ثبت‌نام (0-100)
   funder: string;
   amount: string;
   deadline: string | null;      // ISO date or null (rolling)
@@ -35,6 +37,8 @@ interface StartupCall {
 const CALLS: StartupCall[] = [
   {
     id: "eaai27",
+    nameEn: "EAAI-27 Symposium on AI Education (AAAI, Montreal)",
+    match: 95,
     name: "EAAI-27 — سمپوزیوم آموزش AI (AAAI مونترال)",
     funder: "AAAI — ارسال مقاله بدون نیاز به ویزا",
     amount: "اعتبار علمی (مقاله/گزارش تجربه)",
@@ -49,6 +53,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "yc",
+    nameEn: "Y Combinator — W27 Batch (USA)",
+    match: 50,
     name: "Y Combinator — بچ W27",
     funder: "YC (آمریکا) — پذیرش بین‌المللی از هر کشور",
     amount: "۵۰۰ هزار دلار سرمایه",
@@ -63,6 +69,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "masschallenge",
+    nameEn: "MassChallenge Switzerland — Early Stage 2027",
+    match: 60,
     name: "MassChallenge Switzerland — Early Stage 2027",
     funder: "MassChallenge — بدون سهام، هر جغرافیایی",
     amount: "سهم از ۱.۲۶ میلیون دلار جایزه بدون سهام",
@@ -77,6 +85,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "itucekirdek",
+    nameEn: "ITU Cekirdek — Istanbul (Big Bang)",
+    match: 75,
     name: "ITU Çekirdek — استانبول (Big Bang)",
     funder: "دانشگاه فنی استانبول — ایرانیان بدون ویزا",
     amount: "جوایز نقدی Big Bang + دفتر رایگان",
@@ -91,6 +101,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "hub71",
+    nameEn: "Hub71 — Abu Dhabi (UAE Gov)",
+    match: 80,
     name: "Hub71 — ابوظبی",
     funder: "دولت امارات — ویزای امارات برای ایرانیان آسان",
     amount: "بسته مشوق تا ~۲۵۰ هزار درهم + ویزا",
@@ -105,6 +117,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "fi",
+    nameEn: "Founder Institute — Virtual / Dubai / Istanbul",
+    match: 90,
     name: "Founder Institute — فصل مجازی/دبی/استانبول",
     funder: "FI — بزرگ‌ترین پیش‌شتاب‌دهنده جهان",
     amount: "شبکه و ساختار (~۴٪ سهام مشترک + شهریه)",
@@ -119,6 +133,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "1m1m",
+    nameEn: "1Mby1M — Global Virtual Accelerator",
+    match: 85,
     name: "1Mby1M — شتاب‌دهنده مجازی جهانی",
     funder: "1Mby1M — بدون سهام، کاملاً آنلاین",
     amount: "منتورشیپ بدون سهام (اشتراک سالانه)",
@@ -133,6 +149,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "freshmango",
+    nameEn: "Freshmango — Remote Pre-Seed Accelerator",
+    match: 70,
     name: "Freshmango — شتاب‌دهنده ریموت Pre-Seed",
     funder: "Freshmango — بدون سهام",
     amount: "منتورشیپ + اتصال به سرمایه‌گذار (هزینه ماهانه)",
@@ -147,6 +165,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "seedstars",
+    nameEn: "Seedstars — Emerging Markets Competition",
+    match: 65,
     name: "Seedstars — رقابت بازارهای نوظهور",
     funder: "Seedstars (سوئیس) — تمرکز بر بازارهای نوظهور و منا",
     amount: "تا ۵۰۰ هزار دلار سرمایه برای برنده جهانی",
@@ -161,6 +181,8 @@ const CALLS: StartupCall[] = [
   },
   {
     id: "nvidia",
+    nameEn: "NVIDIA Inception — AI Startup Program",
+    match: 40,
     name: "NVIDIA Inception — برنامه استارتاپ‌های AI",
     funder: "NVIDIA — رایگان، بدون سهام، ریموت",
     amount: "کردیت GPU/کلود + منتورشیپ فنی",
@@ -326,13 +348,14 @@ export default function StartupCallsTracker() {
           <table className="w-full text-right min-w-[900px]">
             <thead>
               <tr className="bg-slate-50 text-[10px] font-black text-slate-500 border-b border-slate-100">
-                <th className="p-3">فراخوان</th>
-                <th className="p-3"><DollarSign size={12} className="inline ml-1" />مبلغ</th>
-                <th className="p-3"><Calendar size={12} className="inline ml-1" />ددلاین</th>
-                <th className="p-3">روز مانده</th>
-                <th className="p-3"><Clock size={12} className="inline ml-1" />زمان پاسخ‌دهی</th>
-                <th className="p-3">وضعیت</th>
-                <th className="p-3">اقدام</th>
+                <th className="p-3">فراخوان / Call</th>
+                <th className="p-3">تناسب / Match</th>
+                <th className="p-3"><DollarSign size={12} className="inline ml-1" />مبلغ / Amount</th>
+                <th className="p-3"><Calendar size={12} className="inline ml-1" />ددلاین / Deadline</th>
+                <th className="p-3">روز مانده / Days left</th>
+                <th className="p-3"><Clock size={12} className="inline ml-1" />زمان پاسخ / Answer time</th>
+                <th className="p-3">وضعیت / Status</th>
+                <th className="p-3">لینک / Apply</th>
               </tr>
             </thead>
             <tbody>
@@ -353,9 +376,18 @@ export default function StartupCallsTracker() {
                           {isOpen ? <ChevronUp size={14} className="text-indigo-500 shrink-0" /> : <ChevronDown size={14} className="text-slate-400 shrink-0" />}
                           <div>
                             <span className="text-[11px] font-black text-slate-800 group-hover:text-indigo-700 block">{c.name}</span>
+                            <span className="text-[9px] text-indigo-500 font-bold block" dir="ltr" style={{ textAlign: "right" }}>{c.nameEn}</span>
                             <span className="text-[9px] text-slate-400 font-bold">{c.funder}</span>
                           </div>
                         </button>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-col items-center gap-1 min-w-[64px]">
+                          <span className={`text-[12px] font-black ${c.match >= 80 ? "text-emerald-600" : c.match >= 60 ? "text-amber-600" : "text-slate-500"}`}>{fa(c.match)}٪</span>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${c.match >= 80 ? "bg-emerald-500" : c.match >= 60 ? "bg-amber-500" : "bg-slate-400"}`} style={{ width: `${c.match}%` }} />
+                          </div>
+                        </div>
                       </td>
                       <td className="p-3 text-[10px] font-bold text-emerald-700">{c.amount}</td>
                       <td className="p-3 text-[10px] font-bold text-slate-600">{c.deadlineNote}</td>
@@ -398,17 +430,18 @@ export default function StartupCallsTracker() {
                             href={c.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 transition-all"
-                            title="صفحه فراخوان"
+                            className="min-h-[36px] inline-flex items-center gap-1 px-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 transition-all text-[9px] font-black"
+                            title={c.link}
                           >
-                            <ExternalLink size={14} />
+                            <ExternalLink size={12} />
+                            <span dir="ltr">{c.link.replace(/^https?:\/\//, "").replace(/\/$/, "").slice(0, 22)}</span>
                           </a>
                         </div>
                       </td>
                     </tr>
                     {isOpen && (
                       <tr className="bg-slate-50/70 border-b border-slate-100">
-                        <td colSpan={7} className="p-4">
+                        <td colSpan={8} className="p-4">
                           <div className="grid md:grid-cols-2 gap-4 mb-4">
                             <div>
                               <h5 className="text-[11px] font-black text-slate-700 mb-2">📋 فیلدهای فرم درخواست:</h5>
