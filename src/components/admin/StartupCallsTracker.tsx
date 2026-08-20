@@ -29,6 +29,7 @@ interface StartupCall {
   answerTime: string;           // زمان پاسخ‌دهی/اعلام نتیجه
   avgResponseDays: string;      // میانگین زمان بررسی
   link: string;
+  applyLink: string;         // لینک مستقیم صفحه ثبت‌نام/Apply
   contactEmail: string;
   formFields: string[];         // فیلدهای فرم درخواست
   fit: string;                  // چرا مرتبط است
@@ -47,6 +48,7 @@ const CALLS: StartupCall[] = [
     answerTime: "اعلام نتیجه: ۱۷ نوامبر ۲۰۲۶",
     avgResponseDays: "~۷۰ روز پس از ارسال",
     link: "https://aaai.org/conference/aaai/aaai-27/eaai-27-call/",
+    applyLink: "https://openreview.net/group?id=AAAI.org/2027/Symposium/EAAI",
     contactEmail: "eaai27chairs@aaai.org",
     formFields: ["عنوان مقاله", "چکیده (~۲۰۰ کلمه)", "نویسندگان و ایمیل", "ترک (Main یا K-12)", "نوع (پژوهشی/گزارش تجربه)", "PDF مقاله (فرمت AAAI)"],
     fit: "ارسال مقاله از ایران کاملاً ممکن است — RAG فارسی کنکور برای ترک K-12",
@@ -63,6 +65,7 @@ const CALLS: StartupCall[] = [
     answerTime: "مصاحبه + نتیجه: ~۳–۵ هفته پس از ددلاین",
     avgResponseDays: "~۳۰ روز",
     link: "https://apply.ycombinator.com/",
+    applyLink: "https://apply.ycombinator.com/",
     contactEmail: "فرم آنلاین apply.ycombinator.com",
     formFields: ["توضیح یک‌خطی استارتاپ", "ویدیو ۱ دقیقه‌ای بنیان‌گذاران", "ترکشن و کاربران", "چرا این تیم؟", "مدل درآمد", "اطلاعات هم‌بنیان‌گذاران"],
     fit: "از هر کشوری می‌پذیرد؛ برای خود بچ ۳ ماه حضور در سانفرانسیسکو لازم است (YC در روند ویزا کمک می‌کند)",
@@ -79,6 +82,7 @@ const CALLS: StartupCall[] = [
     answerTime: "انتخاب نهایی: ~۸ هفته پس از ددلاین",
     avgResponseDays: "~۶۰ روز",
     link: "https://masschallenge.org/our-accelerators/",
+    applyLink: "https://masschallenge.org/apply/",
     contactEmail: "فرم پورتال masschallenge.org",
     formFields: ["پروفایل استارتاپ", "مرحله و ترکشن", "سرمایه جذب‌شده (<۲M CHF)", "ویدیو پیچ", "تیم"],
     fit: "بدون سهام، بدون نیاز به ثبت شرکت، از هر کشور — فقط ۲ سفر کوتاه به سوئیس (ویزای شینگن کوتاه‌مدت)",
@@ -95,6 +99,7 @@ const CALLS: StartupCall[] = [
     answerTime: "ارزیابی: ~۴–۶ هفته",
     avgResponseDays: "~۳۵ روز",
     link: "https://itucekirdek.com/en/",
+    applyLink: "https://itucekirdek.com/en/apply/",
     contactEmail: "فرم آنلاین itucekirdek.com",
     formFields: ["فرم آنلاین استارتاپ", "پیچ‌دک", "دمو محصول", "تیم", "مصاحبه حضوری/آنلاین"],
     fit: "سفر ایران→ترکیه بدون ویزا — یکی از عملی‌ترین گزینه‌ها برای تیم مستقر در ایران",
@@ -111,6 +116,7 @@ const CALLS: StartupCall[] = [
     answerTime: "غربالگری + مصاحبه: ~۶–۸ هفته",
     avgResponseDays: "~۵۰ روز",
     link: "https://hub71.com/",
+    applyLink: "https://hub71.com/apply",
     contactEmail: "فرم آنلاین hub71.com",
     formFields: ["پیچ‌دک", "ترکشن و درآمد", "برنامه استقرار در ابوظبی", "ثبت شرکت در ADGM پس از پذیرش", "تیم"],
     fit: "به استارتاپ ویزای امارات می‌دهد — مسیر واقعی خروج از محدودیت تحریم با ثبت شرکت اماراتی",
@@ -127,6 +133,7 @@ const CALLS: StartupCall[] = [
     answerTime: "آزمون استعداد + نتیجه: ~۱–۲ هفته",
     avgResponseDays: "~۱۰ روز",
     link: "https://fi.co/",
+    applyLink: "https://fi.co/join",
     contactEmail: "فرم fi.co (فصل Virtual یا Dubai/Istanbul)",
     formFields: ["فرم ثبت‌نام", "آزمون استعداد کارآفرینی (رایگان)", "ایده استارتاپ", "رزومه"],
     fit: "کاملاً آنلاین قابل انجام از ایران — فصل‌های منطقه‌ای دبی/استانبول هم دارد",
@@ -143,6 +150,7 @@ const CALLS: StartupCall[] = [
     answerTime: "شروع فوری پس از ثبت‌نام",
     avgResponseDays: "~۷ روز",
     link: "https://1m1m.sramanamitra.com/",
+    applyLink: "https://1m1m.sramanamitra.com/free-trial/",
     contactEmail: "فرم آنلاین سایت",
     formFields: ["پروفایل استارتاپ", "مرحله فعلی", "اشتراک برنامه"],
     fit: "صفر تا صد آنلاین، بدون سهام، بدون محدودیت جغرافیایی — مناسب شروع از ایران",
@@ -159,6 +167,7 @@ const CALLS: StartupCall[] = [
     answerTime: "بررسی: ~۱–۲ هفته",
     avgResponseDays: "~۱۰ روز",
     link: "https://freshmango.io/",
+    applyLink: "https://freshmango.io/apply",
     contactEmail: "فرم آنلاین سایت",
     formFields: ["ایده/محصول", "تیم و اهداف", "مرحله فعلی"],
     fit: "ریموت کامل و بدون محدودیت جغرافیایی — بدون سهام",
@@ -175,6 +184,7 @@ const CALLS: StartupCall[] = [
     answerTime: "هر مرحله: ~۴–۶ هفته",
     avgResponseDays: "~۳۵ روز",
     link: "https://seedstars.com/",
+    applyLink: "https://seedstars.com/programs/",
     contactEmail: "فرم آنلاین seedstars.com",
     formFields: ["پروفایل استارتاپ", "پیچ‌دک", "ترکشن", "ویدیو پیچ"],
     fit: "مخصوص بازارهای نوظهور — مراحل اولیه بدون سفر",
@@ -191,6 +201,7 @@ const CALLS: StartupCall[] = [
     answerTime: "تأیید: ~۱–۲ هفته",
     avgResponseDays: "~۱۰ روز",
     link: "https://www.nvidia.com/en-us/startups/",
+    applyLink: "https://www.nvidia.com/en-us/startups/apply/",
     contactEmail: "فرم آنلاین nvidia.com/startups",
     formFields: ["پروفایل شرکت", "حوزه AI", "وب‌سایت محصول", "ایمیل شرکتی"],
     fit: "⚠️ شرکت آمریکایی — به‌دلیل تحریم، ثبت‌نام با نهاد ثبت‌شده خارج از ایران (مثلاً امارات/ترکیه) انجام شود",
@@ -322,6 +333,59 @@ export default function StartupCallsTracker() {
           <span className="text-[9px] text-slate-400 font-bold self-center">
             (هر فراخوان را باز کن تا پاسخ‌های آماده انگلیسی هر فیلد را با دکمه کپی ببینی)
           </span>
+        </div>
+      </div>
+
+
+      {/* 🔗 جدول لینک‌های مستقیم ثبت‌نام — یک کلیک تا فرم */}
+      <div className="bg-white rounded-[28px] border-2 border-indigo-200 shadow-sm overflow-hidden">
+        <div className="bg-indigo-50 px-5 py-3 border-b border-indigo-100 flex items-center justify-between">
+          <h3 className="text-sm font-black text-indigo-900 flex items-center gap-2">
+            <ExternalLink size={16} /> لینک‌های مستقیم ثبت‌نام / Direct Apply Links
+          </h3>
+          <span className="text-[9px] font-bold text-indigo-400">مرتب بر اساس تناسب — کلیک = صفحه فرم</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right min-w-[640px]">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] font-black text-slate-500 border-b border-slate-100">
+                <th className="p-3">#</th>
+                <th className="p-3">فراخوان / Call</th>
+                <th className="p-3">تناسب</th>
+                <th className="p-3">لینک ثبت‌نام / Apply URL</th>
+                <th className="p-3">ثبت‌نام</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...CALLS].sort((a, b) => b.match - a.match).map((c, i) => (
+                <tr key={c.id} className="border-b border-slate-50 hover:bg-indigo-50/30 transition-colors">
+                  <td className="p-3 text-[11px] font-black text-slate-400">{fa(i + 1)}</td>
+                  <td className="p-3">
+                    <span className="text-[11px] font-black text-slate-800 block">{c.name.split("—")[0].trim()}</span>
+                    <span className="text-[9px] text-indigo-500 font-bold" dir="ltr">{c.nameEn}</span>
+                  </td>
+                  <td className="p-3">
+                    <span className={`text-[11px] font-black px-2 py-1 rounded-full ${c.match >= 80 ? "bg-emerald-100 text-emerald-700" : c.match >= 60 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
+                      {fa(c.match)}٪
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <a href={c.applyLink} target="_blank" rel="noopener noreferrer"
+                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline font-mono break-all"
+                       dir="ltr">
+                      {c.applyLink.replace(/^https?:\/\//, "")}
+                    </a>
+                  </td>
+                  <td className="p-3">
+                    <a href={c.applyLink} target="_blank" rel="noopener noreferrer"
+                       className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black transition-all whitespace-nowrap">
+                      <Rocket size={12} /> ثبت‌نام
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
