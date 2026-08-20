@@ -12,6 +12,7 @@ import { saveCounselorProfile, CounselorProfile, getProfileMetadata, getHydrated
 import { loadStudyPlan, saveStudyPlan } from "../lib/studyPlans";
 import { loadDailyReports, loadTaskProgress, type DailyReport, type TaskProgress } from "../lib/studentSync";
 import DbStatusAlert from "./DbStatusAlert";
+import CounselorStatsOverview from "./CounselorStatsOverview";
 
 const getSupervisedStudents = (): Student[] => {
   const baseStudents = [
@@ -245,6 +246,14 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
     <div className="space-y-8 animate-fade-in text-right" style={{ direction: "rtl" }} id="counselor-portal-hub">
       {/* وضعیت اتصال به دیتابیس — فقط برای ادمین/مشاور */}
       <DbStatusAlert role={role} />
+
+      {/* نمای زندهٔ آماری سامانه از D1 */}
+      <CounselorStatsOverview
+        onSelectStudent={(id) => {
+          const found = studentsUnderSupervision.find((s) => s.id === id);
+          if (found) setActiveStudent(found);
+        }}
+      />
 
       {/* Hero Welcome banner */}
       <div className="bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 rounded-[35px] p-8 text-white relative overflow-hidden shadow-xl border border-white/5">

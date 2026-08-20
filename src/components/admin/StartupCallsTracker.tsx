@@ -1,0 +1,392 @@
+import React, { useState, useEffect } from "react";
+import {
+  Rocket, Calendar, Clock, Mail, ExternalLink, ChevronDown, ChevronUp,
+  AlertTriangle, CheckCircle2, CircleDashed, Send, BellRing, DollarSign,
+} from "lucide-react";
+
+/**
+ * StartupCallsTracker — رهگیر فراخوان‌های استارتاپی/گرنت (کانادا) در پنل ادمین
+ * - جدول ۱۰ فراخوان با ددلاین، زمان پاسخ‌دهی، مبلغ، ایمیل تماس
+ * - شمارش معکوس روزهای مانده + هشدار «روزهای آخر»
+ * - فیلدهای فرم موردنیاز هر فراخوان (بازشونده)
+ * - دکمه ایمیل یادآوری (mailto از پیش پرشده به آدرس متقاضی)
+ * - وضعیت هر فراخوان در localStorage ذخیره می‌شود
+ */
+
+const APPLICANT_EMAIL = "soheil.power@gmail.com";
+const APPLICANT_PHONE = "+1-208-5033653";
+
+interface StartupCall {
+  id: string;
+  name: string;
+  funder: string;
+  amount: string;
+  deadline: string | null;      // ISO date or null (rolling)
+  deadlineNote: string;
+  answerTime: string;           // زمان پاسخ‌دهی/اعلام نتیجه
+  avgResponseDays: string;      // میانگین زمان بررسی
+  link: string;
+  contactEmail: string;
+  formFields: string[];         // فیلدهای فرم درخواست
+  fit: string;                  // چرا مرتبط است
+}
+
+const CALLS: StartupCall[] = [
+  {
+    id: "eaai27",
+    name: "EAAI-27 — سمپوزیوم آموزش AI (AAAI مونترال)",
+    funder: "AAAI — ارسال مقاله بدون نیاز به ویزا",
+    amount: "اعتبار علمی (مقاله/گزارش تجربه)",
+    deadline: "2026-09-01",
+    deadlineNote: "چکیده: ۱ سپتامبر — مقاله کامل: ۸ سپتامبر ۲۰۲۶",
+    answerTime: "اعلام نتیجه: ۱۷ نوامبر ۲۰۲۶",
+    avgResponseDays: "~۷۰ روز پس از ارسال",
+    link: "https://aaai.org/conference/aaai/aaai-27/eaai-27-call/",
+    contactEmail: "eaai27chairs@aaai.org",
+    formFields: ["عنوان مقاله", "چکیده (~۲۰۰ کلمه)", "نویسندگان و ایمیل", "ترک (Main یا K-12)", "نوع (پژوهشی/گزارش تجربه)", "PDF مقاله (فرمت AAAI)"],
+    fit: "ارسال مقاله از ایران کاملاً ممکن است — RAG فارسی کنکور برای ترک K-12",
+  },
+  {
+    id: "yc",
+    name: "Y Combinator — بچ W27",
+    funder: "YC (آمریکا) — پذیرش بین‌المللی از هر کشور",
+    amount: "۵۰۰ هزار دلار سرمایه",
+    deadline: "2026-11-09",
+    deadlineNote: "پیش‌بینی ددلاین W27: ~نوامبر ۲۰۲۶ (درخواست دیرهنگام هم بررسی می‌شود)",
+    answerTime: "مصاحبه + نتیجه: ~۳–۵ هفته پس از ددلاین",
+    avgResponseDays: "~۳۰ روز",
+    link: "https://apply.ycombinator.com/",
+    contactEmail: "فرم آنلاین apply.ycombinator.com",
+    formFields: ["توضیح یک‌خطی استارتاپ", "ویدیو ۱ دقیقه‌ای بنیان‌گذاران", "ترکشن و کاربران", "چرا این تیم؟", "مدل درآمد", "اطلاعات هم‌بنیان‌گذاران"],
+    fit: "از هر کشوری می‌پذیرد؛ برای خود بچ ۳ ماه حضور در سانفرانسیسکو لازم است (YC در روند ویزا کمک می‌کند)",
+  },
+  {
+    id: "masschallenge",
+    name: "MassChallenge Switzerland — Early Stage 2027",
+    funder: "MassChallenge — بدون سهام، هر جغرافیایی",
+    amount: "سهم از ۱.۲۶ میلیون دلار جایزه بدون سهام",
+    deadline: "2027-03-04",
+    deadlineNote: "دور ۲۰۲۷: بازشدن ~۱۴ ژانویه، ددلاین ~۴ مارس ۲۰۲۷",
+    answerTime: "انتخاب نهایی: ~۸ هفته پس از ددلاین",
+    avgResponseDays: "~۶۰ روز",
+    link: "https://masschallenge.org/our-accelerators/",
+    contactEmail: "فرم پورتال masschallenge.org",
+    formFields: ["پروفایل استارتاپ", "مرحله و ترکشن", "سرمایه جذب‌شده (<۲M CHF)", "ویدیو پیچ", "تیم"],
+    fit: "بدون سهام، بدون نیاز به ثبت شرکت، از هر کشور — فقط ۲ سفر کوتاه به سوئیس (ویزای شینگن کوتاه‌مدت)",
+  },
+  {
+    id: "itucekirdek",
+    name: "ITU Çekirdek — استانبول (Big Bang)",
+    funder: "دانشگاه فنی استانبول — ایرانیان بدون ویزا",
+    amount: "جوایز نقدی Big Bang + دفتر رایگان",
+    deadline: null,
+    deadlineNote: "پذیرش دوره‌ای — دور بعدی اوایل ۲۰۲۷ (سایت را رصد کن)",
+    answerTime: "ارزیابی: ~۴–۶ هفته",
+    avgResponseDays: "~۳۵ روز",
+    link: "https://itucekirdek.com/en/",
+    contactEmail: "فرم آنلاین itucekirdek.com",
+    formFields: ["فرم آنلاین استارتاپ", "پیچ‌دک", "دمو محصول", "تیم", "مصاحبه حضوری/آنلاین"],
+    fit: "سفر ایران→ترکیه بدون ویزا — یکی از عملی‌ترین گزینه‌ها برای تیم مستقر در ایران",
+  },
+  {
+    id: "hub71",
+    name: "Hub71 — ابوظبی",
+    funder: "دولت امارات — ویزای امارات برای ایرانیان آسان",
+    amount: "بسته مشوق تا ~۲۵۰ هزار درهم + ویزا",
+    deadline: null,
+    deadlineNote: "۲ دور پذیرش در سال — دور بعدی ~پاییز ۲۰۲۶",
+    answerTime: "غربالگری + مصاحبه: ~۶–۸ هفته",
+    avgResponseDays: "~۵۰ روز",
+    link: "https://hub71.com/",
+    contactEmail: "فرم آنلاین hub71.com",
+    formFields: ["پیچ‌دک", "ترکشن و درآمد", "برنامه استقرار در ابوظبی", "ثبت شرکت در ADGM پس از پذیرش", "تیم"],
+    fit: "به استارتاپ ویزای امارات می‌دهد — مسیر واقعی خروج از محدودیت تحریم با ثبت شرکت اماراتی",
+  },
+  {
+    id: "fi",
+    name: "Founder Institute — فصل مجازی/دبی/استانبول",
+    funder: "FI — بزرگ‌ترین پیش‌شتاب‌دهنده جهان",
+    amount: "شبکه و ساختار (~۴٪ سهام مشترک + شهریه)",
+    deadline: null,
+    deadlineNote: "کوهورت‌های متعدد در سال — پذیرش چرخشی",
+    answerTime: "آزمون استعداد + نتیجه: ~۱–۲ هفته",
+    avgResponseDays: "~۱۰ روز",
+    link: "https://fi.co/",
+    contactEmail: "فرم fi.co (فصل Virtual یا Dubai/Istanbul)",
+    formFields: ["فرم ثبت‌نام", "آزمون استعداد کارآفرینی (رایگان)", "ایده استارتاپ", "رزومه"],
+    fit: "کاملاً آنلاین قابل انجام از ایران — فصل‌های منطقه‌ای دبی/استانبول هم دارد",
+  },
+  {
+    id: "1m1m",
+    name: "1Mby1M — شتاب‌دهنده مجازی جهانی",
+    funder: "1Mby1M — بدون سهام، کاملاً آنلاین",
+    amount: "منتورشیپ بدون سهام (اشتراک سالانه)",
+    deadline: null,
+    deadlineNote: "پذیرش دائمی — از هر کشور",
+    answerTime: "شروع فوری پس از ثبت‌نام",
+    avgResponseDays: "~۷ روز",
+    link: "https://1m1m.sramanamitra.com/",
+    contactEmail: "فرم آنلاین سایت",
+    formFields: ["پروفایل استارتاپ", "مرحله فعلی", "اشتراک برنامه"],
+    fit: "صفر تا صد آنلاین، بدون سهام، بدون محدودیت جغرافیایی — مناسب شروع از ایران",
+  },
+  {
+    id: "freshmango",
+    name: "Freshmango — شتاب‌دهنده ریموت Pre-Seed",
+    funder: "Freshmango — بدون سهام",
+    amount: "منتورشیپ + اتصال به سرمایه‌گذار (هزینه ماهانه)",
+    deadline: null,
+    deadlineNote: "پذیرش دائمی (start-anytime) — هر کشوری",
+    answerTime: "بررسی: ~۱–۲ هفته",
+    avgResponseDays: "~۱۰ روز",
+    link: "https://freshmango.io/",
+    contactEmail: "فرم آنلاین سایت",
+    formFields: ["ایده/محصول", "تیم و اهداف", "مرحله فعلی"],
+    fit: "ریموت کامل و بدون محدودیت جغرافیایی — بدون سهام",
+  },
+  {
+    id: "seedstars",
+    name: "Seedstars — رقابت بازارهای نوظهور",
+    funder: "Seedstars (سوئیس) — تمرکز بر بازارهای نوظهور و منا",
+    amount: "تا ۵۰۰ هزار دلار سرمایه برای برنده جهانی",
+    deadline: null,
+    deadlineNote: "رقابت‌های منطقه‌ای سالانه — مراحل اول آنلاین",
+    answerTime: "هر مرحله: ~۴–۶ هفته",
+    avgResponseDays: "~۳۵ روز",
+    link: "https://seedstars.com/",
+    contactEmail: "فرم آنلاین seedstars.com",
+    formFields: ["پروفایل استارتاپ", "پیچ‌دک", "ترکشن", "ویدیو پیچ"],
+    fit: "مخصوص بازارهای نوظهور — مراحل اولیه بدون سفر",
+  },
+  {
+    id: "nvidia",
+    name: "NVIDIA Inception — برنامه استارتاپ‌های AI",
+    funder: "NVIDIA — رایگان، بدون سهام، ریموت",
+    amount: "کردیت GPU/کلود + منتورشیپ فنی",
+    deadline: null,
+    deadlineNote: "پذیرش دائمی",
+    answerTime: "تأیید: ~۱–۲ هفته",
+    avgResponseDays: "~۱۰ روز",
+    link: "https://www.nvidia.com/en-us/startups/",
+    contactEmail: "فرم آنلاین nvidia.com/startups",
+    formFields: ["پروفایل شرکت", "حوزه AI", "وب‌سایت محصول", "ایمیل شرکتی"],
+    fit: "⚠️ شرکت آمریکایی — به‌دلیل تحریم، ثبت‌نام با نهاد ثبت‌شده خارج از ایران (مثلاً امارات/ترکیه) انجام شود",
+  },
+];
+
+type CallStatus = "notStarted" | "preparing" | "submitted" | "answered";
+const STATUS_META: Record<CallStatus, { label: string; cls: string; icon: any }> = {
+  notStarted: { label: "شروع‌نشده", cls: "bg-slate-100 text-slate-500", icon: CircleDashed },
+  preparing: { label: "در حال آماده‌سازی", cls: "bg-amber-100 text-amber-700", icon: Clock },
+  submitted: { label: "ارسال شد", cls: "bg-indigo-100 text-indigo-700", icon: Send },
+  answered: { label: "پاسخ آمد", cls: "bg-emerald-100 text-emerald-700", icon: CheckCircle2 },
+};
+
+const FA = ["۰","۱","۲","۳","۴","۵","۶","۷","۸","۹"];
+const fa = (v: number | string) => String(v).split("").map(c => /\d/.test(c) ? FA[Number(c)] : c).join("");
+
+function daysLeft(deadline: string | null): number | null {
+  if (!deadline) return null;
+  return Math.ceil((new Date(deadline + "T23:59:59").getTime() - Date.now()) / 86400000);
+}
+
+function reminderMailto(call: StartupCall): string {
+  const d = daysLeft(call.deadline);
+  const subject = encodeURIComponent(`یادآوری فراخوان: ${call.name}${d !== null ? ` — ${d} روز مانده` : ""}`);
+  const body = encodeURIComponent(
+    `فراخوان: ${call.name}\nنهاد: ${call.funder}\nمبلغ: ${call.amount}\nددلاین: ${call.deadlineNote}\nزمان پاسخ‌دهی: ${call.answerTime}\nمیانگین بررسی: ${call.avgResponseDays}\nلینک: ${call.link}\nایمیل تماس فراخوان: ${call.contactEmail}\n\nفیلدهای فرم:\n${call.formFields.map(f => "- " + f).join("\n")}\n\nمتقاضی: ${APPLICANT_EMAIL} | ${APPLICANT_PHONE}\nپروژه: ترنم همدلی (hamdeltar.ir) — RAG کنکور با ۱۸۸۶ سوال، دقت سال ۹۶.۲٪`
+  );
+  return `mailto:${APPLICANT_EMAIL}?subject=${subject}&body=${body}`;
+}
+
+export default function StartupCallsTracker() {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, CallStatus>>({});
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("taranom_startup_calls_status");
+      if (raw) setStatuses(JSON.parse(raw));
+    } catch (_) { /* ignore */ }
+  }, []);
+
+  const setStatus = (id: string, s: CallStatus) => {
+    const next = { ...statuses, [id]: s };
+    setStatuses(next);
+    try { localStorage.setItem("taranom_startup_calls_status", JSON.stringify(next)); } catch (_) { /* ignore */ }
+  };
+
+  const sorted = [...CALLS].sort((a, b) => {
+    const da = daysLeft(a.deadline); const db = daysLeft(b.deadline);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  });
+
+  const urgent = sorted.filter(c => { const d = daysLeft(c.deadline); return d !== null && d >= 0 && d <= 21; });
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      {/* Header */}
+      <div className="bg-gradient-to-tr from-indigo-950 via-slate-900 to-slate-950 rounded-[28px] p-6 text-white border border-white/5">
+        <h2 className="text-xl font-black flex items-center gap-2">
+          <Rocket size={22} className="text-amber-400" />
+          رهگیر فراخوان‌های استارتاپی کانادا 🇨🇦
+        </h2>
+        <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+          {fa(CALLS.length)} فراخوان بین‌المللی (ریموت/بدون نیاز به ویزا و PR — مناسب تیم مستقر در ایران) — متقاضی: <span className="font-mono text-amber-300">{APPLICANT_EMAIL}</span> | <span className="font-mono text-emerald-300" dir="ltr">{APPLICANT_PHONE}</span>
+        </p>
+      </div>
+
+      {/* هشدار روزهای آخر */}
+      {urgent.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-rose-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-black text-rose-700 mb-1">⏰ روزهای آخر — اقدام فوری</p>
+            <ul className="text-xs text-rose-600 font-bold space-y-1">
+              {urgent.map(c => (
+                <li key={c.id}>
+                  {c.name}: فقط <span className="text-base font-black">{fa(daysLeft(c.deadline)!)}</span> روز مانده ({c.deadlineNote})
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* جدول اصلی */}
+      <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-right min-w-[900px]">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] font-black text-slate-500 border-b border-slate-100">
+                <th className="p-3">فراخوان</th>
+                <th className="p-3"><DollarSign size={12} className="inline ml-1" />مبلغ</th>
+                <th className="p-3"><Calendar size={12} className="inline ml-1" />ددلاین</th>
+                <th className="p-3">روز مانده</th>
+                <th className="p-3"><Clock size={12} className="inline ml-1" />زمان پاسخ‌دهی</th>
+                <th className="p-3">وضعیت</th>
+                <th className="p-3">اقدام</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((c) => {
+                const d = daysLeft(c.deadline);
+                const st = statuses[c.id] || "notStarted";
+                const S = STATUS_META[st];
+                const isOpen = expanded === c.id;
+                const lastDays = d !== null && d >= 0 && d <= 21;
+                return (
+                  <React.Fragment key={c.id}>
+                    <tr className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${lastDays ? "bg-rose-50/40" : ""}`}>
+                      <td className="p-3">
+                        <button
+                          onClick={() => setExpanded(isOpen ? null : c.id)}
+                          className="text-right min-h-[40px] flex items-center gap-1.5 group"
+                        >
+                          {isOpen ? <ChevronUp size={14} className="text-indigo-500 shrink-0" /> : <ChevronDown size={14} className="text-slate-400 shrink-0" />}
+                          <div>
+                            <span className="text-[11px] font-black text-slate-800 group-hover:text-indigo-700 block">{c.name}</span>
+                            <span className="text-[9px] text-slate-400 font-bold">{c.funder}</span>
+                          </div>
+                        </button>
+                      </td>
+                      <td className="p-3 text-[10px] font-bold text-emerald-700">{c.amount}</td>
+                      <td className="p-3 text-[10px] font-bold text-slate-600">{c.deadlineNote}</td>
+                      <td className="p-3">
+                        {d === null ? (
+                          <span className="text-[10px] font-black text-sky-600 bg-sky-50 px-2 py-1 rounded-full">دائمی</span>
+                        ) : d < 0 ? (
+                          <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-full">گذشت</span>
+                        ) : (
+                          <span className={`text-[11px] font-black px-2 py-1 rounded-full ${lastDays ? "text-rose-700 bg-rose-100 animate-pulse" : "text-indigo-700 bg-indigo-50"}`}>
+                            {fa(d)} روز
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span className="text-[10px] font-bold text-slate-700 block">{c.answerTime}</span>
+                        <span className="text-[9px] text-slate-400 font-bold">میانگین بررسی: {c.avgResponseDays}</span>
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={st}
+                          onChange={(e) => setStatus(c.id, e.target.value as CallStatus)}
+                          className={`text-[10px] font-black rounded-xl px-2 py-2 border-0 cursor-pointer min-h-[36px] ${S.cls}`}
+                        >
+                          {(Object.keys(STATUS_META) as CallStatus[]).map(k => (
+                            <option key={k} value={k}>{STATUS_META[k].label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-1.5">
+                          <a
+                            href={reminderMailto(c)}
+                            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 transition-all"
+                            title={`ارسال ایمیل یادآوری به ${APPLICANT_EMAIL}`}
+                          >
+                            <BellRing size={14} />
+                          </a>
+                          <a
+                            href={c.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 transition-all"
+                            title="صفحه فراخوان"
+                          >
+                            <ExternalLink size={14} />
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="bg-slate-50/70 border-b border-slate-100">
+                        <td colSpan={7} className="p-4">
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h5 className="text-[11px] font-black text-slate-700 mb-2">📋 فیلدهای فرم درخواست:</h5>
+                              <ul className="space-y-1">
+                                {c.formFields.map((f, i) => (
+                                  <li key={i} className="text-[10px] font-bold text-slate-600 flex items-center gap-1.5">
+                                    <CheckCircle2 size={11} className="text-emerald-500 shrink-0" /> {f}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-slate-600">
+                                <span className="text-slate-400">چرا مرتبط:</span> {c.fit}
+                              </p>
+                              <p className="text-[10px] font-bold text-slate-600 flex items-center gap-1.5">
+                                <Mail size={11} className="text-indigo-500" />
+                                <span className="text-slate-400">ایمیل فراخوان:</span>
+                                <span className="font-mono" dir="ltr">{c.contactEmail}</span>
+                              </p>
+                              <a
+                                href={reminderMailto(c)}
+                                className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black transition-all"
+                              >
+                                <Send size={12} /> ارسال جزئیات کامل به ایمیل من
+                              </a>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-slate-400 font-bold text-center">
+        💡 دکمه زنگوله، ایمیل یادآوری از پیش پرشده (با تمام جزئیات و فیلدهای فرم) برای {APPLICANT_EMAIL} باز می‌کند. وضعیت‌ها به‌صورت خودکار ذخیره می‌شوند.
+      </p>
+    </div>
+  );
+}

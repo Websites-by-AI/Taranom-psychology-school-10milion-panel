@@ -1349,120 +1349,226 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
   }
 }
 
-async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
+/* ----------------------------------------------------------------------------
+ * Messenger bots (Telegram + Bale) — shared engine
+ * - Real Konkur questions from the RAG Space (quiz-lite bank, cached in memory)
+ * - Inline answer buttons (callback_query) with instant grading
+ * - Reply keyboard menu, live /status backed by D1
+ * ------------------------------------------------------------------------- */
+
+interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; }
+let botQuizCache: { at: number; items: BotQuizItem[] } | null = null;
+
+async function getBotQuizBank(env: Env): Promise<BotQuizItem[]> {
+  if (botQuizCache && Date.now() - botQuizCache.at < 10 * 60 * 1000) return botQuizCache.items;
+  try {
+    const base = env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space";
+    const resp = await fetch(`${base}/data/quiz-lite.json`, { signal: AbortSignal.timeout(8000) } as any);
+    if (resp.ok) {
+      const items = (await resp.json()) as BotQuizItem[];
+      if (Array.isArray(items) && items.length > 0) {
+        botQuizCache = { at: Date.now(), items };
+        return items;
+      }
+    }
+  } catch (_) { /* fall through to built-in question */ }
+  return [{
+    q: "پمپ سدیم-پتاسیم به ازای خروج هر ۳ یون سدیم چند یون پتاسیم وارد می‌کند؟",
+    o: ["۱ یون", "۲ یون", "۳ یون", "۴ یون"], a: 1, y: "1402", s: "زیست‌شناسی", f: "تجربی",
+  }];
+}
+
+const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+function faNum(n: number): string { return String(n).split("").map((c) => /\d/.test(c) ? FA_DIGITS[Number(c)] : c).join(""); }
+
+const BOT_MENU_KEYBOARD = {
+  keyboard: [
+    [{ text: "📝 تست کنکور واقعی" }, { text: "💬 مشاوره با دکتر رادان" }],
+    [{ text: "📊 وضعیت سامانه" }, { text: "ℹ️ راهنما" }],
+  ],
+  resize_keyboard: true,
+  is_persistent: true,
+};
+
+/** Build a quiz message + inline keyboard from a random real Konkur question. */
+async function buildBotQuiz(env: Env): Promise<{ text: string; reply_markup: any }> {
+  const bank = await getBotQuizBank(env);
+  const qi = Math.floor(Math.random() * bank.length);
+  const item = bank[qi];
+  const lines = item.o.map((opt, i) => `${faNum(i + 1)}) ${opt}`);
+  const text = `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})\n\n${item.q}\n\n${lines.join("\n")}\n\n👇 گزینه خود را انتخاب کنید:`;
+  const reply_markup = {
+    inline_keyboard: [
+      item.o.map((_, i) => ({ text: faNum(i + 1), callback_data: `qz:${qi}:${item.a}:${i}` })),
+      [{ text: "🔄 سوال بعدی", callback_data: "qz:next" }],
+    ],
+  };
+  return { text, reply_markup };
+}
+
+/** Live status text (D1 user count + RAG bank size). */
+async function buildBotStatus(env: Env, platform: "telegram" | "bale"): Promise<string> {
+  let userCount = "—";
+  try {
+    const store = getAuthStore(env);
+    if (store) userCount = faNum(await store.countUsers());
+  } catch (_) { /* ignore */ }
+  let bankCount = "—";
+  try { bankCount = faNum((await getBotQuizBank(env)).length); } catch (_) { /* ignore */ }
+  const hasAi = !!(env.HF_TOKEN || env.GEMINI_API_KEY || env.OPENROUTER_API_KEY);
+  const channel = platform === "telegram" ? "ربات تلگرام" : "بازوی بله";
+  return [
+    "🟢 وضعیت زنده سامانه ترنم همدلی:",
+    `- ${channel}: فعال و متصل (@taranom_hamdeli_bot)`,
+    `- کاربران ثبت‌شده: ${userCount} نفر`,
+    `- بانک تست فعال ربات: ${bankCount} سوال واقعی کنکور`,
+    `- موتور هوش مصنوعی: ${hasAi ? "آماده ✅" : "غیرفعال ⚠️"}`,
+    "- سامانه اصلی: hamdeltar.ir",
+    "- نسخه: 3.0.0",
+  ].join("\n");
+}
+
+const BOT_HELP_TEXT = [
+  "📌 راهنمای ربات ترنم همدلی",
+  "",
+  "این ربات متصل به سامانه hamdeltar.ir است.",
+  "",
+  "📝 تست کنکور واقعی — یک سوال واقعی از بانک ۱۸۰۰+ سوالی کنکور (با دکمه پاسخ و تصحیح فوری)",
+  "💬 مشاوره — هر سوال درسی/انگیزشی را بنویسید تا دکتر رادان پاسخ دهد",
+  "📊 وضعیت سامانه — آمار زنده کاربران و بانک سوالات",
+  "",
+  "دستورات: /start /quiz /status /help",
+].join("\n");
+
+/** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
+async function handleBotUpdate(
+  ctx: Ctx,
+  meta: RespMeta,
+  platform: "telegram" | "bale"
+): Promise<Response> {
   const body = await readJson(ctx.request);
-  const token = ctx.env.TELEGRAM_BOT_TOKEN;
-  
+  const token = platform === "telegram" ? ctx.env.TELEGRAM_BOT_TOKEN : ctx.env.BALE_BOT_TOKEN;
+  const apiBase = platform === "telegram"
+    ? `https://api.telegram.org/bot${token}`
+    : `https://tapi.bale.ai/bot${token}`;
+
+  const send = async (method: string, payload: any) => {
+    try {
+      await fetch(`${apiBase}/${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(9000) as any,
+      });
+    } catch (err) {
+      console.error(`${platform} ${method} error:`, err);
+    }
+  };
+
+  // --- 1) inline button presses (quiz answers) ---
+  const cb = body?.callback_query;
+  if (cb && cb.message?.chat?.id) {
+    const chatId = cb.message.chat.id;
+    const data = String(cb.data || "");
+    await send("answerCallbackQuery", { callback_query_id: cb.id });
+
+    if (data === "qz:next") {
+      const quiz = await buildBotQuiz(ctx.env);
+      await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
+      return json({ ok: true });
+    }
+    const m = data.match(/^qz:(\d+):(\d+):(\d+)$/);
+    if (m) {
+      const [, qiStr, correctStr, chosenStr] = m;
+      const correct = Number(correctStr);
+      const chosen = Number(chosenStr);
+      const bank = await getBotQuizBank(ctx.env);
+      const item = bank[Number(qiStr)] || null;
+      const correctText = item && item.o[correct] ? item.o[correct] : `گزینه ${faNum(correct + 1)}`;
+      const verdict = chosen === correct
+        ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
+        : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
+      const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: `${verdict}${src}\n\n💡 تحلیل کامل و برنامه‌ریزی هوشمند: hamdeltar.ir`,
+        reply_markup: { inline_keyboard: [[{ text: "🔄 سوال بعدی", callback_data: "qz:next" }]] },
+      });
+      return json({ ok: true });
+    }
+    return json({ ok: true });
+  }
+
+  // --- 2) plain messages ---
   const message = body?.message || body?.edited_message;
   if (!message || !message.chat || !message.chat.id) {
     return json({ ok: true, note: "No message found in update" });
   }
-
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
   const userName = message.from?.first_name || "همسفر";
 
-  let replyText = "";
-
   if (text === "/start") {
-    replyText = `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند **ترنم همدلی** (@taranom_hamdeli_bot) خوش آمدید.\n\nمن دکتر رادان، مشاور تحصیلی و همراه شما در مسیر کنکور و یادگیری کایزن هستم. 🚀\n\nشما می‌توانید سوالات درسی، چالش‌های انگیزشی یا وضعیت تراز خود را بپرسید تا با هم بررسی کنیم.\n\nدستورات:\n/help - راهنمای ربات\n/quiz - شبیه‌ساز تستی\n/status - وضعیت سیستم`;
-  } else if (text === "/help") {
-    replyText = `📌 **راهنمای ربات ترنم همدلی**\n\nاین ربات متصل به سامانه هوشمند ترنم همدلی (hamdeltar.ir) است.\n- ارسال پیام متنی: پاسخ مشاوره‌ای فوری\n- /start: شروع مجدد\n- /quiz: دریافت تله تستی نمونه\n- /status: بررسی وضعیت اتصال هوش مصنوعی`;
-  } else if (text === "/quiz") {
-    replyText = `🎯 **نمونه تله تستی کایزن:**\n\nکدام گزینه درباره پمپ سدیم-پتاسیم در سلول‌های عصبی درست است؟\n\n۱) خارج کردن ۳ یون سدیم با ورود ۲ یون پتاسیم همراه است.\n۲) بدون مصرف ATP انجام می‌شود.\n\n💡 *برای تست‌های بیشتر و جامع‌تر به سایت hamdeltar.ir مراجعه کنید!*`;
-  } else if (text === "/status") {
-    replyText = `🟢 **وضعیت ربات و سامانه:**\n- ربات تلگرام: فعال و متصل (@taranom_hamdeli_bot)\n- موتور هوش مصنوعی: آماده\n- سامانه اصلی: hamdeltar.ir\n- نسخه: 2.4.0`;
-  } else {
-    try {
-      const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
-      if (ai) {
-        const res = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: [{ role: "user", parts: [{ text }] }],
-          config: { systemInstruction: "شما دکتر رادان، مشاور تحصیلی ترنم همدلی در تلگرام هستید. کوتاه و همدلانه پاسخ دهید." }
-        });
-        replyText = res.text?.trim() || getOfflineChatReply(text);
-      } else {
-        replyText = getOfflineChatReply(text);
-      }
-    } catch (_) {
+    const home = platform === "telegram" ? "@taranom_hamdeli_bot" : "ble.ir/taranom_hamdeli_bot";
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند ترنم همدلی (${home}) خوش آمدید.\n\nمن دکتر رادان هستم؛ مشاور تحصیلی شما در مسیر کنکور. از منوی پایین انتخاب کنید یا مستقیم سوالتان را بنویسید. 🚀`,
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
+    return json({ ok: true });
+  }
+  if (text === "/help" || text === "ℹ️ راهنما") {
+    await send("sendMessage", { chat_id: chatId, text: BOT_HELP_TEXT, reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  if (text === "/quiz" || text === "📝 تست کنکور واقعی") {
+    const quiz = await buildBotQuiz(ctx.env);
+    await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
+    return json({ ok: true });
+  }
+  if (text === "/status" || text === "📊 وضعیت سامانه") {
+    await send("sendMessage", { chat_id: chatId, text: await buildBotStatus(ctx.env, platform), reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  if (text === "💬 مشاوره با دکتر رادان") {
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: "💬 بفرمایید! سوال درسی، برنامه‌ریزی یا هر دغدغه‌ای دارید همین‌جا بنویسید تا پاسخ بدهم.",
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
+    return json({ ok: true });
+  }
+
+  // --- 3) free text → AI counselor ---
+  let replyText = "";
+  try {
+    const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
+    if (ai) {
+      const res = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [{ role: "user", parts: [{ text }] }],
+        config: {
+          systemInstruction:
+            `شما دکتر رادان، مشاور تحصیلی ترنم همدلی در ${platform === "telegram" ? "تلگرام" : "پیام‌رسان بله"} هستید. کوتاه (حداکثر ۶ جمله)، صمیمی و همدلانه به فارسی پاسخ دهید.`,
+        },
+      });
+      replyText = res.text?.trim() || getOfflineChatReply(text);
+    } else {
       replyText = getOfflineChatReply(text);
     }
+  } catch (_) {
+    replyText = getOfflineChatReply(text);
   }
-
-  try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: replyText,
-        parse_mode: "Markdown"
-      })
-    });
-  } catch (err) {
-    console.error("Telegram send error:", err);
-  }
-
+  await send("sendMessage", { chat_id: chatId, text: replyText, reply_markup: BOT_MENU_KEYBOARD });
   return json({ ok: true });
 }
 
+async function telegramWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
+  return handleBotUpdate(ctx, meta, "telegram");
+}
+
 async function baleWebhook(ctx: Ctx, meta: RespMeta): Promise<Response> {
-  const body = await readJson(ctx.request);
-  const token = ctx.env.BALE_BOT_TOKEN;
-  
-  const message = body?.message || body?.edited_message;
-  if (!message || !message.chat || !message.chat.id) {
-    return json({ ok: true, note: "No message found in Bale update" });
-  }
-
-  const chatId = message.chat.id;
-  const text = (message.text || "").trim();
-  const userName = message.from?.first_name || "همسفر";
-
-  let replyText = "";
-
-  if (text === "/start") {
-    replyText = `سلام ${userName} عزیز! 🌸\n\nبه بازوی هوشمند **ترنم همدلی** (ble.ir/taranom_hamdeli_bot) خوش آمدید.\n\nمن دکتر رادان، مشاور تحصیلی و همراه شما در مسیر کنکور و یادگیری کایزن هستم. 🚀\n\nدستورات:\n/help - راهنمای بازو\n/quiz - شبیه‌ساز تستی\n/status - وضعیت سیستم`;
-  } else if (text === "/help") {
-    replyText = `📌 **راهنمای بازوی بله ترنم همدلی**\n\nاین بازو متصل به سامانه هوشمند hamdeltar.ir است.\n- ارسال پیام متنی: پاسخ مشاوره‌ای فوری\n- /quiz: دریافت تله تستی نمونه\n- /status: بررسی وضعیت سامانه`;
-  } else if (text === "/quiz") {
-    replyText = `🎯 **نمونه تله تستی کایزن (بله):**\n\nکدام گزینه درباره پمپ سدیم-پتاسیم درست است؟\n\n۱) خروج ۳ یون سدیم با ورود ۲ یون پتاسیم با مصرف ATP.\n۲) انتقال غیرفعال یون‌ها.\n\n💡 *به سایت hamdeltar.ir سر بزنید!*`;
-  } else if (text === "/status") {
-    replyText = `🟢 **وضعیت بازوی بله و سامانه:**\n- بازوی بله: فعال و متصل (@taranom_hamdeli_bot)\n- سامانه اصلی: hamdeltar.ir\n- نسخه: 2.4.0`;
-  } else {
-    try {
-      const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
-      if (ai) {
-        const res = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: [{ role: "user", parts: [{ text }] }],
-          config: { systemInstruction: "شما دکتر رادان، مشاور تحصیلی ترنم همدلی در پیام‌رسان بله هستید. کوتاه، صمیمی و همدلانه پاسخ دهید." }
-        });
-        replyText = res.text?.trim() || getOfflineChatReply(text);
-      } else {
-        replyText = getOfflineChatReply(text);
-      }
-    } catch (_) {
-      replyText = getOfflineChatReply(text);
-    }
-  }
-
-  try {
-    await fetch(`https://tapi.bale.ai/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: replyText,
-        parse_mode: "Markdown"
-      })
-    });
-  } catch (err) {
-    console.error("Bale send error:", err);
-  }
-
-  return json({ ok: true });
+  return handleBotUpdate(ctx, meta, "bale");
 }
 
 async function generateQuizQuestion(ctx: Ctx, meta: RespMeta): Promise<Response> {
@@ -2366,6 +2472,57 @@ async function dailyReportRoute(ctx: Ctx, store: AuthStore, method: string): Pro
 }
 
 /* ----------------------------------------------------------------------------
+ * Dashboard live stats (counselor/admin) — one D1 round-trip for the whole
+ * overview: users, plans, reports, weekly activity.
+ * ------------------------------------------------------------------------- */
+async function dashboardStatsRoute(ctx: Ctx, store: AuthStore): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "Native D1 binding is required for dashboard stats" }, 503);
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester) return json({ error: "Authentication required" }, 401);
+  if (requester.role !== "admin" && requester.role !== "counselor") {
+    return json({ error: "Counselor or administrator access required" }, 403);
+  }
+
+  const db = ctx.env.DB;
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+
+  const [users, students, plans, progress, reports7, reportsAll, recentReports, planFresh] = await Promise.all([
+    db.prepare("SELECT COUNT(*) AS n FROM users").first(),
+    db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='student'").first(),
+    db.prepare("SELECT COUNT(*) AS n FROM study_plans").first(),
+    db.prepare("SELECT COUNT(*) AS n FROM task_progress").first(),
+    db.prepare("SELECT COUNT(*) AS n FROM daily_reports WHERE created_at >= ?").bind(weekAgo).first(),
+    db.prepare("SELECT COUNT(*) AS n FROM daily_reports").first(),
+    db.prepare(
+      "SELECT student_id, student_name, substr(text,1,120) AS preview, created_at FROM daily_reports ORDER BY created_at DESC LIMIT 8"
+    ).all(),
+    db.prepare(
+      "SELECT student_id, updated_at FROM study_plans ORDER BY updated_at DESC LIMIT 8"
+    ).all(),
+  ]);
+
+  // Per-day report counts for the last 7 days (activity sparkline).
+  const daily = await db.prepare(
+    "SELECT substr(created_at,1,10) AS day, COUNT(*) AS n FROM daily_reports WHERE created_at >= ? GROUP BY substr(created_at,1,10) ORDER BY day"
+  ).bind(weekAgo).all();
+
+  return json({
+    generatedAt: new Date().toISOString(),
+    totals: {
+      users: Number(users?.n || 0),
+      students: Number(students?.n || 0),
+      studyPlans: Number(plans?.n || 0),
+      studentsWithProgress: Number(progress?.n || 0),
+      reportsLast7Days: Number(reports7?.n || 0),
+      reportsAllTime: Number(reportsAll?.n || 0),
+    },
+    recentReports: recentReports?.results || [],
+    recentPlanUpdates: planFresh?.results || [],
+    weeklyActivity: daily?.results || [],
+  });
+}
+
+/* ----------------------------------------------------------------------------
  * Body parsing + router
  * ------------------------------------------------------------------------- */
 
@@ -2413,6 +2570,13 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await studyPlanRoute(ctx, store, method);
+    }
+
+    if (path === "dashboard-stats") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      if (isGet) return await dashboardStatsRoute(ctx, store);
+      return json({ error: "Method not allowed", path, method }, 405);
     }
 
     if (path === "task-progress") {
