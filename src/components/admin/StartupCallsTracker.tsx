@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import {
   Rocket, Calendar, Clock, Mail, ExternalLink, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, CircleDashed, Send, BellRing, DollarSign,
+  AlertTriangle, CheckCircle2, CircleDashed, Send, BellRing, DollarSign, Copy, ClipboardCheck,
 } from "lucide-react";
+import { FILLED_FORMS, buildAllFormsEmailBody, type FilledField } from "./startupCallAnswers";
 
 /**
  * StartupCallsTracker — رهگیر فراخوان‌های استارتاپی/گرنت (کانادا) در پنل ادمین
@@ -199,6 +200,58 @@ function reminderMailto(call: StartupCall): string {
   return `mailto:${APPLICANT_EMAIL}?subject=${subject}&body=${body}`;
 }
 
+/** پنل «فرم پرشده» — پاسخ آماده انگلیسی هر فیلد با دکمه کپی */
+function FilledFormPanel({ callId }: { callId: string }) {
+  const fields: FilledField[] | undefined = FILLED_FORMS[callId];
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  if (!fields || fields.length === 0) return null;
+
+  const copy = async (text: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 1500);
+    } catch (_) { /* clipboard blocked */ }
+  };
+
+  return (
+    <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
+      <h5 className="text-[11px] font-black text-emerald-800 mb-3 flex items-center gap-1.5">
+        <ClipboardCheck size={13} /> ✍️ فرم پرشده — پاسخ آماده هر فیلد (انگلیسی، فقط کپی کن)
+      </h5>
+      <div className="space-y-2">
+        {fields.map((f, i) => (
+          <div key={i} className="bg-white rounded-xl border border-emerald-100 p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-black text-slate-700">{f.field}</span>
+              <button
+                onClick={() => copy(f.value, i)}
+                className={`min-h-[32px] px-2.5 inline-flex items-center gap-1 rounded-lg text-[9px] font-black transition-all ${
+                  copiedIdx === i
+                    ? "bg-emerald-600 text-white"
+                    : "bg-emerald-100 hover:bg-emerald-200 text-emerald-700"
+                }`}
+              >
+                {copiedIdx === i ? <><CheckCircle2 size={11} /> کپی شد</> : <><Copy size={11} /> کپی</>}
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-600 leading-relaxed whitespace-pre-wrap" dir="ltr" style={{ textAlign: "left" }}>
+              {f.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function allFormsMailto(): string {
+  const subject = encodeURIComponent("پاسخ‌های آماده فرم‌های ۱۰ فراخوان استارتاپی — Taranom Hamdeli");
+  // mailto has URL-length limits in some clients; keep body but warn user in UI.
+  const body = encodeURIComponent(buildAllFormsEmailBody().slice(0, 12000));
+  return `mailto:${APPLICANT_EMAIL}?subject=${subject}&body=${body}`;
+}
+
 export default function StartupCallsTracker() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<Record<string, CallStatus>>({});
@@ -232,11 +285,22 @@ export default function StartupCallsTracker() {
       <div className="bg-gradient-to-tr from-indigo-950 via-slate-900 to-slate-950 rounded-[28px] p-6 text-white border border-white/5">
         <h2 className="text-xl font-black flex items-center gap-2">
           <Rocket size={22} className="text-amber-400" />
-          رهگیر فراخوان‌های استارتاپی کانادا 🇨🇦
+          رهگیر فراخوان‌های استارتاپی بین‌المللی 🌍
         </h2>
         <p className="text-xs text-slate-300 mt-2 leading-relaxed">
           {fa(CALLS.length)} فراخوان بین‌المللی (ریموت/بدون نیاز به ویزا و PR — مناسب تیم مستقر در ایران) — متقاضی: <span className="font-mono text-amber-300">{APPLICANT_EMAIL}</span> | <span className="font-mono text-emerald-300" dir="ltr">{APPLICANT_PHONE}</span>
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href={allFormsMailto()}
+            className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black transition-all"
+          >
+            <Mail size={13} /> ارسال همه فرم‌های پرشده به ایمیل من
+          </a>
+          <span className="text-[9px] text-slate-400 font-bold self-center">
+            (هر فراخوان را باز کن تا پاسخ‌های آماده انگلیسی هر فیلد را با دکمه کپی ببینی)
+          </span>
+        </div>
       </div>
 
       {/* هشدار روزهای آخر */}
@@ -345,7 +409,7 @@ export default function StartupCallsTracker() {
                     {isOpen && (
                       <tr className="bg-slate-50/70 border-b border-slate-100">
                         <td colSpan={7} className="p-4">
-                          <div className="grid md:grid-cols-2 gap-4">
+                          <div className="grid md:grid-cols-2 gap-4 mb-4">
                             <div>
                               <h5 className="text-[11px] font-black text-slate-700 mb-2">📋 فیلدهای فرم درخواست:</h5>
                               <ul className="space-y-1">
@@ -373,6 +437,7 @@ export default function StartupCallsTracker() {
                               </a>
                             </div>
                           </div>
+                          <FilledFormPanel callId={c.id} />
                         </td>
                       </tr>
                     )}
