@@ -1413,7 +1413,8 @@ function faNum(n: number): string { return String(n).split("").map((c) => /\d/.t
 
 const BOT_MENU_KEYBOARD = {
   keyboard: [
-    [{ text: "📝 تست کنکور واقعی" }, { text: "💬 مشاوره با دکتر رادان" }],
+    [{ text: "📝 تست کنکور واقعی" }, { text: "🤖 تست هوشمند RAG" }],
+    [{ text: "💬 مشاوره با دکتر رادان" }],
     [{ text: "📊 داشبورد من" }, { text: "🧠 تحلیل روانشناسی" }],
     [{ text: "📋 ثبت‌نام / تغییر رشته" }, { text: "ℹ️ راهنما" }],
     [{ text: "📈 وضعیت سامانه" }],
@@ -1647,12 +1648,12 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats)
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
 /* --- پروفایل ثبت‌نام کاربر ربات (رشته/پایه) برای تست شخصی‌سازی‌شده --- */
-interface BotProfile { platform: string; chat_id: string; name: string | null; field: string | null; grade: string | null; step: string; }
+interface BotProfile { platform: string; chat_id: string; name: string | null; field: string | null; grade: string | null; step: string; gpa?: number | null; age?: number | null; }
 
 async function getBotProfile(env: Env, platform: string, chatId: string | number): Promise<BotProfile | null> {
   try {
     if (!env.DB) return null;
-    return await env.DB.prepare("SELECT platform, chat_id, name, field, grade, step FROM bot_profiles WHERE platform=? AND chat_id=?")
+    return await env.DB.prepare("SELECT platform, chat_id, name, field, grade, step, gpa, age FROM bot_profiles WHERE platform=? AND chat_id=?")
       .bind(platform, String(chatId)).first();
   } catch (_) { return null; }
 }
@@ -1663,23 +1664,80 @@ async function upsertBotProfile(env: Env, platform: string, chatId: string | num
     const now = new Date().toISOString();
     const cur = await getBotProfile(env, platform, chatId);
     if (!cur) {
-      await env.DB.prepare("INSERT INTO bot_profiles (platform, chat_id, name, field, grade, step, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
-        .bind(platform, String(chatId), patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? "field", now, now).run();
+      await env.DB.prepare("INSERT INTO bot_profiles (platform, chat_id, name, field, grade, step, gpa, age, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(platform, String(chatId), patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? "field", patch.gpa ?? null, patch.age ?? null, now, now).run();
     } else {
-      await env.DB.prepare("UPDATE bot_profiles SET name=COALESCE(?,name), field=COALESCE(?,field), grade=COALESCE(?,grade), step=COALESCE(?,step), updated_at=? WHERE platform=? AND chat_id=?")
-        .bind(patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? null, now, platform, String(chatId)).run();
+      await env.DB.prepare("UPDATE bot_profiles SET name=COALESCE(?,name), field=COALESCE(?,field), grade=COALESCE(?,grade), step=COALESCE(?,step), gpa=COALESCE(?,gpa), age=COALESCE(?,age), updated_at=? WHERE platform=? AND chat_id=?")
+        .bind(patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? null, patch.gpa ?? null, patch.age ?? null, now, platform, String(chatId)).run();
     }
   } catch (_) { /* silent */ }
 }
 
-const BOT_FIELDS = ["تجربی", "ریاضی", "انسانی", "عمومی"];
+const BOT_FIELDS = ["تجربی", "ریاضی", "انسانی", "هنر", "زبان"];
 const BOT_GRADES = ["دهم", "یازدهم", "دوازدهم", "پشت کنکوری"];
 
 function fieldQuestionText(userName: string): string {
-  return `📋 ${userName} عزیز، برای اینکه تست‌های مناسب خودت را بدهم، اول ثبت‌نام کوتاه:\n\n۱از۲) رشته‌ات کدام است؟ عددش را بفرست:\n${BOT_FIELDS.map((f, i) => `${faNum(i + 1)}) ${f}`).join("\n")}`;
+  return `📋 ${userName} عزیز، برای اینکه تست‌های مناسب خودت را بدهم، ثبت‌نام کوتاه (۴ مرحله):\n\n۱از۴) رشته‌ات کدام است؟ عددش را بفرست:\n${BOT_FIELDS.map((f, i) => `${faNum(i + 1)}) ${f}`).join("\n")}`;
 }
 function gradeQuestionText(): string {
-  return `۲از۲) پایه تحصیلی‌ات؟ عددش را بفرست:\n${BOT_GRADES.map((g, i) => `${faNum(i + 1)}) ${g}`).join("\n")}`;
+  return `۲از۴) پایه تحصیلی‌ات؟ عددش را بفرست:\n${BOT_GRADES.map((g, i) => `${faNum(i + 1)}) ${g}`).join("\n")}`;
+}
+function gpaQuestionText(): string {
+  return "۳از۴) معدل سال گذشته‌ات چند بود؟ (مثلاً 17.5 — اگر نمی‌خواهی بگویی: 0)";
+}
+function ageQuestionText(): string {
+  return "۴از۴) چند سالته؟ (مثلاً 17 — اگر نمی‌خواهی بگویی: 0)";
+}
+function profileSummary(p: BotProfile): string {
+  const gpaTxt = p.gpa && p.gpa > 0 ? `\n📊 معدل: ${faNum(p.gpa)}` : "";
+  const ageTxt = p.age && p.age > 0 ? `\n🎂 سن: ${faNum(p.age)}` : "";
+  return `🎉 ثبت‌نام کامل شد!\n\n👤 ${p.name || "دوست عزیز"}\n📚 رشته: ${p.field}\n🎓 پایه: ${p.grade}${gpaTxt}${ageTxt}\n\nاز این به بعد تست‌ها مخصوص رشته خودت انتخاب می‌شوند.\n📝 «تست کنکور واقعی» = تصادفی از رشته‌ات\n🤖 «تست هوشمند RAG» = بر اساس نقاط ضعف کارنامه‌ات!`;
+}
+
+/** 🤖 انتخاب هوشمند سوال با RAG: ضعیف‌ترین درس از کارنامه + بازیابی معنایی/سطح‌بندی معدل. */
+async function buildSmartQuiz(env: Env, platform: string, chatId: string | number, profile: BotProfile | null): Promise<{ text: string; reply_markup: any; qi: number; item: BotQuizItem } | null> {
+  const bank = await getBotQuizBank(env);
+  const f = profile?.field;
+  const pool = bank.map((it, i) => ({ it, i })).filter(({ it }) => !f || f === "عمومی" || it.f === f || it.f === "عمومی");
+  if (pool.length === 0) return null;
+
+  // ۱) ضعیف‌ترین درس کاربر از لاگ کارنامه
+  let weakSubject: string | null = null;
+  try {
+    if (env.DB) {
+      const row: any = await env.DB.prepare(
+        "SELECT subject, COUNT(*) n, SUM(correct) c FROM bot_quiz_log WHERE platform=? AND chat_id=? AND subject IS NOT NULL GROUP BY subject HAVING n>=2 ORDER BY (CAST(c AS REAL)/n) ASC, n DESC LIMIT 1"
+      ).bind(platform, String(chatId)).first();
+      if (row && Number(row.n) >= 2 && Number(row.c) / Number(row.n) < 0.75) weakSubject = row.subject;
+    }
+  } catch (_) { /* ignore */ }
+
+  // ۲) کاندیدها: سوالات درس ضعیف؛ اگر کارنامه‌ای نیست، امبدینگ رشته+پایه برای انتخاب معنایی
+  let candidates = weakSubject ? pool.filter(({ it }) => it.s === weakSubject) : [];
+  let reason = weakSubject ? `درس ضعیف کارنامه‌ات: ${weakSubject}` : "";
+  if (candidates.length === 0) {
+    const [emb, qVec] = await Promise.all([
+      getBotEmbeddings(env),
+      embedQuery(env, `سوال کنکور ${f || ""} ${profile?.grade || ""}`),
+    ]);
+    if (emb && qVec && emb.vectors.length === bank.length) {
+      candidates = pool.map(({ it, i }) => ({ it, i, score: cosineSim(qVec, emb.vectors[i]) }))
+        .sort((a: any, b: any) => b.score - a.score).slice(0, 25) as any;
+      reason = reason || "انتخاب معنایی RAG برای رشته تو";
+    }
+  }
+  if (candidates.length === 0) { candidates = pool; reason = reason || "تصادفی از رشته تو"; }
+
+  // ۳) سطح‌بندی با معدل: معدل بالا → سال‌های جدیدتر (سخت‌تر)، معدل پایین → قدیمی‌تر
+  const gpa = profile?.gpa || 0;
+  if (gpa > 0 && candidates.length > 6) {
+    const sorted = [...candidates].sort((a, b) => Number(b.it.y) - Number(a.it.y));
+    candidates = gpa >= 17 ? sorted.slice(0, Math.ceil(sorted.length / 2)) : sorted.slice(Math.floor(sorted.length / 2));
+  }
+
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  const base = formatBotQuiz(pick.it, pick.i, platform);
+  return { text: `🤖 تست هوشمند RAG — ${reason}\n\n${base.text}`, reply_markup: base.reply_markup, qi: pick.i, item: pick.it };
 }
 
 async function buildBotQuiz(env: Env, platform?: string, profile?: BotProfile | null): Promise<{ text: string; reply_markup: any; qi: number; item: BotQuizItem }> {
@@ -1797,7 +1855,9 @@ const BOT_HELP_TEXT = [
   "💬 مشاوره — هر سوال درسی/انگیزشی را بنویس",
   "📈 وضعیت سامانه — آمار زنده",
   "",
-  "دستورات: /start /quiz /dashboard /analysis /status /help",
+  "🤖 تست هوشمند RAG — سوال بعدی را بر اساس نقاط ضعف کارنامه و رشته/معدل تو انتخاب می‌کند",
+  "",
+  "دستورات: /start /quiz /smartquiz /dashboard /analysis /status /help",
 ].join("\n");
 
 /** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
@@ -1894,41 +1954,82 @@ async function handleBotUpdate(
     await send("sendMessage", { chat_id: chatId, text: BOT_HELP_TEXT, reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }
+  if (text === "/smartquiz" || text === "🤖 تست هوشمند RAG") {
+    const prof = await getBotProfile(ctx.env, platform, chatId);
+    if (!prof || prof.step !== "done") {
+      await upsertBotProfile(ctx.env, platform, chatId, { name: userName, field: null, grade: null, step: "field" });
+      await send("sendMessage", { chat_id: chatId, text: `برای تست هوشمند اول باید بشناسمت! 😊\n\n${fieldQuestionText(userName)}` });
+      return json({ ok: true });
+    }
+    const sq = await buildSmartQuiz(ctx.env, platform, chatId, prof);
+    if (sq) {
+      await saveBotQuizState(ctx.env, platform, chatId, sq.qi, sq.item.a);
+      await send("sendMessage", { chat_id: chatId, text: sq.text, reply_markup: sq.reply_markup });
+    } else {
+      await send("sendMessage", { chat_id: chatId, text: "بانک سوال در دسترس نیست؛ کمی بعد دوباره امتحان کن.", reply_markup: BOT_MENU_KEYBOARD });
+    }
+    return json({ ok: true });
+  }
   if (text === "/quiz" || text === "📝 تست کنکور واقعی") {
     const prof = await getBotProfile(ctx.env, platform, chatId);
     if (prof && prof.step === "field") { await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName) }); return json({ ok: true }); }
     if (prof && prof.step === "grade") { await send("sendMessage", { chat_id: chatId, text: gradeQuestionText() }); return json({ ok: true }); }
+    if (prof && prof.step === "gpa") { await send("sendMessage", { chat_id: chatId, text: gpaQuestionText() }); return json({ ok: true }); }
+    if (prof && prof.step === "age") { await send("sendMessage", { chat_id: chatId, text: ageQuestionText() }); return json({ ok: true }); }
     const quiz = await buildBotQuiz(ctx.env, platform, prof);
     await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
     await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
     return json({ ok: true });
   }
 
-  // پاسخ عددی (۱ تا ۴): اولویت ۱) تکمیل ثبت‌نام  ۲) پاسخ به سوال فعال تست
-  const numAns = text.match(/^[\s]*([1-4۱-۴])[\s]*$/);
+  // اعداد آزاد (معدل/سن) در میانه ثبت‌نام
+  {
+    const prof0 = await getBotProfile(ctx.env, platform, chatId);
+    if (prof0 && (prof0.step === "gpa" || prof0.step === "age")) {
+      const numTxt = text.replace(/[۰-۹]/g, (c) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace("/", ".").replace("٫", ".");
+      const val = parseFloat(numTxt);
+      if (!isNaN(val) && val >= 0) {
+        if (prof0.step === "gpa") {
+          if (val > 20) { await send("sendMessage", { chat_id: chatId, text: "معدل باید بین ۰ تا ۲۰ باشد. دوباره بفرست:" }); return json({ ok: true }); }
+          await upsertBotProfile(ctx.env, platform, chatId, { gpa: val, step: "age" });
+          await send("sendMessage", { chat_id: chatId, text: `✅ معدل: ${val > 0 ? faNum(val) : "ترجیح دادی نگویی"}\n\n${ageQuestionText()}` });
+          return json({ ok: true });
+        }
+        if (val !== 0 && (val < 10 || val > 80)) { await send("sendMessage", { chat_id: chatId, text: "سن معتبر بفرست (۱۰ تا ۸۰) یا 0:" }); return json({ ok: true }); }
+        await upsertBotProfile(ctx.env, platform, chatId, { age: Math.round(val), step: "done" });
+        const done = await getBotProfile(ctx.env, platform, chatId);
+        await send("sendMessage", { chat_id: chatId, text: profileSummary(done!), reply_markup: BOT_MENU_KEYBOARD });
+        return json({ ok: true });
+      }
+      await send("sendMessage", { chat_id: chatId, text: prof0.step === "gpa" ? gpaQuestionText() : ageQuestionText() });
+      return json({ ok: true });
+    }
+  }
+
+  // پاسخ عددی (۱ تا ۵): اولویت ۱) تکمیل ثبت‌نام  ۲) پاسخ به سوال فعال تست
+  const numAns = text.match(/^[\s]*([1-5۱-۵])[\s]*$/);
   if (numAns) {
-    const map: Record<string, number> = { "1":0,"2":1,"3":2,"4":3,"۱":0,"۲":1,"۳":2,"۴":3 };
+    const map: Record<string, number> = { "1":0,"2":1,"3":2,"4":3,"5":4,"۱":0,"۲":1,"۳":2,"۴":3,"۵":4 };
     const chosen = map[numAns[1]];
-    // --- جریان ثبت‌نام (رشته → پایه) ---
+    // --- جریان ثبت‌نام (رشته → پایه → معدل → سن) ---
     const prof = await getBotProfile(ctx.env, platform, chatId);
     if (prof && prof.step === "field") {
+      if (chosen >= BOT_FIELDS.length) { await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName) }); return json({ ok: true }); }
       const field = BOT_FIELDS[chosen];
       await upsertBotProfile(ctx.env, platform, chatId, { field, step: "grade" });
       await send("sendMessage", { chat_id: chatId, text: `✅ رشته: ${field}\n\n${gradeQuestionText()}` });
       return json({ ok: true });
     }
     if (prof && prof.step === "grade") {
+      if (chosen >= BOT_GRADES.length) { await send("sendMessage", { chat_id: chatId, text: gradeQuestionText() }); return json({ ok: true }); }
       const grade = BOT_GRADES[chosen];
-      await upsertBotProfile(ctx.env, platform, chatId, { grade, step: "done" });
-      await send("sendMessage", {
-        chat_id: chatId,
-        text: `🎉 ثبت‌نام کامل شد!\n\n👤 ${prof.name || "دوست عزیز"}\n📚 رشته: ${prof.field}\n🎓 پایه: ${grade}\n\nاز این به بعد تست‌ها مخصوص رشته خودت انتخاب می‌شوند. «📝 تست کنکور واقعی» را بزن!`,
-        reply_markup: BOT_MENU_KEYBOARD,
-      });
+      await upsertBotProfile(ctx.env, platform, chatId, { grade, step: "gpa" });
+      await send("sendMessage", { chat_id: chatId, text: `✅ پایه: ${grade}\n\n${gpaQuestionText()}` });
       return json({ ok: true });
     }
     const st = await popBotQuizState(ctx.env, platform, chatId);
     if (st) {
+      if (chosen > 3) { await send("sendMessage", { chat_id: chatId, text: "گزینه ۱ تا ۴ را بفرست." }); await saveBotQuizState(ctx.env, platform, chatId, st.qi, st.correct_idx); return json({ ok: true }); }
       await gradeBotAnswer(ctx.env, send, platform, chatId, st.qi, st.correct_idx, chosen);
       return json({ ok: true });
     }

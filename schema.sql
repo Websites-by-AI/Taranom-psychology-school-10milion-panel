@@ -120,3 +120,7 @@ CREATE TABLE IF NOT EXISTS bot_profiles (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (platform, chat_id)
 );
+
+-- ستون‌های معدل و سن پروفایل ربات (v2)
+-- ALTER TABLE bot_profiles ADD COLUMN gpa REAL;
+-- ALTER TABLE bot_profiles ADD COLUMN age INTEGER;
