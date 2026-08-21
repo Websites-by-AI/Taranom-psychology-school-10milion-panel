@@ -97,3 +97,13 @@ CREATE TABLE IF NOT EXISTS bot_quiz_log (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_bot_quiz_chat ON bot_quiz_log (platform, chat_id, created_at);
+
+-- آخرین سوال فعال هر کاربر ربات (برای پاسخ عددی در بله که دکمه ندارد)
+CREATE TABLE IF NOT EXISTS bot_quiz_state (
+  platform    TEXT NOT NULL,
+  chat_id     TEXT NOT NULL,
+  qi          INTEGER NOT NULL,
+  correct_idx INTEGER NOT NULL,
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (platform, chat_id)
+);

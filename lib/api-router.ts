@@ -1618,12 +1618,20 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats)
 }
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
-async function buildBotQuiz(env: Env): Promise<{ text: string; reply_markup: any }> {
+async function buildBotQuiz(env: Env, platform?: string): Promise<{ text: string; reply_markup: any; qi: number; item: BotQuizItem }> {
   const bank = await getBotQuizBank(env);
   const qi = Math.floor(Math.random() * bank.length);
   const item = bank[qi];
+  return { ...formatBotQuiz(item, qi, platform), qi, item };
+}
+
+/** قالب مشترک سوال — در بله دکمه‌ها گاهی کار نمی‌کنند؛ راهنمای پاسخ عددی همیشه اضافه می‌شود. */
+function formatBotQuiz(item: BotQuizItem, qi: number, platform?: string): { text: string; reply_markup: any } {
   const lines = item.o.map((opt, i) => `${faNum(i + 1)}) ${opt}`);
-  const text = `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})\n\n${item.q}\n\n${lines.join("\n")}\n\n👇 گزینه خود را انتخاب کنید:`;
+  const numHint = platform === "bale"
+    ? "\n\n👇 پاسخ را با ارسال «عدد گزینه» بدهید (مثلاً 2)"
+    : "\n\n👇 گزینه را لمس کنید یا عددش را بفرستید:";
+  const text = `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})\n\n${item.q}\n\n${lines.join("\n")}${numHint}`;
   const reply_markup = {
     inline_keyboard: [
       item.o.map((_, i) => ({ text: faNum(i + 1), callback_data: `qz:${qi}:${item.a}:${i}` })),
@@ -1631,6 +1639,55 @@ async function buildBotQuiz(env: Env): Promise<{ text: string; reply_markup: any
     ],
   };
   return { text, reply_markup };
+}
+
+/** ذخیره سوال فعال کاربر تا پاسخ عددی (بدون دکمه) هم قابل تصحیح باشد — لازمهٔ بله. */
+async function saveBotQuizState(env: Env, platform: string, chatId: string | number, qi: number, correctIdx: number): Promise<void> {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(
+      "INSERT INTO bot_quiz_state (platform, chat_id, qi, correct_idx, created_at) VALUES (?,?,?,?,?) " +
+      "ON CONFLICT(platform, chat_id) DO UPDATE SET qi=excluded.qi, correct_idx=excluded.correct_idx, created_at=excluded.created_at"
+    ).bind(platform, String(chatId), qi, correctIdx, new Date().toISOString()).run();
+  } catch (_) { /* silent */ }
+}
+
+async function popBotQuizState(env: Env, platform: string, chatId: string | number): Promise<{ qi: number; correct_idx: number } | null> {
+  try {
+    if (!env.DB) return null;
+    const cid = String(chatId);
+    const row: any = await env.DB.prepare(
+      "SELECT qi, correct_idx FROM bot_quiz_state WHERE platform=? AND chat_id=?"
+    ).bind(platform, cid).first();
+    if (!row) return null;
+    await env.DB.prepare("DELETE FROM bot_quiz_state WHERE platform=? AND chat_id=?").bind(platform, cid).run();
+    return { qi: Number(row.qi), correct_idx: Number(row.correct_idx) };
+  } catch (_) { return null; }
+}
+
+/** تصحیح پاسخ (مشترک بین دکمه و پاسخ عددی). */
+async function gradeBotAnswer(
+  env: Env, send: (m: string, p: any) => Promise<void>, platform: string,
+  chatId: string | number, qi: number, correct: number, chosen: number
+): Promise<void> {
+  const bank = await getBotQuizBank(env);
+  const item = bank[qi] || null;
+  const correctText = item && item.o[correct] ? item.o[correct] : `گزینه ${faNum(correct + 1)}`;
+  const verdict = chosen === correct
+    ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
+    : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
+  const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
+  await logBotQuizAnswer(env, platform, chatId, item, chosen === correct);
+  await send("sendMessage", {
+    chat_id: chatId,
+    text: `${verdict}${src}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
+    reply_markup: {
+      inline_keyboard: [[
+        { text: "🔄 سوال بعدی", callback_data: "qz:next" },
+        { text: "📊 داشبورد", callback_data: "qz:dash" },
+      ]],
+    },
+  });
 }
 
 /** Live status text (D1 user count + RAG bank size). */
@@ -1660,7 +1717,8 @@ const BOT_HELP_TEXT = [
   "",
   "این ربات متصل به سامانه hamdeltar.ir است.",
   "",
-  "📝 تست کنکور واقعی — سوال واقعی از بانک ۱۸۰۰+ سوالی (دکمه پاسخ + تصحیح فوری + ثبت در کارنامه)",
+  "📝 تست کنکور واقعی — سوال واقعی از بانک ۱۸۰۰+ سوالی (تصحیح فوری + ثبت در کارنامه)",
+  "🔢 پاسخ‌دادن: روی دکمه گزینه بزن، یا فقط «عدد گزینه» را بفرست (مثلاً 2) — در بله همیشه با عدد جواب بده",
   "📊 داشبورد من — کارنامه شخصی: دقت کلی، تفکیک درس‌ها، روند ۱۰ تست آخر",
   "🧠 تحلیل روانشناسی — تفسیر دکتر رادان از الگوی پاسخ‌هایت + توصیه عملی",
   "💬 مشاوره — هر سوال درسی/انگیزشی را بنویس",
@@ -1702,7 +1760,8 @@ async function handleBotUpdate(
     await send("answerCallbackQuery", { callback_query_id: cb.id });
 
     if (data === "qz:next") {
-      const quiz = await buildBotQuiz(ctx.env);
+      const quiz = await buildBotQuiz(ctx.env, platform);
+      await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
       await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
       return json({ ok: true });
     }
@@ -1712,17 +1771,9 @@ async function handleBotUpdate(
       const qi = Math.min(Number(showM[1]), bank.length - 1);
       const item = bank[qi];
       if (item) {
-        const lines = item.o.map((opt, i) => `${faNum(i + 1)}) ${opt}`);
-        await send("sendMessage", {
-          chat_id: chatId,
-          text: `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})\n\n${item.q}\n\n${lines.join("\n")}\n\n👇 گزینه خود را انتخاب کنید:`,
-          reply_markup: {
-            inline_keyboard: [
-              item.o.map((_, i) => ({ text: faNum(i + 1), callback_data: `qz:${qi}:${item.a}:${i}` })),
-              [{ text: "🔄 سوال بعدی", callback_data: "qz:next" }],
-            ],
-          },
-        });
+        const q = formatBotQuiz(item, qi, platform);
+        await saveBotQuizState(ctx.env, platform, chatId, qi, item.a);
+        await send("sendMessage", { chat_id: chatId, text: q.text, reply_markup: q.reply_markup });
       }
       return json({ ok: true });
     }
@@ -1737,28 +1788,8 @@ async function handleBotUpdate(
     }
     const m = data.match(/^qz:(\d+):(\d+):(\d+)$/);
     if (m) {
-      const [, qiStr, correctStr, chosenStr] = m;
-      const correct = Number(correctStr);
-      const chosen = Number(chosenStr);
-      const bank = await getBotQuizBank(ctx.env);
-      const item = bank[Number(qiStr)] || null;
-      const correctText = item && item.o[correct] ? item.o[correct] : `گزینه ${faNum(correct + 1)}`;
-      const verdict = chosen === correct
-        ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
-        : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
-      const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
-      // ثبت پاسخ در D1 برای داشبورد و تحلیل روانشناسی
-      await logBotQuizAnswer(ctx.env, platform, chatId, item, chosen === correct);
-      await send("sendMessage", {
-        chat_id: chatId,
-        text: `${verdict}${src}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
-        reply_markup: {
-          inline_keyboard: [[
-            { text: "🔄 سوال بعدی", callback_data: "qz:next" },
-            { text: "📊 داشبورد", callback_data: "qz:dash" },
-          ]],
-        },
-      });
+      await popBotQuizState(ctx.env, platform, chatId); // پاک‌سازی سوال فعال
+      await gradeBotAnswer(ctx.env, send, platform, chatId, Number(m[1]), Number(m[2]), Number(m[3]));
       return json({ ok: true });
     }
     return json({ ok: true });
@@ -1787,8 +1818,27 @@ async function handleBotUpdate(
     return json({ ok: true });
   }
   if (text === "/quiz" || text === "📝 تست کنکور واقعی") {
-    const quiz = await buildBotQuiz(ctx.env);
+    const quiz = await buildBotQuiz(ctx.env, platform);
+    await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
     await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
+    return json({ ok: true });
+  }
+
+  // پاسخ عددی به سوال فعال (۱ تا ۴ فارسی/لاتین) — راه اصلی پاسخ در بله که دکمه شیشه‌ای ندارد
+  const numAns = text.match(/^[\s]*([1-4۱-۴])[\s]*$/);
+  if (numAns) {
+    const map: Record<string, number> = { "1":0,"2":1,"3":2,"4":3,"۱":0,"۲":1,"۳":2,"۴":3 };
+    const chosen = map[numAns[1]];
+    const st = await popBotQuizState(ctx.env, platform, chatId);
+    if (st) {
+      await gradeBotAnswer(ctx.env, send, platform, chatId, st.qi, st.correct_idx, chosen);
+      return json({ ok: true });
+    }
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: "سوال فعالی نداری! اول «📝 تست کنکور واقعی» یا /quiz را بزن.",
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
     return json({ ok: true });
   }
   if (text === "/dashboard" || text === "📊 داشبورد من") {
