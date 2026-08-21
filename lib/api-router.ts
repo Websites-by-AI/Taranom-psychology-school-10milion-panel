@@ -1391,7 +1391,30 @@ const BOT_MENU_KEYBOARD = {
   is_persistent: true,
 };
 
-/** ثبت پاسخ تست کاربر ربات در D1 (بی‌صدا — خطا نباید بات را بشکند). */
+/** بازیابی سوالات مرتبط از بانک RAG برای زمینه‌سازی پاسخ هوش مصنوعی ربات (RAG واقعی در بات). */
+async function botRagContext(env: Env, userText: string): Promise<{ context: string; hits: BotQuizItem[] }> {
+  try {
+    const bank = await getBotQuizBank(env);
+    const norm = (s: string) => (s || "")
+      .replace(/[يك]/g, (c) => (c === "ي" ? "ی" : "ک"))
+      .replace(/[\u200c\u200f]/g, " ")
+      .toLowerCase();
+    const qTokens = norm(userText).split(/[\s،؟?!.:()«»"']+/).filter((t) => t.length >= 3);
+    if (qTokens.length === 0) return { context: "", hits: [] };
+    const scored = bank.map((item) => {
+      const hay = norm(item.q + " " + item.s + " " + item.o.join(" "));
+      let score = 0;
+      for (const t of qTokens) if (hay.includes(t)) score += t.length;
+      return { item, score };
+    }).filter((x) => x.score >= 6).sort((a, b) => b.score - a.score).slice(0, 3);
+    if (scored.length === 0) return { context: "", hits: [] };
+    const ctxLines = scored.map(({ item }, i) =>
+      `${i + 1}) [کنکور ${item.y} — ${item.s}] ${item.q}\nگزینه‌ها: ${item.o.join(" | ")}\nپاسخ صحیح: ${item.o[item.a] || "-"}`);
+    return { context: ctxLines.join("\n\n"), hits: scored.map((x) => x.item) };
+  } catch (_) {
+    return { context: "", hits: [] };
+  }
+}
 async function logBotQuizAnswer(
   env: Env, platform: string, chatId: string | number,
   item: BotQuizItem | null, correct: boolean
@@ -1611,6 +1634,26 @@ async function handleBotUpdate(
       await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
       return json({ ok: true });
     }
+    const showM = data.match(/^qz:show:(\d+)$/);
+    if (showM) {
+      const bank = await getBotQuizBank(ctx.env);
+      const qi = Math.min(Number(showM[1]), bank.length - 1);
+      const item = bank[qi];
+      if (item) {
+        const lines = item.o.map((opt, i) => `${faNum(i + 1)}) ${opt}`);
+        await send("sendMessage", {
+          chat_id: chatId,
+          text: `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})\n\n${item.q}\n\n${lines.join("\n")}\n\n👇 گزینه خود را انتخاب کنید:`,
+          reply_markup: {
+            inline_keyboard: [
+              item.o.map((_, i) => ({ text: faNum(i + 1), callback_data: `qz:${qi}:${item.a}:${i}` })),
+              [{ text: "🔄 سوال بعدی", callback_data: "qz:next" }],
+            ],
+          },
+        });
+      }
+      return json({ ok: true });
+    }
     if (data === "qz:dash") {
       const st = await getBotQuizStats(ctx.env, platform, chatId);
       await send("sendMessage", {
@@ -1704,25 +1747,57 @@ async function handleBotUpdate(
     return json({ ok: true });
   }
 
-  // --- 3) free text → AI counselor ---
+  // --- 3) free text → AI counselor (RAG + Hugging Face Llama) ---
   let replyText = "";
   try {
-    const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
-    if (ai) {
-      const res = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: [{ role: "user", parts: [{ text }] }],
-        config: {
-          systemInstruction:
-            `شما دکتر رادان، مشاور تحصیلی ترنم همدلی در ${platform === "telegram" ? "تلگرام" : "پیام‌رسان بله"} هستید. کوتاه (حداکثر ۶ جمله)، صمیمی و همدلانه به فارسی پاسخ دهید.`,
-        },
-      });
-      replyText = res.text?.trim() || getOfflineChatReply(text);
-    } else {
-      replyText = getOfflineChatReply(text);
+    // ۱) بازیابی سوالات مرتبط از بانک RAG هاگینگ‌فیس برای زمینه (کاهش هالوسینیشن)
+    const rag = await botRagContext(ctx.env, text);
+    const sysBase = `شما دکتر رادان، مشاور تحصیلی ترنم همدلی در ${platform === "telegram" ? "تلگرام" : "پیام‌رسان بله"} هستید. کوتاه (حداکثر ۶ جمله)، صمیمی و همدلانه به فارسی پاسخ دهید.`;
+    const sys = rag.context
+      ? `${sysBase}\n\nسوالات مرتبط از بانک رسمی کنکور (در صورت ارتباط، با ذکر سال به آن‌ها استناد کن):\n${rag.context}`
+      : sysBase;
+
+    // ۲) اولویت با Llama روی Hugging Face (HF_TOKEN سرور)، سپس زنجیره کلیدهای دیگر
+    if (ctx.env.HF_TOKEN && ctx.env.HF_TOKEN.startsWith("hf_")) {
+      try {
+        const hfRes = await huggingFaceGenerate(ctx.env.HF_TOKEN,
+          ctx.env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
+          { contents: [{ role: "user", parts: [{ text }] }], config: { systemInstruction: sys, maxOutputTokens: 384 } });
+        replyText = hfRes.text?.trim() || "";
+      } catch (_) { /* zanjire paayin */ }
+    }
+    if (!replyText) {
+      const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
+      if (ai) {
+        const res = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: [{ role: "user", parts: [{ text }] }],
+          config: { systemInstruction: sys },
+        });
+        replyText = res.text?.trim() || "";
+      }
+    }
+    if (!replyText) replyText = getOfflineChatReply(text);
+    // ۳) اگر سوال مرتبط در بانک بود، دکمه «تمرین همین مبحث» اضافه شود
+    if (rag.hits.length > 0) {
+      const bank = await getBotQuizBank(ctx.env);
+      const qi = bank.indexOf(rag.hits[0]);
+      if (qi >= 0) {
+        await send("sendMessage", {
+          chat_id: chatId,
+          text: replyText + `\n\n📚 ${faNum(rag.hits.length)} سوال مرتبط از کنکورهای واقعی در بانک داریم.`,
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "📝 تمرین همین مبحث", callback_data: `qz:show:${qi}` },
+              { text: "🔄 سوال تصادفی", callback_data: "qz:next" },
+            ]],
+          },
+        });
+        return json({ ok: true });
+      }
     }
   } catch (_) {
-    replyText = getOfflineChatReply(text);
+    replyText = replyText || getOfflineChatReply(text);
   }
   await send("sendMessage", { chat_id: chatId, text: replyText, reply_markup: BOT_MENU_KEYBOARD });
   return json({ ok: true });
