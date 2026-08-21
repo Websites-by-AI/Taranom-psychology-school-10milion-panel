@@ -13,5 +13,8 @@
   "vars": {
     "HF_MODEL": "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
     "EXAM_RAG_URL": "https://sosa123454321-taranom-exam-rag.static.hf.space"
+  },
+  "ai": {
+    "binding": "AI"
   }
 }

@@ -41,6 +41,8 @@ export interface Env {
   APP_URL?: string;
   /** Cloudflare D1 database binding (set in wrangler.json). */
   DB?: any;
+  /** Cloudflare Workers AI binding (set in wrangler.json) — embeddings + fallback LLM. */
+  AI?: any;
   /** Cloudflare account id — enables D1 access over REST on non-CF hosts (Vercel). */
   CF_ACCOUNT_ID?: string;
   /** D1 database id used with CF_ACCOUNT_ID + D1_API_TOKEN for REST access. */
@@ -805,6 +807,7 @@ async function hfStatus(env: Env): Promise<Response> {
     },
     wandb: { configured: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10), project: "taranom-exam-rag" },
     examRag: { configured: true, url: env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space" },
+    workersAi: { configured: !!env.AI, chatModel: "@cf/meta/llama-3.1-8b-instruct", embeddingModel: "@cf/baai/bge-m3", semanticRag: !!env.AI },
   });
 }
 
@@ -1391,29 +1394,98 @@ const BOT_MENU_KEYBOARD = {
   is_persistent: true,
 };
 
-/** بازیابی سوالات مرتبط از بانک RAG برای زمینه‌سازی پاسخ هوش مصنوعی ربات (RAG واقعی در بات). */
-async function botRagContext(env: Env, userText: string): Promise<{ context: string; hits: BotQuizItem[] }> {
+/* --- بازیابی معنایی (Semantic RAG): امبدینگ‌های بانک روی HF Space + مدل bge-m3 در Workers AI --- */
+let botEmbCache: { at: number; dims: number; vectors: Float32Array[] } | null = null;
+
+function decodeQuantVec(b64: string, dims: number): Float32Array {
+  const bin = atob(b64);
+  const v = new Float32Array(dims);
+  for (let i = 0; i < dims; i++) {
+    let x = bin.charCodeAt(i);
+    if (x > 127) x -= 256;
+    v[i] = x / 127;
+  }
+  return v;
+}
+
+async function getBotEmbeddings(env: Env): Promise<{ dims: number; vectors: Float32Array[] } | null> {
+  if (botEmbCache && Date.now() - botEmbCache.at < 30 * 60 * 1000) return botEmbCache;
+  try {
+    const base = env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space";
+    const resp = await fetch(`${base}/data/quiz-embeddings.json`, { signal: AbortSignal.timeout(10000) } as any);
+    if (!resp.ok) return null;
+    const data: any = await resp.json();
+    const vectors = (data.vectors as string[]).map((b: string) => decodeQuantVec(b, data.dims));
+    botEmbCache = { at: Date.now(), dims: data.dims, vectors };
+    return botEmbCache;
+  } catch (_) { return null; }
+}
+
+function cosineSim(a: Float32Array, b: Float32Array): number {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+
+/** امبدینگ کوئری کاربر با Workers AI (bge-m3 چندزبانه) — فقط با باینده AI. */
+async function embedQuery(env: Env, text: string): Promise<Float32Array | null> {
+  try {
+    if (!env.AI) return null;
+    const out: any = await env.AI.run("@cf/baai/bge-m3", { text: [text.slice(0, 512)] });
+    const vec: number[] | undefined = out?.data?.[0];
+    return vec ? Float32Array.from(vec) : null;
+  } catch (_) { return null; }
+}
+
+/** بازیابی سوالات مرتبط از بانک RAG — اول معنایی (امبدینگ)، بعد واژگانی (fallback). */
+async function botRagContext(env: Env, userText: string): Promise<{ context: string; hits: BotQuizItem[]; mode: string }> {
   try {
     const bank = await getBotQuizBank(env);
+
+    // ۱) مسیر معنایی: Workers AI embeddings + بردارهای از پیش محاسبه‌شده روی HF Space
+    const [emb, qVec] = await Promise.all([getBotEmbeddings(env), embedQuery(env, userText)]);
+    if (emb && qVec && emb.vectors.length === bank.length) {
+      const scored = bank.map((item, i) => ({ item, score: cosineSim(qVec, emb.vectors[i]) }))
+        .sort((a, b) => b.score - a.score).slice(0, 3).filter((x) => x.score > 0.45);
+      if (scored.length > 0) {
+        const ctxLines = scored.map(({ item }, i) =>
+          `${i + 1}) [کنکور ${item.y} — ${item.s}] ${item.q}\nگزینه‌ها: ${item.o.join(" | ")}\nپاسخ صحیح: ${item.o[item.a] || "-"}`);
+        return { context: ctxLines.join("\n\n"), hits: scored.map((x) => x.item), mode: "semantic" };
+      }
+    }
+
+    // ۲) مسیر واژگانی (وقتی AI binding نیست یا امتیاز معنایی پایین بود)
     const norm = (s: string) => (s || "")
       .replace(/[يك]/g, (c) => (c === "ي" ? "ی" : "ک"))
       .replace(/[\u200c\u200f]/g, " ")
       .toLowerCase();
     const qTokens = norm(userText).split(/[\s،؟?!.:()«»"']+/).filter((t) => t.length >= 3);
-    if (qTokens.length === 0) return { context: "", hits: [] };
+    if (qTokens.length === 0) return { context: "", hits: [], mode: "none" };
     const scored = bank.map((item) => {
       const hay = norm(item.q + " " + item.s + " " + item.o.join(" "));
       let score = 0;
       for (const t of qTokens) if (hay.includes(t)) score += t.length;
       return { item, score };
     }).filter((x) => x.score >= 6).sort((a, b) => b.score - a.score).slice(0, 3);
-    if (scored.length === 0) return { context: "", hits: [] };
+    if (scored.length === 0) return { context: "", hits: [], mode: "none" };
     const ctxLines = scored.map(({ item }, i) =>
       `${i + 1}) [کنکور ${item.y} — ${item.s}] ${item.q}\nگزینه‌ها: ${item.o.join(" | ")}\nپاسخ صحیح: ${item.o[item.a] || "-"}`);
-    return { context: ctxLines.join("\n\n"), hits: scored.map((x) => x.item) };
+    return { context: ctxLines.join("\n\n"), hits: scored.map((x) => x.item), mode: "lexical" };
   } catch (_) {
-    return { context: "", hits: [] };
+    return { context: "", hits: [], mode: "error" };
   }
+}
+
+/** پاسخ‌گویی با Workers AI (لاما ۸B روی خود کلودفلر — بدون وابستگی خارجی، سریع و رایگان). */
+async function workersAiChat(env: Env, sys: string, userText: string): Promise<string> {
+  try {
+    if (!env.AI) return "";
+    const out: any = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: [{ role: "system", content: sys }, { role: "user", content: userText }],
+      max_tokens: 384,
+    });
+    return (out?.response || out?.choices?.[0]?.message?.content || "").trim();
+  } catch (_) { return ""; }
 }
 async function logBotQuizAnswer(
   env: Env, platform: string, chatId: string | number,
@@ -1757,7 +1829,7 @@ async function handleBotUpdate(
       ? `${sysBase}\n\nسوالات مرتبط از بانک رسمی کنکور (در صورت ارتباط، با ذکر سال به آن‌ها استناد کن):\n${rag.context}`
       : sysBase;
 
-    // ۲) اولویت با Llama روی Hugging Face (HF_TOKEN سرور)، سپس زنجیره کلیدهای دیگر
+    // ۲) اولویت با Llama-70B روی Hugging Face، سپس Llama-8B روی Workers AI کلودفلر، سپس بقیه
     if (ctx.env.HF_TOKEN && ctx.env.HF_TOKEN.startsWith("hf_")) {
       try {
         const hfRes = await huggingFaceGenerate(ctx.env.HF_TOKEN,
@@ -1765,6 +1837,9 @@ async function handleBotUpdate(
           { contents: [{ role: "user", parts: [{ text }] }], config: { systemInstruction: sys, maxOutputTokens: 384 } });
         replyText = hfRes.text?.trim() || "";
       } catch (_) { /* zanjire paayin */ }
+    }
+    if (!replyText) {
+      replyText = await workersAiChat(ctx.env, sys, text); // لاما داخل خود کلودفلر — سریع و بدون خروج
     }
     if (!replyText) {
       const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
