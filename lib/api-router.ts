@@ -844,17 +844,10 @@ async function chat(ctx: Ctx, meta: RespMeta): Promise<Response> {
   if (!message) return json({ error: "MESSAGE_REQUIRED", reply: "پیامی دریافت نشد." }, 400);
 
   try {
-    const ai = getAI(ctx.request, body, ctx.env, meta);
-    if (!ai) {
-      return json({ reply: getOfflineChatReply(message) }, 200, meta.headers);
-    }
+    // 🧠 RAG معنایی مشترک با ربات‌ها: بازیابی سوالات مرتبط کنکور از بانک HF Space
+    const rag = await botRagContext(ctx.env, message);
 
-    const formattedHistory = (history || []).map((msg: any) => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    }));
-
-    const systemInstruction = `شما 'دکتر رادان'، همراه همدل و مشاور برنامه‌ریزی تحصیلی در موسسه 'ترنم همدلی' هستید.
+    const systemInstructionBase = `شما 'دکتر رادان'، همراه همدل و مشاور برنامه‌ریزی تحصیلی در موسسه 'ترنم همدلی' هستید.
 تخصص شما: کنکور سراسری ایران، تحلیل روند یادگیری، عارضه‌یابی اشتباهات تسی، و روانشناسی یادگیری.
 ویژگی‌های شخصیتی: همدل، صبور، بسیار خوش‌صحبت به زبان فارسی، حامی واقعی، و در عین حال دقیق و راهنما.
 هدف: داوطلب را برای رشدی پایدار و رسیدن به اهداف تحصیلی‌اش با آرامش هدایت کنید.
@@ -864,12 +857,46 @@ async function chat(ctx: Ctx, meta: RespMeta): Promise<Response> {
 ۳. از اصطلاحات فنی کنکور در جای مناسب و با لحنی آرام‌بخش استفاده کنید.
 ۴. حداکثر در ۳ پاراگراف پاسخ دهید.
 ۵. از ایموجی‌های مناسب (📚, 🌱, ✨, 💡) استفاده کنید.`;
+    const systemInstruction = rag.context
+      ? `${systemInstructionBase}\n\nسوالات مرتبط از بانک رسمی کنکور (در صورت ارتباط با پرسش کاربر، با ذکر سال به آن‌ها استناد کن):\n${rag.context}`
+      : systemInstructionBase;
+
+    const related = rag.hits.map((h) => ({ question: h.q, year: h.y, subject: h.s, field: h.f }));
+
+    // زنجیره مدل‌ها: ۱) HF Llama-70B  ۲) Workers AI Llama-8B  ۳) زنجیره کلیدها (Gemini/OpenRouter)  ۴) آفلاین
+    if (ctx.env.HF_TOKEN && ctx.env.HF_TOKEN.startsWith("hf_")) {
+      try {
+        const contents = [
+          ...(history || []).map((msg: any) => ({ role: msg.role === "user" ? "user" : "model", parts: [{ text: msg.content }] })),
+          { role: "user", parts: [{ text: message }] },
+        ];
+        const hfRes = await huggingFaceGenerate(ctx.env.HF_TOKEN,
+          ctx.env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
+          { contents, config: { systemInstruction, maxOutputTokens: 640 } });
+        const t = hfRes.text?.trim();
+        if (t) return json({ reply: t, engine: "hf-llama-70b", ragMode: rag.mode, related }, 200, meta.headers);
+      } catch (_) { /* zanjire paayin */ }
+    }
+    {
+      const t = await workersAiChat(ctx.env, systemInstruction, message);
+      if (t) return json({ reply: t, engine: "workers-ai-llama-8b", ragMode: rag.mode, related }, 200, meta.headers);
+    }
+
+    const ai = getAI(ctx.request, body, ctx.env, meta);
+    if (!ai) {
+      return json({ reply: getOfflineChatReply(message), ragMode: rag.mode, related }, 200, meta.headers);
+    }
+
+    const formattedHistory = (history || []).map((msg: any) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
 
     const chatSession = ai.chats.create({ model: "gemini-3.5-flash", history: formattedHistory, config: { systemInstruction } });
     const result = await chatSession.sendMessage({ message });
     const reply = result.text?.trim();
     if (!reply) throw new Error("Empty reply from Gemini");
-    return json({ reply }, 200, meta.headers);
+    return json({ reply, engine: "gemini", ragMode: rag.mode, related }, 200, meta.headers);
   } catch (error: any) {
     const errStr = (error?.message || error?.toString() || "").toLowerCase();
     const rawErrorMsg = error?.message || error?.toString() || "Unknown server-side Gemini API or network error";
