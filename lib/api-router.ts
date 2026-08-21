@@ -1384,11 +1384,143 @@ function faNum(n: number): string { return String(n).split("").map((c) => /\d/.t
 const BOT_MENU_KEYBOARD = {
   keyboard: [
     [{ text: "📝 تست کنکور واقعی" }, { text: "💬 مشاوره با دکتر رادان" }],
-    [{ text: "📊 وضعیت سامانه" }, { text: "ℹ️ راهنما" }],
+    [{ text: "📊 داشبورد من" }, { text: "🧠 تحلیل روانشناسی" }],
+    [{ text: "📈 وضعیت سامانه" }, { text: "ℹ️ راهنما" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
 };
+
+/** ثبت پاسخ تست کاربر ربات در D1 (بی‌صدا — خطا نباید بات را بشکند). */
+async function logBotQuizAnswer(
+  env: Env, platform: string, chatId: string | number,
+  item: BotQuizItem | null, correct: boolean
+): Promise<void> {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(
+      "INSERT INTO bot_quiz_log (id, platform, chat_id, subject, field, year, correct, created_at) VALUES (?,?,?,?,?,?,?,?)"
+    ).bind(
+      randomToken(12), platform, String(chatId),
+      item?.s || null, item?.f || null, item?.y || null,
+      correct ? 1 : 0, new Date().toISOString()
+    ).run();
+  } catch (_) { /* silent */ }
+}
+
+interface BotQuizStats {
+  total: number; correct: number;
+  bySubject: { subject: string; total: number; correct: number }[];
+  last10: number[]; // 1/0 آخرین ۱۰ پاسخ (جدید → قدیم)
+}
+
+/** آمار تست‌های یک کاربر ربات از D1. */
+async function getBotQuizStats(env: Env, platform: string, chatId: string | number): Promise<BotQuizStats | null> {
+  try {
+    if (!env.DB) return null;
+    const cid = String(chatId);
+    const tot: any = await env.DB.prepare(
+      "SELECT COUNT(*) n, SUM(correct) c FROM bot_quiz_log WHERE platform=? AND chat_id=?"
+    ).bind(platform, cid).first();
+    if (!tot || !tot.n) return { total: 0, correct: 0, bySubject: [], last10: [] };
+    const subj: any = await env.DB.prepare(
+      "SELECT subject, COUNT(*) n, SUM(correct) c FROM bot_quiz_log WHERE platform=? AND chat_id=? AND subject IS NOT NULL GROUP BY subject ORDER BY n DESC LIMIT 8"
+    ).bind(platform, cid).all();
+    const last: any = await env.DB.prepare(
+      "SELECT correct FROM bot_quiz_log WHERE platform=? AND chat_id=? ORDER BY created_at DESC LIMIT 10"
+    ).bind(platform, cid).all();
+    return {
+      total: Number(tot.n), correct: Number(tot.c || 0),
+      bySubject: (subj.results || []).map((r: any) => ({ subject: r.subject, total: Number(r.n), correct: Number(r.c || 0) })),
+      last10: (last.results || []).map((r: any) => Number(r.correct)),
+    };
+  } catch (_) { return null; }
+}
+
+function progressBar(pct: number): string {
+  const filled = Math.round(pct / 10);
+  return "▰".repeat(filled) + "▱".repeat(10 - filled);
+}
+
+/** 📊 داشبورد شخصی کاربر ربات. */
+function buildBotDashboard(st: BotQuizStats): string {
+  if (st.total === 0) {
+    return "📊 داشبورد من\n\nهنوز تستی نزده‌ای! دکمه «📝 تست کنکور واقعی» را بزن تا اولین سوال بیاید — بعد از چند تست، اینجا آمار دقیق و تحلیل می‌بینی.";
+  }
+  const pct = Math.round((100 * st.correct) / st.total);
+  const lines = [
+    "📊 داشبورد من — کارنامه تست‌های ربات",
+    "",
+    `کل تست‌ها: ${faNum(st.total)} | صحیح: ${faNum(st.correct)} ✅ | غلط: ${faNum(st.total - st.correct)} ❌`,
+    `دقت کلی: ${faNum(pct)}٪`,
+    progressBar(pct),
+    "",
+    "📚 به تفکیک درس:",
+  ];
+  for (const s of st.bySubject) {
+    const sp = Math.round((100 * s.correct) / s.total);
+    lines.push(`• ${s.subject}: ${faNum(s.correct)}/${faNum(s.total)} (${faNum(sp)}٪) ${sp >= 70 ? "🟢" : sp >= 40 ? "🟡" : "🔴"}`);
+  }
+  if (st.last10.length >= 3) {
+    lines.push("", `روند ${faNum(st.last10.length)} تست آخر: ` + st.last10.slice().reverse().map((x) => (x ? "✅" : "❌")).join(""));
+  }
+  lines.push("", "🧠 برای تفسیر این نتایج «تحلیل روانشناسی» را بزن.");
+  return lines.join("\n");
+}
+
+/** 🧠 تحلیل روانشناسی مبتنی بر لاگ تست‌ها (قاعده‌محور + در صورت امکان AI). */
+async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats): Promise<string> {
+  if (st.total < 3) {
+    return "🧠 تحلیل روانشناسی\n\nبرای تحلیل معتبر حداقل ۳ تست لازم است. الان «📝 تست کنکور واقعی» را بزن — بعد از چند تست برگرد!";
+  }
+  const pct = Math.round((100 * st.correct) / st.total);
+  const recent = st.last10;
+  const recentPct = recent.length ? Math.round((100 * recent.reduce((a, b) => a + b, 0)) / recent.length) : pct;
+  const trend = recentPct - pct;
+  // تشخیص الگوها
+  let streakWrong = 0, maxStreakWrong = 0;
+  for (const x of recent) { if (!x) { streakWrong++; maxStreakWrong = Math.max(maxStreakWrong, streakWrong); } else streakWrong = 0; }
+  const weak = st.bySubject.filter((s) => s.total >= 2 && (100 * s.correct) / s.total < 40).map((s) => s.subject);
+  const strong = st.bySubject.filter((s) => s.total >= 2 && (100 * s.correct) / s.total >= 70).map((s) => s.subject);
+
+  const facts = [
+    `دقت کلی ${pct}٪ در ${st.total} تست`,
+    `دقت ${recent.length} تست اخیر ${recentPct}٪ (روند ${trend >= 0 ? "صعودی/ثابت" : "نزولی"})`,
+    maxStreakWrong >= 3 ? `زنجیره ${maxStreakWrong} پاسخ غلط پیاپی در تست‌های اخیر` : "",
+    weak.length ? `درس‌های ضعیف: ${weak.join("، ")}` : "",
+    strong.length ? `درس‌های قوی: ${strong.join("، ")}` : "",
+  ].filter(Boolean).join(" | ");
+
+  // تلاش برای تحلیل AI؛ در نبود آن، تحلیل قاعده‌محور
+  try {
+    const ai = getAI(ctx.request, { message: facts }, ctx.env, meta);
+    if (ai) {
+      const res = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [{ role: "user", parts: [{ text: `داده‌های عملکرد تستی دانش‌آموز: ${facts}` }] }],
+        config: {
+          systemInstruction:
+            "شما دکتر رادان، روانشناس تحصیلی ترنم همدلی هستید. بر اساس داده‌های تستی، یک تحلیل روانشناسی کوتاه فارسی بده (حداکثر ۸ جمله): ۱) وضعیت روحی/اضطراب احتمالی از روی الگوی خطاها ۲) نقطه قوت ۳) دو توصیه عملی کایزن. لحن گرم و امیدبخش.",
+        },
+      });
+      const t = res.text?.trim();
+      if (t) return `🧠 تحلیل روانشناسی دکتر رادان\n\n${t}\n\n📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪`;
+    }
+  } catch (_) { /* fall back */ }
+
+  // قاعده‌محور
+  const lines = ["🧠 تحلیل روانشناسی دکتر رادان", ""];
+  if (pct >= 70) lines.push("عملکردت نشان‌دهنده تسلط و اعتمادبه‌نفس سالم است. 🌟 مغزت الگوهای سوالات را خوب شناخته.");
+  else if (pct >= 45) lines.push("عملکردت متوسط رو به بالاست — پایه خوبی داری ولی هنوز تثبیت نشده. این طبیعیِ مرحله یادگیری است.");
+  else lines.push("دقت پایین فعلی بیشتر از آنکه ضعف علمی باشد، معمولاً نشانه عجله در پاسخ یا اضطراب تست است. نفس عمیق، خواندن کامل صورت سوال.");
+  if (trend < -10) lines.push(`⚠️ روند ${faNum(Math.abs(trend))}٪ افت اخیر داری — احتمالاً خستگی ذهنی. یک استراحت کوتاه (تکنیک پومودورو) قبل از ادامه توصیه می‌شود.`);
+  else if (trend > 10) lines.push(`📈 روند اخیرت ${faNum(trend)}٪ بهتر از میانگین است — یادگیری‌ات در حال شتاب گرفتن است، همین مسیر را ادامه بده.`);
+  if (maxStreakWrong >= 3) lines.push(`الگوی ${faNum(maxStreakWrong)} غلط پیاپی دیده شد — بعد از هر پاسخ غلط، قبل از سوال بعدی ۱۰ ثانیه مکث کن تا «اثر دومینوی خطا» قطع شود.`);
+  if (weak.length) lines.push(`🔴 تمرکز مطالعه این هفته: ${weak.join("، ")}.`);
+  if (strong.length) lines.push(`🟢 نقطه قوت تو: ${strong.join("، ")} — از این اعتمادبه‌نفس برای شروع جلسات مطالعه استفاده کن.`);
+  lines.push("", `📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪ | تحلیل کامل‌تر: hamdeltar.ir`);
+  return lines.join("\n");
+}
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
 async function buildBotQuiz(env: Env): Promise<{ text: string; reply_markup: any }> {
@@ -1433,11 +1565,13 @@ const BOT_HELP_TEXT = [
   "",
   "این ربات متصل به سامانه hamdeltar.ir است.",
   "",
-  "📝 تست کنکور واقعی — یک سوال واقعی از بانک ۱۸۰۰+ سوالی کنکور (با دکمه پاسخ و تصحیح فوری)",
-  "💬 مشاوره — هر سوال درسی/انگیزشی را بنویسید تا دکتر رادان پاسخ دهد",
-  "📊 وضعیت سامانه — آمار زنده کاربران و بانک سوالات",
+  "📝 تست کنکور واقعی — سوال واقعی از بانک ۱۸۰۰+ سوالی (دکمه پاسخ + تصحیح فوری + ثبت در کارنامه)",
+  "📊 داشبورد من — کارنامه شخصی: دقت کلی، تفکیک درس‌ها، روند ۱۰ تست آخر",
+  "🧠 تحلیل روانشناسی — تفسیر دکتر رادان از الگوی پاسخ‌هایت + توصیه عملی",
+  "💬 مشاوره — هر سوال درسی/انگیزشی را بنویس",
+  "📈 وضعیت سامانه — آمار زنده",
   "",
-  "دستورات: /start /quiz /status /help",
+  "دستورات: /start /quiz /dashboard /analysis /status /help",
 ].join("\n");
 
 /** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
@@ -1477,6 +1611,15 @@ async function handleBotUpdate(
       await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
       return json({ ok: true });
     }
+    if (data === "qz:dash") {
+      const st = await getBotQuizStats(ctx.env, platform, chatId);
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: st ? buildBotDashboard(st) : "داشبورد فعلاً در دسترس نیست.",
+        reply_markup: BOT_MENU_KEYBOARD,
+      });
+      return json({ ok: true });
+    }
     const m = data.match(/^qz:(\d+):(\d+):(\d+)$/);
     if (m) {
       const [, qiStr, correctStr, chosenStr] = m;
@@ -1489,10 +1632,17 @@ async function handleBotUpdate(
         ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
         : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
       const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
+      // ثبت پاسخ در D1 برای داشبورد و تحلیل روانشناسی
+      await logBotQuizAnswer(ctx.env, platform, chatId, item, chosen === correct);
       await send("sendMessage", {
         chat_id: chatId,
-        text: `${verdict}${src}\n\n💡 تحلیل کامل و برنامه‌ریزی هوشمند: hamdeltar.ir`,
-        reply_markup: { inline_keyboard: [[{ text: "🔄 سوال بعدی", callback_data: "qz:next" }]] },
+        text: `${verdict}${src}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔄 سوال بعدی", callback_data: "qz:next" },
+            { text: "📊 داشبورد", callback_data: "qz:dash" },
+          ]],
+        },
       });
       return json({ ok: true });
     }
@@ -1526,7 +1676,22 @@ async function handleBotUpdate(
     await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
     return json({ ok: true });
   }
-  if (text === "/status" || text === "📊 وضعیت سامانه") {
+  if (text === "/dashboard" || text === "📊 داشبورد من") {
+    const st = await getBotQuizStats(ctx.env, platform, chatId);
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: st ? buildBotDashboard(st) : "داشبورد فعلاً در دسترس نیست.",
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
+    return json({ ok: true });
+  }
+  if (text === "/analysis" || text === "🧠 تحلیل روانشناسی") {
+    const st = await getBotQuizStats(ctx.env, platform, chatId);
+    const msg = st ? await buildBotPsychAnalysis(ctx, meta, st) : "تحلیل فعلاً در دسترس نیست.";
+    await send("sendMessage", { chat_id: chatId, text: msg, reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  if (text === "/status" || text === "📈 وضعیت سامانه" || text === "📊 وضعیت سامانه") {
     await send("sendMessage", { chat_id: chatId, text: await buildBotStatus(ctx.env, platform), reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }

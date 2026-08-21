@@ -84,3 +84,16 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
   student_id TEXT,
   created_at TEXT NOT NULL
 );
+
+-- پاسخ‌های تست کاربران ربات (تلگرام/بله) برای داشبورد و تحلیل روانشناسی
+CREATE TABLE IF NOT EXISTS bot_quiz_log (
+  id         TEXT PRIMARY KEY,
+  platform   TEXT NOT NULL,          -- telegram | bale
+  chat_id    TEXT NOT NULL,
+  subject    TEXT,
+  field      TEXT,
+  year       TEXT,
+  correct    INTEGER NOT NULL,       -- 1 درست / 0 غلط
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bot_quiz_chat ON bot_quiz_log (platform, chat_id, created_at);

@@ -3,8 +3,6 @@ import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, 
 import { motion } from "motion/react";
 import { Student } from "../types";
 import { BRAND_CONFIG } from "../constants";
-import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 
 interface LoginViewProps {
   onLogin: (student: Student, role: "student" | "parent" | "admin" | "counselor" | "teacher") => void;
@@ -253,40 +251,13 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       return;
     }
 
-    try {
-      const q = query(collection(db, "users"), where("mobile", "==", mobileNumber));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const userData = querySnapshot.docs[0].data();
-        const student: Student = {
-          id: userData.uid,
-          name: userData.displayName,
-          code: userData.uid.substring(0, 7),
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.displayName}`,
-          grade: "کاربر ثبت‌نام شده",
-          field: userData.field || "tajrobi",
-          city: userData.city || "نامشخص",
-          age: userData.age || 18,
-          paymentStatus: userData.paymentStatus || "paid",
-          subscriptionType: userData.subscriptionType || "vip"
-        };
-        onLogin(student, safeDemoRole);
-      } else {
-        // Fallback to mock for demo
-        const localRegs = getLocalRegistrations();
-        const matched = mockStudents.find(s => s.id === mobileNumber) || 
-                        localRegs.find(s => s.mobile === mobileNumber) || 
-                        mockStudents[0];
-        onLogin(matched, safeDemoRole);
-      }
-    } catch (err) {
-      console.error("Login Error:", err);
-      handleFirestoreError(err, OperationType.GET, "users");
-      onLogin(mockStudents[0], safeDemoRole);
-    } finally {
-      setLoading(false);
-    }
+    // دموی محلی — بدون Firestore (تحریم از ایران)
+    const localRegs = getLocalRegistrations();
+    const matched = mockStudents.find(s => s.id === mobileNumber) ||
+                    localRegs.find(s => s.mobile === mobileNumber) ||
+                    mockStudents[0];
+    onLogin(matched, safeDemoRole);
+    setLoading(false);
   };
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
@@ -308,75 +279,17 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       return;
     }
 
-    // ۲) مسیر قدیمی برای کاربرانی که پیش از اتصال D1 ثبت‌نام کرده‌اند
-    try {
-      // Try by email or mobile
-      const qEmail = query(collection(db, "users"), where("email", "==", email), where("password", "==", password));
-      const qMobile = query(collection(db, "users"), where("mobile", "==", email), where("password", "==", password));
-      
-      let querySnapshot = await getDocs(qEmail);
-      if (querySnapshot.empty) {
-        querySnapshot = await getDocs(qMobile);
-      }
-
-      if (!querySnapshot.empty) {
-        const userData = querySnapshot.docs[0].data();
-        const student: Student = {
-          id: userData.uid,
-          name: userData.displayName,
-          code: userData.uid.substring(0, 7),
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.displayName}`,
-          grade: "کاربر فعال",
-          field: userData.field || "tajrobi",
-          city: userData.city || "نامشخص",
-          age: userData.age || 18,
-          paymentStatus: userData.paymentStatus || "paid",
-          subscriptionType: userData.subscriptionType || "vip"
-        };
-        onLogin(student, safeDemoRole);
-      } else {
-        alert("نام کاربری یا رمز عبور اشتباه است.");
-      }
-    } catch (err) {
-      console.error("Password Login Error:", err);
-      handleFirestoreError(err, OperationType.GET, "users");
-      alert("خطا در ورود. لطفا دوباره تلاش کنید.");
-    } finally {
-      setLoading(false);
-    }
+    // مسیر قدیمی Firestore حذف شد (تحریم گوگل برای IP ایران → 403 و هنگ صفحه ورود). فقط D1.
+    setLoading(false);
+    alert("نام کاربری یا رمز عبور اشتباه است.");
   };
 
   const handleSimpleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    try {
-      const q = query(collection(db, "users"), where("email", "==", email));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const userData = querySnapshot.docs[0].data();
-        const student: Student = {
-          id: userData.uid,
-          name: userData.displayName,
-          code: userData.uid.substring(0, 7),
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.displayName}`,
-          grade: "ورود تستی",
-          field: userData.field || "tajrobi",
-          city: userData.city || "نامشخص",
-          age: userData.age || 18,
-          paymentStatus: userData.paymentStatus || "paid",
-          subscriptionType: userData.subscriptionType || "vip"
-        };
-        onLogin(student, safeDemoRole);
-      } else {
-        onLogin(mockStudents[1], safeDemoRole);
-      }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.GET, "users");
-      onLogin(mockStudents[1], safeDemoRole);
-    } finally {
-      setLoading(false);
-    }
+    // دموی محلی — Firestore حذف شد
+    onLogin(mockStudents[1], safeDemoRole);
+    setLoading(false);
   };
 
   return (
