@@ -107,3 +107,16 @@ CREATE TABLE IF NOT EXISTS bot_quiz_state (
   created_at  TEXT NOT NULL,
   PRIMARY KEY (platform, chat_id)
 );
+
+-- پروفایل ثبت‌نام کاربران ربات (رشته/پایه) برای تست شخصی‌سازی‌شده
+CREATE TABLE IF NOT EXISTS bot_profiles (
+  platform   TEXT NOT NULL,
+  chat_id    TEXT NOT NULL,
+  name       TEXT,
+  field      TEXT,
+  grade      TEXT,
+  step       TEXT NOT NULL DEFAULT 'field',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (platform, chat_id)
+);

@@ -1415,7 +1415,8 @@ const BOT_MENU_KEYBOARD = {
   keyboard: [
     [{ text: "📝 تست کنکور واقعی" }, { text: "💬 مشاوره با دکتر رادان" }],
     [{ text: "📊 داشبورد من" }, { text: "🧠 تحلیل روانشناسی" }],
-    [{ text: "📈 وضعیت سامانه" }, { text: "ℹ️ راهنما" }],
+    [{ text: "📋 ثبت‌نام / تغییر رشته" }, { text: "ℹ️ راهنما" }],
+    [{ text: "📈 وضعیت سامانه" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -1645,11 +1646,56 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats)
 }
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
-async function buildBotQuiz(env: Env, platform?: string): Promise<{ text: string; reply_markup: any; qi: number; item: BotQuizItem }> {
+/* --- پروفایل ثبت‌نام کاربر ربات (رشته/پایه) برای تست شخصی‌سازی‌شده --- */
+interface BotProfile { platform: string; chat_id: string; name: string | null; field: string | null; grade: string | null; step: string; }
+
+async function getBotProfile(env: Env, platform: string, chatId: string | number): Promise<BotProfile | null> {
+  try {
+    if (!env.DB) return null;
+    return await env.DB.prepare("SELECT platform, chat_id, name, field, grade, step FROM bot_profiles WHERE platform=? AND chat_id=?")
+      .bind(platform, String(chatId)).first();
+  } catch (_) { return null; }
+}
+
+async function upsertBotProfile(env: Env, platform: string, chatId: string | number, patch: Partial<BotProfile>): Promise<void> {
+  try {
+    if (!env.DB) return;
+    const now = new Date().toISOString();
+    const cur = await getBotProfile(env, platform, chatId);
+    if (!cur) {
+      await env.DB.prepare("INSERT INTO bot_profiles (platform, chat_id, name, field, grade, step, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(platform, String(chatId), patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? "field", now, now).run();
+    } else {
+      await env.DB.prepare("UPDATE bot_profiles SET name=COALESCE(?,name), field=COALESCE(?,field), grade=COALESCE(?,grade), step=COALESCE(?,step), updated_at=? WHERE platform=? AND chat_id=?")
+        .bind(patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? null, now, platform, String(chatId)).run();
+    }
+  } catch (_) { /* silent */ }
+}
+
+const BOT_FIELDS = ["تجربی", "ریاضی", "انسانی", "عمومی"];
+const BOT_GRADES = ["دهم", "یازدهم", "دوازدهم", "پشت کنکوری"];
+
+function fieldQuestionText(userName: string): string {
+  return `📋 ${userName} عزیز، برای اینکه تست‌های مناسب خودت را بدهم، اول ثبت‌نام کوتاه:\n\n۱از۲) رشته‌ات کدام است؟ عددش را بفرست:\n${BOT_FIELDS.map((f, i) => `${faNum(i + 1)}) ${f}`).join("\n")}`;
+}
+function gradeQuestionText(): string {
+  return `۲از۲) پایه تحصیلی‌ات؟ عددش را بفرست:\n${BOT_GRADES.map((g, i) => `${faNum(i + 1)}) ${g}`).join("\n")}`;
+}
+
+async function buildBotQuiz(env: Env, platform?: string, profile?: BotProfile | null): Promise<{ text: string; reply_markup: any; qi: number; item: BotQuizItem }> {
   const bank = await getBotQuizBank(env);
-  const qi = Math.floor(Math.random() * bank.length);
+  // شخصی‌سازی: اگر رشته کاربر ثبت شده، سوال از همان رشته (+ دروس عمومی) انتخاب می‌شود
+  let pool: number[] = bank.map((_, i) => i);
+  const f = profile?.field;
+  if (f && f !== "عمومی") {
+    const filtered = bank.map((it, i) => ({ it, i })).filter(({ it }) => it.f === f || it.f === "عمومی").map(({ i }) => i);
+    if (filtered.length >= 5) pool = filtered;
+  }
+  const qi = pool[Math.floor(Math.random() * pool.length)];
   const item = bank[qi];
-  return { ...formatBotQuiz(item, qi, platform), qi, item };
+  const base = formatBotQuiz(item, qi, platform);
+  const tag = f && f !== "عمومی" ? `\n🎯 شخصی‌سازی‌شده برای رشته ${f}` : "";
+  return { text: base.text + tag, reply_markup: base.reply_markup, qi, item };
 }
 
 /** قالب مشترک سوال — در بله دکمه‌ها گاهی کار نمی‌کنند؛ راهنمای پاسخ عددی همیشه اضافه می‌شود. */
@@ -1787,7 +1833,8 @@ async function handleBotUpdate(
     await send("answerCallbackQuery", { callback_query_id: cb.id });
 
     if (data === "qz:next") {
-      const quiz = await buildBotQuiz(ctx.env, platform);
+      const profNext = await getBotProfile(ctx.env, platform, chatId);
+      const quiz = await buildBotQuiz(ctx.env, platform, profNext);
       await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
       await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
       return json({ ok: true });
@@ -1831,13 +1878,16 @@ async function handleBotUpdate(
   const text = (message.text || "").trim();
   const userName = message.from?.first_name || "همسفر";
 
-  if (text === "/start") {
+  if (text === "/start" || text === "/register" || text === "📋 ثبت‌نام / تغییر رشته") {
     const home = platform === "telegram" ? "@taranom_hamdeli_bot" : "ble.ir/taranom_hamdeli_bot";
     await send("sendMessage", {
       chat_id: chatId,
-      text: `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند ترنم همدلی (${home}) خوش آمدید.\n\nمن دکتر رادان هستم؛ مشاور تحصیلی شما در مسیر کنکور. از منوی پایین انتخاب کنید یا مستقیم سوالتان را بنویسید. 🚀`,
+      text: `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند ترنم همدلی (${home}) خوش آمدید.\nمن دکتر رادان هستم؛ مشاور تحصیلی شما در مسیر کنکور. 🚀`,
       reply_markup: BOT_MENU_KEYBOARD,
     });
+    // شروع/ریست ثبت‌نام: نام از پیام‌رسان، رشته و پایه با دو سوال عددی
+    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, field: null, grade: null, step: "field" });
+    await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName) });
     return json({ ok: true });
   }
   if (text === "/help" || text === "ℹ️ راهنما") {
@@ -1845,17 +1895,38 @@ async function handleBotUpdate(
     return json({ ok: true });
   }
   if (text === "/quiz" || text === "📝 تست کنکور واقعی") {
-    const quiz = await buildBotQuiz(ctx.env, platform);
+    const prof = await getBotProfile(ctx.env, platform, chatId);
+    if (prof && prof.step === "field") { await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName) }); return json({ ok: true }); }
+    if (prof && prof.step === "grade") { await send("sendMessage", { chat_id: chatId, text: gradeQuestionText() }); return json({ ok: true }); }
+    const quiz = await buildBotQuiz(ctx.env, platform, prof);
     await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
     await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
     return json({ ok: true });
   }
 
-  // پاسخ عددی به سوال فعال (۱ تا ۴ فارسی/لاتین) — راه اصلی پاسخ در بله که دکمه شیشه‌ای ندارد
+  // پاسخ عددی (۱ تا ۴): اولویت ۱) تکمیل ثبت‌نام  ۲) پاسخ به سوال فعال تست
   const numAns = text.match(/^[\s]*([1-4۱-۴])[\s]*$/);
   if (numAns) {
     const map: Record<string, number> = { "1":0,"2":1,"3":2,"4":3,"۱":0,"۲":1,"۳":2,"۴":3 };
     const chosen = map[numAns[1]];
+    // --- جریان ثبت‌نام (رشته → پایه) ---
+    const prof = await getBotProfile(ctx.env, platform, chatId);
+    if (prof && prof.step === "field") {
+      const field = BOT_FIELDS[chosen];
+      await upsertBotProfile(ctx.env, platform, chatId, { field, step: "grade" });
+      await send("sendMessage", { chat_id: chatId, text: `✅ رشته: ${field}\n\n${gradeQuestionText()}` });
+      return json({ ok: true });
+    }
+    if (prof && prof.step === "grade") {
+      const grade = BOT_GRADES[chosen];
+      await upsertBotProfile(ctx.env, platform, chatId, { grade, step: "done" });
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: `🎉 ثبت‌نام کامل شد!\n\n👤 ${prof.name || "دوست عزیز"}\n📚 رشته: ${prof.field}\n🎓 پایه: ${grade}\n\nاز این به بعد تست‌ها مخصوص رشته خودت انتخاب می‌شوند. «📝 تست کنکور واقعی» را بزن!`,
+        reply_markup: BOT_MENU_KEYBOARD,
+      });
+      return json({ ok: true });
+    }
     const st = await popBotQuizState(ctx.env, platform, chatId);
     if (st) {
       await gradeBotAnswer(ctx.env, send, platform, chatId, st.qi, st.correct_idx, chosen);
