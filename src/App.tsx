@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { HealthDebuggerProvider } from "./context/HealthDebuggerContext";
 import { 
   Routes, Route, useNavigate, useLocation, Navigate, BrowserRouter 
@@ -12,7 +12,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "./types";
 import LoginView from "./components/LoginView";
-import WelcomeTourPortal from "./components/WelcomeTourPortal";
+const WelcomeTourPortal = lazy(() => import("./components/WelcomeTourPortal"));
 import MainFooter from "./components/MainFooter";
 import ProfileSettingsView from "./components/ProfileSettingsView";
 import ViewFactory, { RoleType, ALLOWED_VIEWS_BY_ROLE } from "./components/ViewFactory";
@@ -477,17 +477,19 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900" id="public-homepage-root">
         <style dangerouslySetInnerHTML={{ __html: getThemeCSS(previewTheme || theme) }} />
-        <WelcomeTourPortal 
-          currentRole={role || "student"} 
-          onNavigate={(target) => {
-            if (target === "login") {
-              setStudent(null);
-              setRole(null);
-            }
-            navigate(`/${target}`);
-          }} 
-          onSwitchRole={(newRole) => setRole(newRole)} 
-        />
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400 text-sm font-bold">در حال بارگذاری…</div>}>
+          <WelcomeTourPortal 
+            currentRole={role || "student"} 
+            onNavigate={(target) => {
+              if (target === "login") {
+                setStudent(null);
+                setRole(null);
+              }
+              navigate(`/${target}`);
+            }} 
+            onSwitchRole={(newRole) => setRole(newRole)} 
+          />
+        </Suspense>
       </div>
     );
   }
