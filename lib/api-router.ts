@@ -2053,16 +2053,39 @@ async function handleBotUpdate(
   const text = (message.text || "").trim();
   const userName = message.from?.first_name || "همسفر";
 
-  if (text === "/start" || text === "/register" || text === "📋 ثبت‌نام / تغییر رشته") {
+  if (text === "/start") {
     const home = platform === "telegram" ? "@taranom_hamdeli_bot" : "ble.ir/taranom_hamdeli_bot";
+    const prof = await getBotProfile(ctx.env, platform, chatId);
+    // 🧠 حافظه: اگر قبلاً ثبت‌نام کرده، دوباره نپرس — خوش‌آمد با پروفایل ذخیره‌شده
+    if (prof && prof.step === "done") {
+      const gpaTxt = prof.gpa && prof.gpa > 0 ? ` | 📊 معدل ${faNum(prof.gpa)}` : "";
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: `سلام ${prof.name || userName} عزیز، خوش برگشتی! 🌸\n\nپروفایلت را یادم هست:\n📚 ${prof.field} | 🎓 ${prof.grade}${gpaTxt}\n\nهمین الان «📝 تست» یا «🤖 تست هوشمند» را بزن.\n(برای تغییر رشته: «📋 ثبت‌نام / تغییر رشته» در ☰ منو)`,
+        reply_markup: BOT_MENU_KEYBOARD,
+      });
+      return json({ ok: true });
+    }
+    // اگر ثبت‌نام نیمه‌کاره است، از همان مرحله ادامه بده — از اول شروع نکن
+    if (prof && prof.step !== "done") {
+      const stepMsg = prof.step === "grade" ? gradeQuestionText() : prof.step === "gpa" ? gpaQuestionText() : prof.step === "age" ? ageQuestionText() : fieldQuestionText(userName);
+      await send("sendMessage", { chat_id: chatId, text: `سلام ${userName}! ثبت‌نامت نیمه‌کاره مانده — ادامه بدهیم:\n\n${stepMsg}`, reply_markup: BOT_MENU_KEYBOARD });
+      return json({ ok: true });
+    }
+    // کاربر کاملاً جدید → ثبت‌نام
     await send("sendMessage", {
       chat_id: chatId,
       text: `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند ترنم همدلی (${home}) خوش آمدید.\nمن دکتر رادان هستم؛ مشاور تحصیلی شما در مسیر کنکور. 🚀`,
       reply_markup: BOT_MENU_KEYBOARD,
     });
-    // شروع/ریست ثبت‌نام: نام از پیام‌رسان، رشته و پایه با دو سوال عددی
-    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, field: null, grade: null, step: "field" });
+    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, step: "field" });
     await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName) });
+    return json({ ok: true });
+  }
+  // فقط دستور صریح «تغییر رشته» پروفایل را ریست می‌کند
+  if (text === "/register" || text === "📋 ثبت‌نام / تغییر رشته") {
+    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, step: "field" });
+    await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName), reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }
   if (text === "/help" || text === "ℹ️ راهنما") {
