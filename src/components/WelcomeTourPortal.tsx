@@ -568,7 +568,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               title="دستیار شخصی و صبور"
               desc="دیگه لازم نیست بین هزارتا منبع گم بشی. معلم هوشمندت بر اساسِ خودِ تو، بهترین راه رو پیدا می‌کنه."
               badge="صمیمانه"
-              image="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800"
+              image="/img/w-1516321318423-f0.jpg"
             />
             <BentoCard 
               className="md:col-span-3 lg:col-span-8"
@@ -576,7 +576,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<BarChart3 size={24} />}
               title="خودشناسی تحصیلی با مانوا"
               desc="ببین کجاها واقعاً وقتت تلف می‌شه و کدوم ساعت‌ها بیشترین بازدهی رو داری. ما بهت کمک می‌کنیم خودت رو بهتر بشناسی تا هوشمندانه‌تر تلاش کنی."
-              image="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
+              image="/img/w-1460925895917-af.jpg"
             />
             <BentoCard 
               className="md:col-span-6 lg:col-span-4"
@@ -584,7 +584,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<Target size={24} />}
               title="حلِ چالش‌های تستی"
               desc="هر تستی که اشتباه می‌زنی، یه فرصته. ما تله‌هایی که طراح‌ها برات گذاشتن رو برات کالبدشکافی می‌کنیم."
-              image="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&q=80&w=800"
+              image="/img/w-1434030216411-0b.jpg"
             />
             <BentoCard 
               className="md:col-span-3 lg:col-span-4"
@@ -592,7 +592,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<Activity size={24} />}
               title="آرامش و سلامتِ ذهن"
               desc="کنکور فقط درس نیست. ما حواسمون به سطح استرس و خستگی‌ت هست تا همیشه با انرژیِ خوب درس بخونی."
-              image="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=800"
+              image="/img/w-1506126613408-ec.jpg"
             />
             <BentoCard 
               className="md:col-span-3 lg:col-span-4"
@@ -600,7 +600,7 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
               icon={<LayoutDashboard size={24} />}
               title="برنامه‌ریزی که باهات راه میاد"
               desc="برنامه‌ای که خشک نیست! اگه یه روز خسته بودی، باهات هماهنگ می‌شه تا هیچ‌وقت احساس عقب‌موندگی نکنی."
-              image="https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&q=80&w=800"
+              image="/img/w-1484480974693-6c.jpg"
             />
           </div>
         </div>
@@ -621,10 +621,10 @@ export default function WelcomeTourPortal({ currentRole, onNavigate, onSwitchRol
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { title: "کارت‌های یادگیری عمیق زیست", price: "۱۴۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&q=80&w=400" },
-                  { title: "دفتر برنامه‌ریزی کایزن", price: "۹۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=400" },
-                  { title: "بسته آزمون‌های جامع شبیه‌ساز", price: "۲۱۰,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=400" },
-                  { title: "کتاب کار عارضه‌یابی تحصیلی", price: "۱۲۵,۰۰۰ تومان", img: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400" }
+                  { title: "کارت‌های یادگیری عمیق زیست", price: "۱۴۰,۰۰۰ تومان", img: "/img/w-1576086213369-97.jpg" },
+                  { title: "دفتر برنامه‌ریزی کایزن", price: "۹۵,۰۰۰ تومان", img: "/img/w-1517842645767-c6.jpg" },
+                  { title: "بسته آزمون‌های جامع شبیه‌ساز", price: "۲۱۰,۰۰۰ تومان", img: "/img/w-1497633762265-9d.jpg" },
+                  { title: "کتاب کار عارضه‌یابی تحصیلی", price: "۱۲۵,۰۰۰ تومان", img: "/img/w-1512820790803-83.jpg" }
                 ].map((item, idx) => (
                   <motion.div 
                     key={idx} 
