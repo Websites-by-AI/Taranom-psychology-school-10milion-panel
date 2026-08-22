@@ -472,6 +472,29 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       </div>
     );
   }
+
+  // صفحات مشاور/معلم: اگر نقش فعلی مجاز نیست (مثلاً ورود مستقیم با نقش پیش‌فرض دانش‌آموز)،
+  // به‌جای پیام «عدم دسترسی» فرم ورود نمایش داده شود تا مشاور بتواند وارد شود.
+  if (view === "counselor-dashboard" && role !== "counselor" && role !== "admin") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between" id="counselor-auth-required">
+        <main className="flex-grow flex items-center justify-center py-10">
+          <LoginView onLogin={handleLogin} onBackToHome={() => navigate("/welcome")} />
+        </main>
+        <MainFooter />
+      </div>
+    );
+  }
+  if (view === "teacher-dashboard" && role !== "teacher" && role !== "admin") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between" id="teacher-auth-required">
+        <main className="flex-grow flex items-center justify-center py-10">
+          <LoginView onLogin={handleLogin} onBackToHome={() => navigate("/welcome")} />
+        </main>
+        <MainFooter />
+      </div>
+    );
+  }
   
   if (view === "welcome") {
     return (
