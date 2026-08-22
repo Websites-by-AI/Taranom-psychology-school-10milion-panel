@@ -14,6 +14,11 @@ export default defineConfig(() => {
     build: {
       // Raise the limit + split vendor libs into cacheable chunks (perf).
       chunkSizeWarningLimit: 900,
+      // فقط چانک‌های ضروری صفحه اول preload شوند — pdf/chart سنگین‌اند و بعداً lazy لود می‌شوند
+      modulePreload: {
+        resolveDependencies: (_url: string, deps: string[]) =>
+          deps.filter((d) => !d.includes('pdf-vendor') && !d.includes('chart-vendor') && !d.includes('firebase-vendor')),
+      },
       rollupOptions: {
         output: {
           manualChunks: {
