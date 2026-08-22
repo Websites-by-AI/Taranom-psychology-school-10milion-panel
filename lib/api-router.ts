@@ -874,23 +874,10 @@ async function chat(ctx: Ctx, meta: RespMeta): Promise<Response> {
 
     const related = rag.hits.map((h) => ({ question: h.q, year: h.y, subject: h.s, field: h.f }));
 
-    // زنجیره مدل‌ها: ۱) HF Llama-70B  ۲) Workers AI Llama-8B  ۳) زنجیره کلیدها (Gemini/OpenRouter)  ۴) آفلاین
-    if (ctx.env.HF_TOKEN && ctx.env.HF_TOKEN.startsWith("hf_")) {
-      try {
-        const contents = [
-          ...(history || []).map((msg: any) => ({ role: msg.role === "user" ? "user" : "model", parts: [{ text: msg.content }] })),
-          { role: "user", parts: [{ text: message }] },
-        ];
-        const hfRes = await huggingFaceGenerate(ctx.env.HF_TOKEN,
-          ctx.env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
-          { contents, config: { systemInstruction, maxOutputTokens: 640 } });
-        const t = hfRes.text?.trim();
-        if (t) return json({ reply: t, engine: "hf-llama-70b", ragMode: rag.mode, related }, 200, meta.headers);
-      } catch (_) { /* zanjire paayin */ }
-    }
+    // مسابقه موازی دو Llama-70B (HF + Workers AI) — سریع‌ترین موفق؛ سپس Gemini/OpenRouter؛ سپس آفلاین
     {
-      const t = await workersAiChat(ctx.env, systemInstruction, message);
-      if (t) return json({ reply: t, engine: "workers-ai-llama-8b", ragMode: rag.mode, related }, 200, meta.headers);
+      const race = await bestAiReply(ctx.env, systemInstruction, message);
+      if (race) return json({ reply: race.text, engine: race.engine, ragMode: rag.mode, related }, 200, meta.headers);
     }
 
     const ai = getAI(ctx.request, body, ctx.env, meta);
@@ -1521,6 +1508,41 @@ async function botRagContext(env: Env, userText: string): Promise<{ context: str
   } catch (_) {
     return { context: "", hits: [], mode: "error" };
   }
+}
+
+/** مسابقه موازی بین موتورهای AI — اولین جواب غیرخالی برنده است (کمترین تاخیر برای بات‌ها). */
+function firstAiSuccess(promises: Promise<{ text: string; engine: string } | null>[]): Promise<{ text: string; engine: string } | null> {
+  return new Promise((resolve) => {
+    let pending = promises.length;
+    let done = false;
+    if (pending === 0) return resolve(null);
+    for (const p of promises) {
+      p.then((v) => {
+        pending--;
+        if (!done && v && v.text) { done = true; resolve(v); }
+        else if (pending === 0 && !done) resolve(null);
+      }).catch(() => { pending--; if (pending === 0 && !done) resolve(null); });
+    }
+  });
+}
+
+/** بهترین پاسخ AI: HF Llama-70B و Workers AI Llama-70B همزمان اجرا می‌شوند؛ سریع‌ترینِ موفق برمی‌گردد. */
+async function bestAiReply(env: Env, sys: string, userText: string): Promise<{ text: string; engine: string } | null> {
+  const racers: Promise<{ text: string; engine: string } | null>[] = [];
+  if (env.HF_TOKEN && env.HF_TOKEN.startsWith("hf_")) {
+    racers.push(
+      huggingFaceGenerate(env.HF_TOKEN, env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
+        { contents: [{ role: "user", parts: [{ text: userText }] }], config: { systemInstruction: sys, maxOutputTokens: 384 } })
+        .then((r) => (r.text?.trim() ? { text: r.text.trim(), engine: "hf-llama-70b" } : null))
+        .catch(() => null)
+    );
+  }
+  racers.push(
+    workersAiChat(env, sys, userText)
+      .then((t) => (t ? { text: t, engine: "workers-ai-llama-70b" } : null))
+      .catch(() => null)
+  );
+  return firstAiSuccess(racers);
 }
 
 /** پاسخ‌گویی با Workers AI (لاما ۸B روی خود کلودفلر — بدون وابستگی خارجی، سریع و رایگان). */
@@ -2175,18 +2197,9 @@ async function handleBotUpdate(
       ? `${sysBase}\n\nسوالات مرتبط از بانک رسمی کنکور (در صورت ارتباط، با ذکر سال به آن‌ها استناد کن):\n${rag.context}`
       : sysBase;
 
-    // ۲) اولویت با Llama-70B روی Hugging Face، سپس Llama-8B روی Workers AI کلودفلر، سپس بقیه
-    if (ctx.env.HF_TOKEN && ctx.env.HF_TOKEN.startsWith("hf_")) {
-      try {
-        const hfRes = await huggingFaceGenerate(ctx.env.HF_TOKEN,
-          ctx.env.HF_MODEL || "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
-          { contents: [{ role: "user", parts: [{ text }] }], config: { systemInstruction: sys, maxOutputTokens: 384 } });
-        replyText = hfRes.text?.trim() || "";
-      } catch (_) { /* zanjire paayin */ }
-    }
-    if (!replyText) {
-      replyText = await workersAiChat(ctx.env, sys, text); // لاما داخل خود کلودفلر — سریع و بدون خروج
-    }
+    // ۲) مسابقه موازی دو Llama-70B (هاگینگ‌فیس + Workers AI) — سریع‌ترین موفق برنده
+    const race = await bestAiReply(ctx.env, sys, text);
+    if (race) replyText = race.text;
     if (!replyText) {
       const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
       if (ai) {
