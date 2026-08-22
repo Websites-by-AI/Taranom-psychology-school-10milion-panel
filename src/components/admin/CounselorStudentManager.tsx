@@ -117,7 +117,7 @@ export default function CounselorStudentManager() {
         </select>
         <select value={grade} onChange={(e) => setGrade(e.target.value)}
           className="min-h-[44px] px-3 rounded-xl border border-slate-200 text-sm bg-white">
-          {["پایه دهم", "پایه یازدهم", "پایه دوازدهم", "پشت کنکوری"].map((g) => <option key={g}>{g}</option>)}
+          {["پایه هفتم", "پایه هشتم", "پایه نهم", "پایه دهم", "پایه یازدهم", "پایه دوازدهم", "پشت کنکوری"].map((g) => <option key={g}>{g}</option>)}
         </select>
         <input value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} type="text" dir="ltr"
           placeholder="رمز عبور اولیه (حداقل ۶ کاراکتر) *"

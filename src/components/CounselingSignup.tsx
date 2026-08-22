@@ -78,7 +78,7 @@ export default function CounselingSignup() {
           <span className="text-[11px] font-black text-slate-600 mb-1 block">پایه</span>
           <select value={grade} onChange={(e) => setGrade(e.target.value)}
             className="w-full min-h-[44px] px-3 rounded-xl border border-slate-200 text-sm bg-white focus:border-indigo-400 focus:outline-none">
-            {["نهم", "دهم", "یازدهم", "دوازدهم", "پشت کنکوری"].map((g) => <option key={g}>{g}</option>)}
+            {["هفتم (متوسطه اول)", "هشتم (متوسطه اول)", "نهم (متوسطه اول)", "دهم", "یازدهم", "دوازدهم", "پشت کنکوری"].map((g) => <option key={g}>{g}</option>)}
           </select>
         </label>
       </div>

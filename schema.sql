@@ -140,3 +140,5 @@ CREATE TABLE IF NOT EXISTS counseling_requests (
 
 -- ثبت‌کننده هر کاربر (برای مدیریت دانش‌آموز توسط مشاور)
 -- ALTER TABLE users ADD COLUMN created_by TEXT;
+
+-- خلق ثبت‌نام ربات (v3): ALTER TABLE bot_profiles ADD COLUMN mood INTEGER;
