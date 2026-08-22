@@ -1422,6 +1422,7 @@ const BOT_MENU_KEYBOARD = {
 const BOT_FULL_MENU_INLINE = {
   inline_keyboard: [
     [{ text: "📝 تست کنکور واقعی", callback_data: "menu:quiz" }, { text: "🤖 تست هوشمند RAG", callback_data: "menu:smart" }],
+    [{ text: "📚 تست موضوعی (انتخاب درس)", callback_data: "menu:subjects" }, { text: "🗓 تست بر اساس سال", callback_data: "menu:years" }],
     [{ text: "📊 داشبورد من", callback_data: "qz:dash" }, { text: "🧠 تحلیل روانشناسی", callback_data: "menu:analysis" }],
     [{ text: "💬 مشاوره", callback_data: "menu:chat" }, { text: "📋 ثبت‌نام/تغییر رشته", callback_data: "menu:register" }],
     [{ text: "📈 وضعیت", callback_data: "menu:status" }, { text: "ℹ️ راهنما", callback_data: "menu:help" }],
@@ -1786,6 +1787,52 @@ function profileSummary(p: BotProfile): string {
   return `🎉 ثبت‌نام کامل شد!\n\n👤 ${p.name || "دوست عزیز"}\n📚 رشته: ${p.field}\n🎓 پایه: ${p.grade}${gpaTxt}${ageTxt}\n\nاز این به بعد تست‌ها مخصوص رشته خودت انتخاب می‌شوند.\n📝 «تست کنکور واقعی» = تصادفی از رشته‌ات\n🤖 «تست هوشمند RAG» = بر اساس نقاط ضعف کارنامه‌ات!`;
 }
 
+/** درس‌های موجود در بانک برای رشته کاربر (مرتب بر اساس تعداد سوال). */
+function subjectsForField(bank: BotQuizItem[], field?: string | null): { subject: string; count: number }[] {
+  const pool = bank.filter((it) => !field || field === "عمومی" || it.f === field || it.f === "عمومی");
+  const m: Record<string, number> = {};
+  for (const it of pool) m[it.s] = (m[it.s] || 0) + 1;
+  return Object.entries(m).map(([subject, count]) => ({ subject, count }))
+    .filter((x) => x.count >= 2).sort((a, b) => b.count - a.count).slice(0, 8);
+}
+
+function yearsForField(bank: BotQuizItem[], field?: string | null): { year: string; count: number }[] {
+  const pool = bank.filter((it) => !field || field === "عمومی" || it.f === field || it.f === "عمومی");
+  const m: Record<string, number> = {};
+  for (const it of pool) m[it.y] = (m[it.y] || 0) + 1;
+  return Object.entries(m).map(([year, count]) => ({ year, count }))
+    .filter((x) => x.count >= 2).sort((a, b) => b.year.localeCompare(a.year)).slice(0, 8);
+}
+
+/** سوال تصادفی از یک درس یا سال مشخص (در محدوده رشته کاربر). */
+function pickFiltered(bank: BotQuizItem[], field: string | null | undefined, subject?: string, year?: string): { qi: number; item: BotQuizItem } | null {
+  const idxs = bank.map((it, i) => ({ it, i }))
+    .filter(({ it }) => !field || field === "عمومی" || it.f === field || it.f === "عمومی")
+    .filter(({ it }) => (!subject || it.s === subject) && (!year || it.y === year))
+    .map(({ i }) => i);
+  if (idxs.length === 0) return null;
+  const qi = idxs[Math.floor(Math.random() * idxs.length)];
+  return { qi, item: bank[qi] };
+}
+
+function subjectMenuKeyboard(subs: { subject: string; count: number }[]): any {
+  const rows: any[] = [];
+  for (let i = 0; i < subs.length; i += 2) {
+    rows.push(subs.slice(i, i + 2).map((s, j) => ({ text: `${s.subject} (${faNum(s.count)})`, callback_data: `qsub:${i + j}` })));
+  }
+  rows.push([{ text: "🗓 بر اساس سال کنکور", callback_data: "menu:years" }]);
+  return { inline_keyboard: rows };
+}
+
+function yearMenuKeyboard(years: { year: string; count: number }[]): any {
+  const rows: any[] = [];
+  for (let i = 0; i < years.length; i += 3) {
+    rows.push(years.slice(i, i + 3).map((y) => ({ text: `کنکور ${faNum(Number(y.year))}`, callback_data: `qyear:${y.year}` })));
+  }
+  rows.push([{ text: "📚 بر اساس درس", callback_data: "menu:subjects" }]);
+  return { inline_keyboard: rows };
+}
+
 /** 🤖 انتخاب هوشمند سوال با RAG: ضعیف‌ترین درس از کارنامه + بازیابی معنایی/سطح‌بندی معدل. */
 async function buildSmartQuiz(env: Env, platform: string, chatId: string | number, profile: BotProfile | null): Promise<{ text: string; reply_markup: any; qi: number; item: BotQuizItem } | null> {
   const bank = await getBotQuizBank(env);
@@ -2027,6 +2074,18 @@ async function handleBotUpdate(
         await send("sendMessage", { chat_id: chatId, text: msg });
         return json({ ok: true });
       }
+      if (item === "subjects" || item === "years") {
+        const prof = await getBotProfile(ctx.env, platform, chatId);
+        const bank = await getBotQuizBank(ctx.env);
+        if (item === "subjects") {
+          const subs = subjectsForField(bank, prof?.field);
+          await send("sendMessage", { chat_id: chatId, text: "📚 کدام درس؟", reply_markup: subjectMenuKeyboard(subs) });
+        } else {
+          const yrs = yearsForField(bank, prof?.field);
+          await send("sendMessage", { chat_id: chatId, text: "🗓 کدام سال کنکور؟", reply_markup: yearMenuKeyboard(yrs) });
+        }
+        return json({ ok: true });
+      }
       if (item === "chat") { await send("sendMessage", { chat_id: chatId, text: "💬 سوالت را همین‌جا بنویس تا دکتر رادان جواب بدهد." }); return json({ ok: true }); }
       if (item === "register") {
         await upsertBotProfile(ctx.env, platform, chatId, { field: null, grade: null, step: "field" });
@@ -2035,6 +2094,36 @@ async function handleBotUpdate(
       }
       if (item === "status") { await send("sendMessage", { chat_id: chatId, text: await buildBotStatus(ctx.env, platform) }); return json({ ok: true }); }
       if (item === "help") { await send("sendMessage", { chat_id: chatId, text: BOT_HELP_TEXT }); return json({ ok: true }); }
+      return json({ ok: true });
+    }
+    const subM = data.match(/^qsub:(\d+)$/);
+    if (subM) {
+      const prof = await getBotProfile(ctx.env, platform, chatId);
+      const bank = await getBotQuizBank(ctx.env);
+      const subs = subjectsForField(bank, prof?.field);
+      const s = subs[Number(subM[1])];
+      const pick = s ? pickFiltered(bank, prof?.field, s.subject) : null;
+      if (pick) {
+        const q = formatBotQuiz(pick.item, pick.qi, platform);
+        await saveBotQuizState(ctx.env, platform, chatId, pick.qi, pick.item.a);
+        await send("sendMessage", { chat_id: chatId, text: `📚 تست ${s.subject}\n\n${q.text}`, reply_markup: q.reply_markup });
+      } else {
+        await send("sendMessage", { chat_id: chatId, text: "برای این درس فعلاً سوال کافی نداریم." });
+      }
+      return json({ ok: true });
+    }
+    const yearM = data.match(/^qyear:(\d+)$/);
+    if (yearM) {
+      const prof = await getBotProfile(ctx.env, platform, chatId);
+      const bank = await getBotQuizBank(ctx.env);
+      const pick = pickFiltered(bank, prof?.field, undefined, yearM[1]);
+      if (pick) {
+        const q = formatBotQuiz(pick.item, pick.qi, platform);
+        await saveBotQuizState(ctx.env, platform, chatId, pick.qi, pick.item.a);
+        await send("sendMessage", { chat_id: chatId, text: `🗓 کنکور ${faNum(Number(yearM[1]))}\n\n${q.text}`, reply_markup: q.reply_markup });
+      } else {
+        await send("sendMessage", { chat_id: chatId, text: "برای این سال سوال کافی نداریم." });
+      }
       return json({ ok: true });
     }
     if (data === "qz:dash") {
@@ -2119,6 +2208,13 @@ async function handleBotUpdate(
     }
     return json({ ok: true });
   }
+  if (text === "/subjects" || text === "📚 تست موضوعی") {
+    const prof = await getBotProfile(ctx.env, platform, chatId);
+    const bank = await getBotQuizBank(ctx.env);
+    const subs = subjectsForField(bank, prof?.field);
+    await send("sendMessage", { chat_id: chatId, text: "📚 کدام درس؟", reply_markup: subjectMenuKeyboard(subs) });
+    return json({ ok: true });
+  }
   if (text === "☰ منو" || text === "/menu") {
     await send("sendMessage", { chat_id: chatId, text: "☰ منوی کامل — یکی را انتخاب کن:", reply_markup: BOT_FULL_MENU_INLINE });
     return json({ ok: true });
@@ -2152,6 +2248,16 @@ async function handleBotUpdate(
         await upsertBotProfile(ctx.env, platform, chatId, { age: Math.round(val), step: "done" });
         const done = await getBotProfile(ctx.env, platform, chatId);
         await send("sendMessage", { chat_id: chatId, text: profileSummary(done!), reply_markup: BOT_MENU_KEYBOARD });
+        // بلافاصله بپرس کدام درس را دوست دارد تست بزند
+        const bankD = await getBotQuizBank(ctx.env);
+        const subsD = subjectsForField(bankD, done?.field);
+        if (subsD.length) {
+          await send("sendMessage", {
+            chat_id: chatId,
+            text: "📚 دوست داری از کدام درس تست بزنی؟ (عدد داخل پرانتز = تعداد سوال موجود)",
+            reply_markup: subjectMenuKeyboard(subsD),
+          });
+        }
         return json({ ok: true });
       }
       await send("sendMessage", { chat_id: chatId, text: prof0.step === "gpa" ? gpaQuestionText() : ageQuestionText() });
