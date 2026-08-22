@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import CounselingSignup from "./CounselingSignup";
 import { Sparkles, Phone, Lock, Hash, ShieldCheck, UserCheck, Layers, BookOpen, Activity, Wallet, CreditCard, Home, Play, CheckCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { Student } from "../types";
@@ -293,7 +294,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center p-4">
+    <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 gap-5">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1014,6 +1015,11 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
           </div>
         </div>
       </motion.div>
+
+      {/* فرم ثبت‌نام مشاوره تحصیلی (عمومی) */}
+      <div className="w-full max-w-md">
+        <CounselingSignup />
+      </div>
 
       {/* Payment Simulation Modal */}
       {showPaymentModal && (

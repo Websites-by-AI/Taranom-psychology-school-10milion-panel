@@ -1680,6 +1680,64 @@ async function botProfileHeader(env: Env, platform?: string, chatId?: string | n
   return `👤 ${p.name || "دوست عزیز"} | 📚 ${p.field} | 🎓 ${p.grade}${gpa}\n(پروفایل از دیتابیس مرکزی)\n\n`;
 }
 
+/** شاخص‌های روانشناختی کمّی از شواهد رفتاری لاگ تست‌ها (غربالگری اولیه — نه تشخیص بالینی). */
+async function buildPsychIndicators(env: Env, platform: string, chatId: string | number, st: BotQuizStats): Promise<string> {
+  try {
+    if (!env.DB) return "";
+    const rows: any = await env.DB.prepare(
+      "SELECT substr(created_at,1,10) day, COUNT(*) n, SUM(correct) c FROM bot_quiz_log WHERE platform=? AND chat_id=? GROUP BY day ORDER BY day"
+    ).bind(platform, String(chatId)).all();
+    const days = rows.results || [];
+    if (days.length === 0) return "";
+
+    // --- اضطراب آزمون: زنجیره خطا + افت دقت اخیر + خطا در حجم بالا
+    let streak = 0, maxStreak = 0;
+    for (const x of st.last10) { if (!x) { streak++; maxStreak = Math.max(maxStreak, streak); } else streak = 0; }
+    const pct = st.total ? (100 * st.correct) / st.total : 0;
+    const recentPct = st.last10.length ? (100 * st.last10.reduce((a, b) => a + b, 0)) / st.last10.length : pct;
+    let anxiety = 0;
+    const anxEv: string[] = [];
+    if (maxStreak >= 3) { anxiety += 35; anxEv.push(`${faNum(maxStreak)} خطای پیاپی`); }
+    if (recentPct < pct - 15) { anxiety += 30; anxEv.push(`افت ${faNum(Math.round(pct - recentPct))}٪ در تست‌های اخیر`); }
+    if (pct < 40 && st.total >= 6) { anxiety += 20; anxEv.push("دقت پایین با وجود تلاش زیاد"); }
+    anxiety = Math.min(95, anxiety);
+
+    // --- افت خلق: روند نزولی دقت روزانه + کاهش فعالیت
+    let mood = 0;
+    const moodEv: string[] = [];
+    if (days.length >= 3) {
+      const firstHalf = days.slice(0, Math.floor(days.length / 2));
+      const secondHalf = days.slice(Math.floor(days.length / 2));
+      const acc = (arr: any[]) => { const n = arr.reduce((s, d) => s + Number(d.n), 0); const c = arr.reduce((s, d) => s + Number(d.c || 0), 0); return n ? (100 * c) / n : 0; };
+      const vol = (arr: any[]) => arr.reduce((s, d) => s + Number(d.n), 0) / arr.length;
+      if (acc(secondHalf) < acc(firstHalf) - 12) { mood += 40; moodEv.push(`دقت روزانه از ${faNum(Math.round(acc(firstHalf)))}٪ به ${faNum(Math.round(acc(secondHalf)))}٪ افت کرده`); }
+      if (vol(secondHalf) < vol(firstHalf) * 0.55) { mood += 30; moodEv.push("حجم تمرین روزانه نصف شده"); }
+    }
+    mood = Math.min(95, mood);
+
+    // --- الگوی وسواسی/کمال‌گرایی: حجم غیرعادی در یک روز + تکرار با دقت بالا
+    let ocd = 0;
+    const ocdEv: string[] = [];
+    const maxDay = Math.max(...days.map((d: any) => Number(d.n)));
+    const avgDay = days.reduce((s: number, d: any) => s + Number(d.n), 0) / days.length;
+    if (maxDay >= 25 && maxDay > avgDay * 3) { ocd += 35; ocdEv.push(`${faNum(maxDay)} تست در یک روز (۳ برابر میانگین)`); }
+    if (pct >= 85 && st.total >= 15 && maxDay > avgDay * 2) { ocd += 25; ocdEv.push("تکرار زیاد با وجود تسلط بالا"); }
+    ocd = Math.min(95, ocd);
+
+    const level = (v: number) => v >= 60 ? "بالا 🔴" : v >= 30 ? "متوسط 🟡" : "کم 🟢";
+    const bar = (v: number) => progressBar(v);
+    const lines = [
+      "",
+      "📐 شاخص‌های روانشناختی (غربالگری اولیه از شواهد رفتاری — تشخیص بالینی نیست):",
+      `• اضطراب آزمون: ${bar(anxiety)} ${faNum(anxiety)}٪ (${level(anxiety)})${anxEv.length ? "\n  شواهد: " + anxEv.join("؛ ") : "\n  شواهد: الگوی نگران‌کننده‌ای دیده نشد"}`,
+      `• افت خلق/انگیزه: ${bar(mood)} ${faNum(mood)}٪ (${level(mood)})${moodEv.length ? "\n  شواهد: " + moodEv.join("؛ ") : "\n  شواهد: روند فعالیت پایدار است"}`,
+      `• الگوی وسواسی/کمال‌گرایی: ${bar(ocd)} ${faNum(ocd)}٪ (${level(ocd)})${ocdEv.length ? "\n  شواهد: " + ocdEv.join("؛ ") : "\n  شواهد: الگوی تکرار غیرعادی دیده نشد"}`,
+    ];
+    if (anxiety >= 60 || mood >= 60) lines.push("⚠️ اگر این حال‌وهوا در زندگی روزمره هم هست، با مشاور انسانی سایت گفت‌وگو کن: hamdeltar.ir");
+    return lines.join("\n");
+  } catch (_) { return ""; }
+}
+
 async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats, platform?: string, chatId?: string | number): Promise<string> {
   if (st.total < 3) {
     const hdr0 = await botProfileHeader(ctx.env, platform, chatId);
@@ -1704,23 +1762,16 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats,
     strong.length ? `درس‌های قوی: ${strong.join("، ")}` : "",
   ].filter(Boolean).join(" | ");
 
-  // تلاش برای تحلیل AI؛ در نبود آن، تحلیل قاعده‌محور
+  const indicators = platform && chatId !== undefined ? await buildPsychIndicators(ctx.env, platform, chatId, st) : "";
+
+  // تحلیل AI با مسابقه دو Llama-70B (همان موتور مشاوره)؛ در نبود آن، قاعده‌محور
   try {
-    const ai = getAI(ctx.request, { message: facts }, ctx.env, meta);
-    if (ai) {
-      const res = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: [{ role: "user", parts: [{ text: `داده‌های عملکرد تستی دانش‌آموز: ${facts}` }] }],
-        config: {
-          systemInstruction:
-            "شما دکتر رادان، روانشناس تحصیلی ترنم همدلی هستید. بر اساس داده‌های تستی، یک تحلیل روانشناسی کوتاه فارسی بده (حداکثر ۸ جمله): ۱) وضعیت روحی/اضطراب احتمالی از روی الگوی خطاها ۲) نقطه قوت ۳) دو توصیه عملی کایزن. لحن گرم و امیدبخش.",
-        },
-      });
-      const t = res.text?.trim();
-      if (t) {
-        const timeline = platform && chatId !== undefined ? await buildBotTimeline(ctx.env, platform, chatId) : "";
-        return `${profHdr}${buildStudySuggestion(st)}\n\n🧠 تحلیل روانشناسی دکتر رادان\n\n${t}${timeline}\n\n📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪`;
-      }
+    const sys = "شما دکتر رادان، روانشناس تحصیلی ترنم همدلی هستید. بر اساس داده‌های تستی، یک تحلیل روانشناسی کوتاه فارسی بده (حداکثر ۸ جمله): ۱) وضعیت روحی/اضطراب احتمالی از روی الگوی خطاها ۲) نقطه قوت ۳) دو توصیه عملی کایزن. لحن گرم و امیدبخش.";
+    const race = await bestAiReply(ctx.env, sys, `داده‌های عملکرد تستی دانش‌آموز: ${facts}`);
+    if (race) {
+      const timeline = platform && chatId !== undefined ? await buildBotTimeline(ctx.env, platform, chatId) : "";
+      const engFa = race.engine.startsWith("hf") ? "Llama-70B هاگینگ‌فیس" : "Llama-70B کلودفلر";
+      return `${profHdr}${buildStudySuggestion(st)}\n\n🧠 تحلیل روانشناسی دکتر رادان\n\n${race.text}${indicators}${timeline}\n\n📊 ${faNum(st.total)} تست، دقت ${faNum(pct)}٪ | 🤖 تحلیل با ${engFa} ✓`;
     }
   } catch (_) { /* fall back */ }
 
@@ -1735,8 +1786,8 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats,
   if (weak.length) lines.push(`🔴 تمرکز مطالعه این هفته: ${weak.join("، ")}.`);
   if (strong.length) lines.push(`🟢 نقطه قوت تو: ${strong.join("، ")} — از این اعتمادبه‌نفس برای شروع جلسات مطالعه استفاده کن.`);
   const timeline = platform && chatId !== undefined ? await buildBotTimeline(ctx.env, platform, chatId) : "";
-  lines.push("", `📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪ | تحلیل کامل‌تر: hamdeltar.ir`);
-  return profHdr + buildStudySuggestion(st) + "\n\n" + lines.join("\n") + timeline;
+  lines.push("", `📊 ${faNum(st.total)} تست، دقت ${faNum(pct)}٪ | 🤖 موتور آفلاین (AI در دسترس نبود)`);
+  return profHdr + buildStudySuggestion(st) + "\n\n" + lines.join("\n") + indicators + timeline;
 }
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
@@ -3337,6 +3388,55 @@ async function dashboardStatsRoute(ctx: Ctx, store: AuthStore): Promise<Response
 }
 
 /* ----------------------------------------------------------------------------
+ * Counseling signup (public) + CRM (counselor/admin)
+ * ------------------------------------------------------------------------- */
+async function counselingRequestRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "D1 لازم است" }, 503);
+  if (method === "POST") {
+    const body = await readJson(ctx.request);
+    const name = String(body?.name || "").trim().slice(0, 100);
+    const mobile = String(body?.mobile || "").trim();
+    const field = String(body?.field || "").trim().slice(0, 30);
+    const grade = String(body?.grade || "").trim().slice(0, 30);
+    const topic = String(body?.topic || "").trim().slice(0, 500);
+    if (!name || name.length < 2) return json({ error: "نام معتبر وارد کنید." }, 400);
+    if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست (مثل 09121234567)." }, 400);
+    // rate limit ساده بر اساس IP
+    const ip = getClientIp(ctx.request);
+    const rlKey = `counsel-req:${ip}`;
+    const rl = await rateLimitStatus(store, rlKey, 3600000, 5);
+    if (rl.blocked) return rateLimited(rl.retryAfterSec);
+    await recordRateLimit(store, rlKey, 3600000);
+    const now = new Date().toISOString();
+    const id = randomToken(12);
+    await ctx.env.DB.prepare(
+      "INSERT INTO counseling_requests (id,name,mobile,field,grade,topic,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)"
+    ).bind(id, name, mobile, field || null, grade || null, topic || null, "new", now, now).run();
+    return json({ ok: true, id, message: "درخواست مشاوره ثبت شد؛ به‌زودی با شما تماس می‌گیریم." });
+  }
+  if (method === "GET") {
+    const requester = await getSessionUser(ctx.request, store);
+    if (!requester || (requester.role !== "admin" && requester.role !== "counselor")) return json({ error: "دسترسی مشاور/ادمین لازم است" }, 403);
+    const res = await ctx.env.DB.prepare(
+      "SELECT id,name,mobile,field,grade,topic,status,created_at FROM counseling_requests ORDER BY created_at DESC LIMIT 200"
+    ).all();
+    return json({ requests: res.results || [] });
+  }
+  if (method === "PATCH") {
+    const requester = await getSessionUser(ctx.request, store);
+    if (!requester || (requester.role !== "admin" && requester.role !== "counselor")) return json({ error: "دسترسی مشاور/ادمین لازم است" }, 403);
+    const body = await readJson(ctx.request);
+    const id = String(body?.id || "");
+    const status = String(body?.status || "");
+    if (!id || !["new", "contacted", "done"].includes(status)) return json({ error: "id/status نامعتبر" }, 400);
+    await ctx.env.DB.prepare("UPDATE counseling_requests SET status=?, updated_at=? WHERE id=?")
+      .bind(status, new Date().toISOString(), id).run();
+    return json({ ok: true });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
+
+/* ----------------------------------------------------------------------------
  * Body parsing + router
  * ------------------------------------------------------------------------- */
 
@@ -3384,6 +3484,12 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await studyPlanRoute(ctx, store, method);
+    }
+
+    if (path === "counseling-request") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await counselingRequestRoute(ctx, store, method);
     }
 
     if (path === "dashboard-stats") {

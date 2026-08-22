@@ -124,3 +124,16 @@ CREATE TABLE IF NOT EXISTS bot_profiles (
 -- ستون‌های معدل و سن پروفایل ربات (v2)
 -- ALTER TABLE bot_profiles ADD COLUMN gpa REAL;
 -- ALTER TABLE bot_profiles ADD COLUMN age INTEGER;
+
+-- درخواست‌های ثبت‌نام مشاوره (CRM)
+CREATE TABLE IF NOT EXISTS counseling_requests (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  mobile     TEXT NOT NULL,
+  field      TEXT,
+  grade      TEXT,
+  topic      TEXT,
+  status     TEXT NOT NULL DEFAULT 'new',  -- new | contacted | done
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
