@@ -807,7 +807,18 @@ async function hfStatus(env: Env): Promise<Response> {
     },
     wandb: { configured: !!(env.WANDB_API_KEY && env.WANDB_API_KEY.length > 10), project: "taranom-exam-rag" },
     examRag: { configured: true, url: env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space" },
-    workersAi: { configured: !!env.AI, chatModel: "@cf/meta/llama-3.1-8b-instruct", embeddingModel: "@cf/baai/bge-m3", semanticRag: !!env.AI },
+    workersAi: await (async () => {
+      let chatOk = false, chatErr = "", sample = "";
+      try {
+        if (env.AI) {
+          const out: any = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: [{ role: "user", content: "سلام" }], max_tokens: 16 });
+          sample = (out?.response || out?.choices?.[0]?.message?.content || "").slice(0, 60);
+          chatOk = !!sample;
+          if (!chatOk) chatErr = "empty: " + JSON.stringify(out).slice(0, 120);
+        } else chatErr = "no AI binding";
+      } catch (e: any) { chatErr = (e?.message || String(e)).slice(0, 140); }
+      return { configured: !!env.AI, chatModel: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", embeddingModel: "@cf/baai/bge-m3", semanticRag: !!env.AI, chatOk, chatErr, sample };
+    })(),
   });
 }
 
@@ -1514,14 +1525,19 @@ async function botRagContext(env: Env, userText: string): Promise<{ context: str
 
 /** پاسخ‌گویی با Workers AI (لاما ۸B روی خود کلودفلر — بدون وابستگی خارجی، سریع و رایگان). */
 async function workersAiChat(env: Env, sys: string, userText: string): Promise<string> {
-  try {
-    if (!env.AI) return "";
-    const out: any = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
-      messages: [{ role: "system", content: sys }, { role: "user", content: userText }],
-      max_tokens: 384,
-    });
-    return (out?.response || out?.choices?.[0]?.message?.content || "").trim();
-  } catch (_) { return ""; }
+  if (!env.AI) return "";
+  const WAI_MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-4-scout-17b-16e-instruct", "@cf/mistralai/mistral-small-3.1-24b-instruct"];
+  for (const m of WAI_MODELS) {
+    try {
+      const out: any = await env.AI.run(m, {
+        messages: [{ role: "system", content: sys }, { role: "user", content: userText }],
+        max_tokens: 384,
+      });
+      const t = (out?.response || out?.choices?.[0]?.message?.content || "").trim();
+      if (t) return t;
+    } catch (_) { /* مدل بعدی */ }
+  }
+  return "";
 }
 async function logBotQuizAnswer(
   env: Env, platform: string, chatId: string | number,
