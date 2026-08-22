@@ -28,12 +28,18 @@ export const onRequestGet: PagesFunction<Env> = (ctx) =>
 export const onRequestPost: PagesFunction<Env> = (ctx) =>
   handleRequest(ctx.request, ctx.env as Env, toPathArray(ctx.params));
 
+export const onRequestPatch: PagesFunction<Env> = (ctx) =>
+  handleRequest(ctx.request, ctx.env as Env, toPathArray(ctx.params));
+
+export const onRequestDelete: PagesFunction<Env> = (ctx) =>
+  handleRequest(ctx.request, ctx.env as Env, toPathArray(ctx.params));
+
 export const onRequestOptions: PagesFunction<Env> = () =>
   new Response(null, {
     status: 204,
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, x-gemini-key, x-openrouter-key, x-ai-provider-keys",
       "Access-Control-Max-Age": "86400",
     },
