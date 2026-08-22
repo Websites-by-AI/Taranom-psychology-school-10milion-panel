@@ -25,7 +25,8 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
   const [isOrg, setIsOrg] = useState(false);
 
   // States for more detailed registration info requested by user ("یک سر یاطال بیشتر ور ازش بیره")
-  const [regField, setRegField] = useState<"tajrobi" | "riazi" | "ensani">("tajrobi");
+  const [regField, setRegField] = useState<"tajrobi" | "riazi" | "ensani" | "honar" | "zaban">("tajrobi");
+  const [regGrade, setRegGrade] = useState("پایه دوازدهم");
   const [regCity, setRegCity] = useState("");
   const [regAge, setRegAge] = useState("");
   const [regTargetMajor, setRegTargetMajor] = useState("");
@@ -158,7 +159,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       name: regName,
       code: "NEW_" + Math.floor(Math.random() * 100000 + 10000),
       field: regField,
-      grade: `پایه دوازدهم - هدف: ${regTargetMajor}`,
+      grade: `${regGrade}${regTargetMajor ? ` - هدف: ${regTargetMajor}` : ""}`,
       city: regCity || "تهران",
       age: Number(regAge) || 18,
       paymentStatus: "paid",
@@ -172,6 +173,7 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
       mobile: mobileNumber,
       password,
       field: regField,
+      grade: regGrade,
       city: regCity || undefined,
       age: Number(regAge) || undefined,
       targetMajor: regTargetMajor || undefined,
@@ -618,6 +620,28 @@ export default function LoginView({ onLogin, onBackToHome }: LoginViewProps) {
                             <option value="tajrobi">علوم تجربی</option>
                             <option value="riazi">ریاضی فیزیک</option>
                             <option value="ensani">علوم انسانی</option>
+                            <option value="honar">هنر</option>
+                            <option value="zaban">زبان‌های خارجی</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-600 mb-1">پایه تحصیلی</label>
+                          <select
+                            value={regGrade}
+                            onChange={(e) => setRegGrade(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white text-xs font-extrabold transition cursor-pointer"
+                          >
+                            <optgroup label="متوسطه اول">
+                              <option value="پایه هفتم">هفتم</option>
+                              <option value="پایه هشتم">هشتم</option>
+                              <option value="پایه نهم">نهم</option>
+                            </optgroup>
+                            <optgroup label="متوسطه دوم">
+                              <option value="پایه دهم">دهم</option>
+                              <option value="پایه یازدهم">یازدهم</option>
+                              <option value="پایه دوازدهم">دوازدهم</option>
+                              <option value="پشت کنکوری">پشت کنکوری</option>
+                            </optgroup>
                           </select>
                         </div>
                         <div>

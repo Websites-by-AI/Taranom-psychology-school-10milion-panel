@@ -131,10 +131,17 @@ export default function StudentRegistrationForm({ onSuccess }: StudentRegistrati
               className="block w-full pl-3 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none bg-white"
             >
               <option value="">انتخاب پایه تحصیلی...</option>
-              <option value="دهم">پایه دهم</option>
-              <option value="یازدهم">پایه یازدهم</option>
-              <option value="دوازدهم">پایه دوازدهم</option>
-              <option value="پشت کنکوری">پشت کنکوری (فارغ التحصیل)</option>
+              <optgroup label="متوسطه اول">
+                <option value="هفتم">پایه هفتم</option>
+                <option value="هشتم">پایه هشتم</option>
+                <option value="نهم">پایه نهم</option>
+              </optgroup>
+              <optgroup label="متوسطه دوم">
+                <option value="دهم">پایه دهم</option>
+                <option value="یازدهم">پایه یازدهم</option>
+                <option value="دوازدهم">پایه دوازدهم</option>
+                <option value="پشت کنکوری">پشت کنکوری (فارغ التحصیل)</option>
+              </optgroup>
             </select>
           </div>
         </div>

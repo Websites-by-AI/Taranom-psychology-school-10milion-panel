@@ -3007,7 +3007,10 @@ async function authRegister(ctx: Ctx, store: AuthStore): Promise<Response> {
   const mobile = (body?.mobile || "").toString().trim();
   const email = (body?.email || "").toString().trim().toLowerCase();
   const password = (body?.password || "").toString();
-  const field = ["tajrobi", "riazi", "ensani"].includes(body?.field) ? body.field : "tajrobi";
+  const field = ["tajrobi", "riazi", "ensani", "honar", "zaban"].includes(body?.field) ? body.field : "tajrobi";
+  const VALID_GRADES = ["پایه هفتم", "پایه هشتم", "پایه نهم", "پایه دهم", "پایه یازدهم", "پایه دوازدهم", "پشت کنکوری"];
+  const gradeReq = (body?.grade || "").toString().trim();
+  const grade = VALID_GRADES.includes(gradeReq) ? gradeReq : "پایه دوازدهم";
 
   if (!name) return json({ error: "نام الزامی است." }, 400);
   if (mobile && !/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست (مثال: 09123456789)." }, 400);
@@ -3034,7 +3037,7 @@ async function authRegister(ctx: Ctx, store: AuthStore): Promise<Response> {
     password_salt: salt,
     role: "student",
     field,
-    grade: "پایه دوازدهم",
+    grade,
     city: (body?.city || "").toString().trim() || null,
     age: body?.age ? Number(body.age) : null,
     avatar: null,
