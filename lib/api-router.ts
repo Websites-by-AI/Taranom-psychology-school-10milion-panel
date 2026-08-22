@@ -1670,10 +1670,21 @@ function buildStudySuggestion(st: BotQuizStats): string {
   return lines.join("\n");
 }
 
+/** هدر پروفایل کاربر از D1 برای ابتدای تحلیل. */
+async function botProfileHeader(env: Env, platform?: string, chatId?: string | number): Promise<string> {
+  if (!platform || chatId === undefined) return "";
+  const p = await getBotProfile(env, platform, chatId);
+  if (!p || p.step !== "done") return "";
+  const gpa = p.gpa && p.gpa > 0 ? ` | 📊 معدل ${faNum(p.gpa)}` : "";
+  return `👤 ${p.name || "دوست عزیز"} | 📚 ${p.field} | 🎓 ${p.grade}${gpa}\n(پروفایل از دیتابیس مرکزی)\n\n`;
+}
+
 async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats, platform?: string, chatId?: string | number): Promise<string> {
   if (st.total < 3) {
-    return "🧠 تحلیل روانشناسی\n\nبرای تحلیل معتبر حداقل ۳ تست لازم است. الان «📝 تست» را بزن — بعد از چند تست برگرد!";
+    const hdr0 = await botProfileHeader(ctx.env, platform, chatId);
+    return hdr0 + "🧠 تحلیل روانشناسی\n\nبرای تحلیل معتبر حداقل ۳ تست لازم است. الان «📝 تست» را بزن — بعد از چند تست برگرد!";
   }
+  const profHdr = await botProfileHeader(ctx.env, platform, chatId);
   const pct = Math.round((100 * st.correct) / st.total);
   const recent = st.last10;
   const recentPct = recent.length ? Math.round((100 * recent.reduce((a, b) => a + b, 0)) / recent.length) : pct;
@@ -1707,7 +1718,7 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats,
       const t = res.text?.trim();
       if (t) {
         const timeline = platform && chatId !== undefined ? await buildBotTimeline(ctx.env, platform, chatId) : "";
-        return `${buildStudySuggestion(st)}\n\n🧠 تحلیل روانشناسی دکتر رادان\n\n${t}${timeline}\n\n📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪`;
+        return `${profHdr}${buildStudySuggestion(st)}\n\n🧠 تحلیل روانشناسی دکتر رادان\n\n${t}${timeline}\n\n📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪`;
       }
     }
   } catch (_) { /* fall back */ }
@@ -1724,7 +1735,7 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats,
   if (strong.length) lines.push(`🟢 نقطه قوت تو: ${strong.join("، ")} — از این اعتمادبه‌نفس برای شروع جلسات مطالعه استفاده کن.`);
   const timeline = platform && chatId !== undefined ? await buildBotTimeline(ctx.env, platform, chatId) : "";
   lines.push("", `📊 داده‌ها: ${faNum(st.total)} تست، دقت ${faNum(pct)}٪ | تحلیل کامل‌تر: hamdeltar.ir`);
-  return buildStudySuggestion(st) + "\n\n" + lines.join("\n") + timeline;
+  return profHdr + buildStudySuggestion(st) + "\n\n" + lines.join("\n") + timeline;
 }
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
