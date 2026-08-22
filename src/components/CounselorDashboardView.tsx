@@ -14,6 +14,7 @@ import { loadDailyReports, loadTaskProgress, type DailyReport, type TaskProgress
 import DbStatusAlert from "./DbStatusAlert";
 import CounselorStatsOverview from "./CounselorStatsOverview";
 import CounselingCRM from "./admin/CounselingCRM";
+import CounselorStudentManager from "./admin/CounselorStudentManager";
 
 const getSupervisedStudents = (): Student[] => {
   const baseStudents = [
@@ -247,6 +248,9 @@ export default function CounselorDashboardView({ student, role, onNavigate, onUp
     <div className="space-y-8 animate-fade-in text-right" style={{ direction: "rtl" }} id="counselor-portal-hub">
       {/* وضعیت اتصال به دیتابیس — فقط برای ادمین/مشاور */}
       <DbStatusAlert role={role} />
+
+      {/* ثبت‌نام و مدیریت دانش‌آموز توسط خود مشاور */}
+      <CounselorStudentManager />
 
       {/* CRM درخواست‌های مشاوره */}
       <CounselingCRM />

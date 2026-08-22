@@ -3388,6 +3388,64 @@ async function dashboardStatsRoute(ctx: Ctx, store: AuthStore): Promise<Response
 }
 
 /* ----------------------------------------------------------------------------
+ * Counselor-managed students: register & delete own students only
+ * ------------------------------------------------------------------------- */
+async function counselorStudentsRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "D1 لازم است" }, 503);
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester || (requester.role !== "counselor" && requester.role !== "admin")) {
+    return json({ error: "برای این عملیات باید با حساب واقعی مشاور وارد شوید (حالت دمو کافی نیست)." }, 403);
+  }
+
+  // GET: فقط دانش‌آموزهای ساخته‌شده توسط همین مشاور (ادمین: همه)
+  if (method === "GET") {
+    const rows = requester.role === "admin"
+      ? await ctx.env.DB.prepare("SELECT id,name,mobile,email,field,grade,created_at,created_by FROM users WHERE role='student' ORDER BY created_at DESC LIMIT 200").all()
+      : await ctx.env.DB.prepare("SELECT id,name,mobile,email,field,grade,created_at,created_by FROM users WHERE role='student' AND created_by=? ORDER BY created_at DESC LIMIT 200").bind(requester.id).all();
+    return json({ students: rows.results || [] });
+  }
+
+  // POST: ثبت دانش‌آموز جدید توسط مشاور
+  if (method === "POST") {
+    const body = await readJson(ctx.request);
+    const name = String(body?.name || "").trim().slice(0, 100);
+    const mobile = String(body?.mobile || "").trim();
+    const field = ["tajrobi", "riazi", "ensani", "honar", "zaban"].includes(body?.field) ? body.field : "tajrobi";
+    const grade = String(body?.grade || "پایه دوازدهم").slice(0, 40);
+    const password = String(body?.password || "");
+    if (!name || name.length < 2) return json({ error: "نام معتبر وارد کنید." }, 400);
+    if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست (مثل 09121234567)." }, 400);
+    if (password.length < 6) return json({ error: "رمز عبور حداقل ۶ کاراکتر." }, 400);
+    const existing = await store.findUserByIdentifier(mobile);
+    if (existing) return json({ error: "این شماره قبلاً ثبت شده است." }, 409);
+    const { hash, salt } = await hashPassword(password);
+    const id = randomToken(12);
+    await ctx.env.DB.prepare(
+      "INSERT INTO users (id,email,mobile,name,password_hash,password_salt,role,field,grade,city,age,avatar,target_major,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(id, null, mobile, name, hash, salt, "student", field, grade, null, null, null, null, new Date().toISOString(), requester.id).run();
+    return json({ ok: true, id, message: `دانش‌آموز «${name}» ثبت شد. ورود با موبایل ${mobile} و رمز تعیین‌شده.` });
+  }
+
+  // DELETE: حذف — مشاور فقط دانش‌آموزی که خودش ساخته؛ ادمین هر دانش‌آموزی
+  if (method === "DELETE") {
+    const body = await readJson(ctx.request);
+    const id = String(body?.id || "");
+    if (!id) return json({ error: "id لازم است" }, 400);
+    const target: any = await ctx.env.DB.prepare("SELECT id, role, created_by, name FROM users WHERE id=?").bind(id).first();
+    if (!target) return json({ error: "کاربر پیدا نشد." }, 404);
+    if (target.role !== "student") return json({ error: "فقط حساب دانش‌آموز قابل حذف است." }, 400);
+    if (requester.role !== "admin" && target.created_by !== requester.id) {
+      return json({ error: "فقط دانش‌آموزی که خودتان ثبت کرده‌اید را می‌توانید حذف کنید." }, 403);
+    }
+    await ctx.env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id).run();
+    await ctx.env.DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();
+    return json({ ok: true, message: `دانش‌آموز «${target.name}» حذف شد.` });
+  }
+
+  return json({ error: "Method not allowed" }, 405);
+}
+
+/* ----------------------------------------------------------------------------
  * Counseling signup (public) + CRM (counselor/admin)
  * ------------------------------------------------------------------------- */
 async function counselingRequestRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
@@ -3484,6 +3542,12 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await studyPlanRoute(ctx, store, method);
+    }
+
+    if (path === "counselor-students") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await counselorStudentsRoute(ctx, store, method);
     }
 
     if (path === "counseling-request") {

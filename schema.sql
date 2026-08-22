@@ -137,3 +137,6 @@ CREATE TABLE IF NOT EXISTS counseling_requests (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- ثبت‌کننده هر کاربر (برای مدیریت دانش‌آموز توسط مشاور)
+-- ALTER TABLE users ADD COLUMN created_by TEXT;
