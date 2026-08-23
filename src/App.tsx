@@ -8,7 +8,7 @@ import {
   Plus, LogOut, LayoutDashboard, FileSpreadsheet, 
   Calendar, MessageSquare, LineChart, Users, BellRing, Sparkles, Layers, Shield, Target,
   Palette, Building2, Menu, X, ChevronLeft, Pipette, GraduationCap, BookOpen, Zap
-} from "lucide-react";
+, PlayCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "./types";
 import LoginView from "./components/LoginView";
@@ -252,6 +252,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "counseling", label: "انتخاب رشته", icon: GraduationCap },
       { id: "historical-db", label: "بانک اطلاعات کنکور", icon: Database },
       { id: "konkur", label: "بانک سؤالات کنکور", icon: LibraryBig },
+      { id: "courses", label: "دوره‌های آموزشی", icon: PlayCircle },
       { id: "admin", label: "تنظیمات", icon: Shield },
       { id: "study-planner", label: "میز مطالعه", icon: BookOpen },
       { id: "smart-stress-trainer", label: "شبیه‌ساز آزمون", icon: Zap },
