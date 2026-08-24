@@ -1420,8 +1420,7 @@ function faNum(n: number): string { return String(n).split("").map((c) => /\d/.t
 /** منوی جمع‌وجور پایین (فقط ۱ ردیف) — بقیه امکانات در «☰ منو» به‌صورت دکمه شیشه‌ای تاشو. */
 const BOT_MENU_KEYBOARD = {
   keyboard: [
-    [{ text: "📝 تست" }, { text: "🤖 تست هوشمند" }, { text: "☰ منو" }],
-    [{ text: "📜 تاریخچه" }, { text: "💳 اعتبار من" }],
+    [{ text: "📝 تست" }, { text: "☰ منو" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
