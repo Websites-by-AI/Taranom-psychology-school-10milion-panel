@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PlayCircle, ExternalLink, BookOpen, Clock, Star, GraduationCap, Filter, Users, Search } from "lucide-react";
 
 /**
@@ -85,6 +85,10 @@ export default function CoursesView() {
   const [provider, setProvider] = useState("همه");
   const [tQuery, setTQuery] = useState("");
   const [tSubject, setTSubject] = useState("همه");
+  const [systemMentors, setSystemMentors] = useState<{ name: string; role: string; field: string | null }[]>([]);
+  useEffect(() => {
+    fetch("/api/public-mentors").then((r) => r.json()).then((d) => { if (d.mentors) setSystemMentors(d.mentors); }).catch(() => {});
+  }, []);
 
   const fields = ["همه", "تجربی", "ریاضی", "انسانی", "زبان", "عمومی"];
   const providers = ["همه", "آپارات", "یوتیوب", "فرادرس"];
@@ -167,6 +171,28 @@ export default function CoursesView() {
             ))}
           </div>
         </div>
+        {systemMentors.length > 0 && (
+          <div className="bg-violet-50/60 border border-violet-100 rounded-2xl p-4">
+            <p className="text-[11px] font-black text-violet-700 mb-2">🏠 مربیان رسمی ترنم همدلی (عضو سامانه — رزرو جلسه حضوری/آنلاین)</p>
+            <div className="flex flex-wrap gap-2">
+              {systemMentors.map((m, i) => {
+                const FIELD_FA: Record<string, string> = { tajrobi: "تجربی", riazi: "ریاضی", ensani: "انسانی", honar: "هنر", zaban: "زبان" };
+                return (
+                  <span key={i} className="bg-white border border-violet-200 rounded-full px-3 py-1.5 text-[10px] font-black text-slate-700">
+                    ⭐ {m.name} <span className="text-violet-500">({m.role === "counselor" ? "مشاور" : "دبیر"}{m.field ? ` • ${FIELD_FA[m.field] || m.field}` : ""})</span>
+                  </span>
+                );
+              })}
+            </div>
+            <a href="/inperson" className="inline-block mt-2 text-[10px] font-black text-violet-600 underline">📍 رزرو جلسه با مربیان سامانه ←</a>
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 font-bold">
+          👇 دبیرهای معروف کشوری (خارج از سامانه) — معرفی صرفاً بر اساس دوره‌های عمومی منتشرشده در
+          {" "}<a href="https://alaatv.com" target="_blank" rel="noreferrer" className="underline">آلاء (alaatv.com)</a> و
+          {" "}<a href="https://www.aparat.com" target="_blank" rel="noreferrer" className="underline">آپارات</a>؛
+          خودتان از همین منابع راستی‌آزمایی کنید. ترنم همدلی با این اساتید قرارداد ندارد.
+        </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {teachersFiltered.map((t) => (
             <a key={t.name + t.subject} href={t.url} target="_blank" rel="noopener noreferrer"

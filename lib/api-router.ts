@@ -2285,12 +2285,30 @@ async function buildBotCourseFinder(env: Env, platform: string, chatId: string |
     }
   } catch (_) { /* silent */ }
 
+  // 🧑‍🏫 مربیان رسمی خود سامانه (نقش counselor/teacher در D1) — اولویت اول
+  let systemMentors: { name: string; role: string; field: string | null }[] = [];
+  try {
+    const storeM = getAuthStore(env);
+    if (storeM) {
+      const all = await storeM.listUsers();
+      systemMentors = all.filter((u) => u.role === "counselor" || u.role === "teacher")
+        .map((u) => ({ name: u.name, role: u.role, field: u.field || null })).slice(0, 10);
+    }
+  } catch (_) { /* silent */ }
+
   const matches = BOT_COURSE_TEACHERS.filter((t) =>
     (!field || t.fields.includes(field) || t.fields.includes("عمومی")) &&
     (!subjectFilter || t.subject === subjectFilter)
   );
   const pick = subjectFilter ? matches : matches.slice(0, 8);
   const lines: string[] = [subjectFilter ? `🎬 دبیرهای پیشنهادی «${subjectFilter}»` : `🎬 دبیر و دوره رایگان${field ? ` — رشته ${field}` : ""}`, "━━━━━━━━━━━━━━━"];
+  if (!subjectFilter && systemMentors.length) {
+    lines.push("🏠 مربیان رسمی ترنم همدلی (داخل سامانه):");
+    const FIELD_FA: Record<string, string> = { tajrobi: "تجربی", riazi: "ریاضی", ensani: "انسانی", honar: "هنر", zaban: "زبان" };
+    for (const m of systemMentors) lines.push(`⭐ ${m.name} — ${m.role === "counselor" ? "مشاور" : "دبیر"}${m.field ? ` (${FIELD_FA[m.field] || m.field})` : ""}`);
+    lines.push("📞 رزرو جلسه با مربیان سامانه: hamdeltar.ir/inperson", "");
+    lines.push("👇 و دبیرهای معروف کشوری با دوره رایگان قابل راستی‌آزمایی:");
+  }
   if (weakest && !subjectFilter) {
     const wTeachers = BOT_COURSE_TEACHERS.filter((t) => t.subject === weakest);
     if (wTeachers.length) {
@@ -4806,6 +4824,19 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await questionFeedbackRoute(ctx, store, method);
+    }
+
+    if (path === "public-mentors") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      if (isGet) {
+        const all = await store.listUsers();
+        const mentors = all.filter((u) => u.role === "counselor" || u.role === "teacher")
+          .map((u) => ({ name: u.name, role: u.role, field: u.field || null }))
+          .slice(0, 50);
+        return json({ mentors, count: mentors.length });
+      }
+      return json({ error: "Method not allowed" }, 405);
     }
 
     if (path === "bot-login") {
