@@ -2208,7 +2208,7 @@ function subjectsForField(bank: BotQuizItem[], field?: string | null): { subject
   const m: Record<string, number> = {};
   for (const it of pool) m[it.s] = (m[it.s] || 0) + 1;
   return Object.entries(m).map(([subject, count]) => ({ subject, count }))
-    .filter((x) => x.count >= 2).sort((a, b) => b.count - a.count).slice(0, 8);
+    .filter((x) => x.count >= 2).sort((a, b) => b.count - a.count).slice(0, 12);
 }
 
 function yearsForField(bank: BotQuizItem[], field?: string | null): { year: string; count: number }[] {
