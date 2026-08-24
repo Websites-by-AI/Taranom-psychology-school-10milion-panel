@@ -2570,12 +2570,26 @@ async function popBotQuizState(env: Env, platform: string, chatId: string | numb
   try {
     if (!env.DB) return null;
     const cid = String(chatId);
-    const row: any = await env.DB.prepare(
-      "SELECT qi, correct_idx FROM bot_quiz_state WHERE platform=? AND chat_id=?"
-    ).bind(platform, cid).first();
-    if (!row) return null;
-    await env.DB.prepare("DELETE FROM bot_quiz_state WHERE platform=? AND chat_id=?").bind(platform, cid).run();
-    return { qi: Number(row.qi), correct_idx: Number(row.correct_idx) };
+    // اتمیک (ضد race): DELETE ... RETURNING — فقط یکی از دو درخواست هم‌زمان ردیف را می‌گیرد
+    try {
+      const del: any = await env.DB.prepare(
+        "DELETE FROM bot_quiz_state WHERE platform=? AND chat_id=? RETURNING qi, correct_idx"
+      ).bind(platform, cid).first();
+      if (!del) return null;
+      return { qi: Number(del.qi), correct_idx: Number(del.correct_idx) };
+    } catch (_) {
+      // فال‌بک برای درایورهایی که RETURNING ندارند (SELECT سپس DELETE مشروط)
+      const row: any = await env.DB.prepare(
+        "SELECT qi, correct_idx FROM bot_quiz_state WHERE platform=? AND chat_id=?"
+      ).bind(platform, cid).first();
+      if (!row) return null;
+      const res: any = await env.DB.prepare(
+        "DELETE FROM bot_quiz_state WHERE platform=? AND chat_id=? AND qi=? AND correct_idx=?"
+      ).bind(platform, cid, row.qi, row.correct_idx).run();
+      const changed = Number(res?.meta?.changes ?? res?.changes ?? 1);
+      if (changed === 0) return null; // درخواست هم‌زمان دیگر آن را برداشته
+      return { qi: Number(row.qi), correct_idx: Number(row.correct_idx) };
+    }
   } catch (_) { return null; }
 }
 
