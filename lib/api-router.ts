@@ -65,6 +65,10 @@ export interface Env {
   KAVENEGAR_API_KEY?: string;
   /** Kavenegar sender line number (e.g. \"10004346\"). */
   KAVENEGAR_SENDER?: string;
+  /** Comma-separated Telegram chat IDs allowed to run admin bot commands (/post_channel). */
+  BOT_ADMIN_IDS?: string;
+  /** Channel for daily posts, e.g. "@ai_exam_iran". */
+  CHANNEL_ID?: string;
   /** Local development only. Never set this to true in production. */
   DEV_AUTH_CODES?: string;
 }
@@ -1612,30 +1616,87 @@ function progressBar(pct: number): string {
   return "▰".repeat(filled) + "▱".repeat(10 - filled);
 }
 
-/** 📊 داشبورد شخصی کاربر ربات. */
-function buildBotDashboard(st: BotQuizStats): string {
+/** 📊 داشبورد شخصی کاربر ربات — نسخه گرافیکی با پروگرس‌بار قبل از هر نتیجه. */
+function buildBotDashboard(st: BotQuizStats, profile?: BotProfile | null): string {
   if (st.total === 0) {
-    return "📊 داشبورد من\n\nهنوز تستی نزده‌ای! دکمه «📝 تست کنکور واقعی» را بزن تا اولین سوال بیاید — بعد از چند تست، اینجا آمار دقیق و تحلیل می‌بینی.";
+    return "📊 داشبورد من\n\nهنوز تستی نزده‌ای! دکمه «📝 تست» را بزن تا اولین سوال بیاید — بعد از چند تست، اینجا کارنامه گرافیکی می‌بینی.";
   }
   const pct = Math.round((100 * st.correct) / st.total);
+  const grade = pct >= 80 ? "🏆 عالی" : pct >= 60 ? "🥇 خوب" : pct >= 40 ? "🥈 قابل قبول" : "🥉 نیاز به تلاش";
+  const who = profile && profile.step === "done"
+    ? `👤 ${profile.name || ""}${(profile as any).last_name ? " " + (profile as any).last_name : ""} | 📚 ${profile.field} | 🎓 ${profile.grade}\n`
+    : "";
   const lines = [
-    "📊 داشبورد من — کارنامه تست‌های ربات",
+    "📊 داشبورد من",
+    "━━━━━━━━━━━━━━━",
+    who + `وضعیت کلی: ${grade}`,
     "",
-    `کل تست‌ها: ${faNum(st.total)} | صحیح: ${faNum(st.correct)} ✅ | غلط: ${faNum(st.total - st.correct)} ❌`,
-    `دقت کلی: ${faNum(pct)}٪`,
-    progressBar(pct),
+    `${progressBar(pct)} ${faNum(pct)}٪ دقت کلی`,
+    `📝 ${faNum(st.total)} تست | ✅ ${faNum(st.correct)} درست | ❌ ${faNum(st.total - st.correct)} غلط`,
     "",
-    "📚 به تفکیک درس:",
+    "📚 نمودار درس‌ها (پروگرس‌بار → نتیجه):",
   ];
   for (const s of st.bySubject) {
     const sp = Math.round((100 * s.correct) / s.total);
-    lines.push(`• ${s.subject}: ${faNum(s.correct)}/${faNum(s.total)} (${faNum(sp)}٪) ${sp >= 70 ? "🟢" : sp >= 40 ? "🟡" : "🔴"}`);
+    lines.push(`${progressBar(sp)} ${faNum(sp)}٪ ${sp >= 70 ? "🟢" : sp >= 40 ? "🟡" : "🔴"} ${s.subject} (${faNum(s.correct)}/${faNum(s.total)})`);
   }
   if (st.last10.length >= 3) {
-    lines.push("", `روند ${faNum(st.last10.length)} تست آخر: ` + st.last10.slice().reverse().map((x) => (x ? "✅" : "❌")).join(""));
+    const rpct = Math.round((100 * st.last10.reduce((a, b) => a + b, 0)) / st.last10.length);
+    lines.push("", `📈 روند اخیر: ${st.last10.slice().reverse().map((x) => (x ? "✅" : "❌")).join("")}`,
+      `${progressBar(rpct)} ${faNum(rpct)}٪ در ${faNum(st.last10.length)} تست آخر`);
   }
-  lines.push("", "🧠 برای تفسیر این نتایج «تحلیل روانشناسی» را بزن.");
+  lines.push("━━━━━━━━━━━━━━━", "🧠 «تحلیل روانشناسی» = تفسیر این نمودارها + پیشنهاد مسیر");
   return lines.join("\n");
+}
+
+/* ── سهمیه روزانه مشاوره هوشمند (پیش‌فرض ۱۵ پیام در روز برای هر کاربر) ── */
+const BOT_CHAT_DAILY_LIMIT = 15;
+async function checkChatQuota(env: Env, platform: string, chatId: string | number): Promise<{ ok: boolean; used: number; limit: number }> {
+  try {
+    if (!env.DB) return { ok: true, used: 0, limit: BOT_CHAT_DAILY_LIMIT };
+    const day = new Date().toISOString().slice(0, 10);
+    const cid = String(chatId);
+    const row: any = await env.DB.prepare("SELECT used FROM bot_chat_quota WHERE platform=? AND chat_id=? AND day=?").bind(platform, cid, day).first();
+    const used = Number(row?.used || 0);
+    if (used >= BOT_CHAT_DAILY_LIMIT) return { ok: false, used, limit: BOT_CHAT_DAILY_LIMIT };
+    await env.DB.prepare(
+      "INSERT INTO bot_chat_quota (platform, chat_id, day, used) VALUES (?,?,?,1) ON CONFLICT(platform, chat_id, day) DO UPDATE SET used = used + 1"
+    ).bind(platform, cid, day).run();
+    return { ok: true, used: used + 1, limit: BOT_CHAT_DAILY_LIMIT };
+  } catch (_) { return { ok: true, used: 0, limit: BOT_CHAT_DAILY_LIMIT }; }
+}
+
+/* ── پست روزانه کانال (@ai_exam_iran): سوال روز + نکته — فقط ادمین ربات ── */
+function isBotAdmin(env: Env, chatId: string | number): boolean {
+  const raw = (env as any).BOT_ADMIN_IDS || "";
+  return String(raw).split(",").map((s: string) => s.trim()).filter(Boolean).includes(String(chatId));
+}
+
+async function buildChannelDailyPost(env: Env): Promise<{ text: string; reply_markup: any } | null> {
+  const bank = await getBotQuizBank(env);
+  if (!bank.length) return null;
+  // سوال روز: بر اساس روز سال، هر روز متفاوت و تکرارنشونده تا چرخه کامل
+  const dayOfYear = Math.floor((Date.now() - Date.parse(new Date().getFullYear() + "-01-01")) / 86400000);
+  const qi = (dayOfYear * 37) % bank.length;
+  const item = bank[qi];
+  const lines = item.o.map((opt, i) => `${faNum(i + 1)}) ${opt}`);
+  const today = new Date().toLocaleDateString("fa-IR");
+  const text = [
+    `🌅 سوال روز — ${today}`,
+    `📚 ${item.s} | کنکور ${faNum(Number(item.y))} (${item.f})`,
+    "━━━━━━━━━━━━━━━",
+    item.q,
+    "",
+    lines.join("\n"),
+    "━━━━━━━━━━━━━━━",
+    "✍️ جوابت را در ربات بفرست و کارنامه بگیر:",
+    "🤖 @taranom_hamdeli_bot",
+    "🌐 hamdeltar.ir",
+  ].join("\n");
+  return {
+    text,
+    reply_markup: { inline_keyboard: [[{ text: "📝 پاسخ در ربات + تست‌های بیشتر", url: "https://t.me/taranom_hamdeli_bot" }]] },
+  };
 }
 
 /** 🧠 تحلیل روانشناسی مبتنی بر لاگ تست‌ها (قاعده‌محور + در صورت امکان AI). */
@@ -1793,12 +1854,12 @@ async function buildBotPsychAnalysis(ctx: Ctx, meta: RespMeta, st: BotQuizStats,
 
 /** Build a quiz message + inline keyboard from a random real Konkur question. */
 /* --- پروفایل ثبت‌نام کاربر ربات (رشته/پایه) برای تست شخصی‌سازی‌شده --- */
-interface BotProfile { platform: string; chat_id: string; name: string | null; field: string | null; grade: string | null; step: string; gpa?: number | null; age?: number | null; mood?: number | null; }
+interface BotProfile { platform: string; chat_id: string; name: string | null; last_name?: string | null; field: string | null; grade: string | null; step: string; gpa?: number | null; age?: number | null; mood?: number | null; }
 
 async function getBotProfile(env: Env, platform: string, chatId: string | number): Promise<BotProfile | null> {
   try {
     if (!env.DB) return null;
-    return await env.DB.prepare("SELECT platform, chat_id, name, field, grade, step, gpa, age, mood FROM bot_profiles WHERE platform=? AND chat_id=?")
+    return await env.DB.prepare("SELECT platform, chat_id, name, last_name, field, grade, step, gpa, age, mood FROM bot_profiles WHERE platform=? AND chat_id=?")
       .bind(platform, String(chatId)).first();
   } catch (_) { return null; }
 }
@@ -1809,11 +1870,11 @@ async function upsertBotProfile(env: Env, platform: string, chatId: string | num
     const now = new Date().toISOString();
     const cur = await getBotProfile(env, platform, chatId);
     if (!cur) {
-      await env.DB.prepare("INSERT INTO bot_profiles (platform, chat_id, name, field, grade, step, gpa, age, mood, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
-        .bind(platform, String(chatId), patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? "field", patch.gpa ?? null, patch.age ?? null, patch.mood ?? null, now, now).run();
+      await env.DB.prepare("INSERT INTO bot_profiles (platform, chat_id, name, last_name, field, grade, step, gpa, age, mood, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(platform, String(chatId), patch.name ?? null, patch.last_name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? "field", patch.gpa ?? null, patch.age ?? null, patch.mood ?? null, now, now).run();
     } else {
-      await env.DB.prepare("UPDATE bot_profiles SET name=COALESCE(?,name), field=COALESCE(?,field), grade=COALESCE(?,grade), step=COALESCE(?,step), gpa=COALESCE(?,gpa), age=COALESCE(?,age), mood=COALESCE(?,mood), updated_at=? WHERE platform=? AND chat_id=?")
-        .bind(patch.name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? null, patch.gpa ?? null, patch.age ?? null, patch.mood ?? null, now, platform, String(chatId)).run();
+      await env.DB.prepare("UPDATE bot_profiles SET name=COALESCE(?,name), last_name=COALESCE(?,last_name), field=COALESCE(?,field), grade=COALESCE(?,grade), step=COALESCE(?,step), gpa=COALESCE(?,gpa), age=COALESCE(?,age), mood=COALESCE(?,mood), updated_at=? WHERE platform=? AND chat_id=?")
+        .bind(patch.name ?? null, patch.last_name ?? null, patch.field ?? null, patch.grade ?? null, patch.step ?? null, patch.gpa ?? null, patch.age ?? null, patch.mood ?? null, now, platform, String(chatId)).run();
     }
   } catch (_) { /* silent */ }
 }
@@ -1860,7 +1921,8 @@ function profileSummary(p: BotProfile): string {
   const ageTxt = p.age && p.age > 0 ? `\n🎂 سن: ${faNum(p.age)}` : "";
   const moodTxt = p.mood && p.mood >= 1 && p.mood <= 4 ? `\n💚 خلق امروز: ${BOT_MOODS[p.mood - 1]}` : "";
   const subj = subjectsTextForProfile(p.field, p.grade);
-  return `🎉 ثبت‌نام کامل شد!\n\n👤 ${p.name || "دوست عزیز"}\n📚 رشته: ${p.field}\n🎓 پایه: ${p.grade}${gpaTxt}${ageTxt}${moodTxt}\n\n${subj}\n\n📝 «تست کنکور واقعی» = تصادفی از رشته‌ات\n🤖 «تست هوشمند RAG» = بر اساس نقاط ضعفت!`;
+  const fullName = `${p.name || "دوست عزیز"}${p.last_name ? " " + p.last_name : ""}`;
+  return `🎉 ثبت‌نام کامل شد!\n\n👤 ${fullName}\n📚 رشته: ${p.field}\n🎓 پایه: ${p.grade}${gpaTxt}${ageTxt}${moodTxt}\n\n${subj}\n\n📝 «تست کنکور واقعی» = تصادفی از رشته‌ات\n🤖 «تست هوشمند RAG» = بر اساس نقاط ضعفت!`;
 }
 
 /** درس‌های موجود در بانک برای رشته کاربر (مرتب بر اساس تعداد سوال). */
@@ -2072,7 +2134,8 @@ const BOT_HELP_TEXT = [
   "",
   "🤖 تست هوشمند RAG — سوال بعدی را بر اساس نقاط ضعف کارنامه و رشته/معدل تو انتخاب می‌کند",
   "",
-  "دستورات: /start /quiz /smartquiz /dashboard /analysis /status /help",
+  "✏️ /setname نام نام‌خانوادگی — اصلاح اطلاعات ثبت‌نامی",
+  "دستورات: /start /quiz /smartquiz /dashboard /analysis /setname /status /help",
 ].join("\n");
 
 /** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
@@ -2206,7 +2269,7 @@ async function handleBotUpdate(
       const st = await getBotQuizStats(ctx.env, platform, chatId);
       await send("sendMessage", {
         chat_id: chatId,
-        text: st ? buildBotDashboard(st) : "داشبورد فعلاً در دسترس نیست.",
+        text: st ? buildBotDashboard(st, await getBotProfile(ctx.env, platform, chatId)) : "داشبورد فعلاً در دسترس نیست.",
         reply_markup: BOT_MENU_KEYBOARD,
       });
       return json({ ok: true });
@@ -2228,6 +2291,7 @@ async function handleBotUpdate(
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
   const userName = message.from?.first_name || "همسفر";
+  const userLastName = message.from?.last_name || null;
 
   if (text === "/start") {
     const home = platform === "telegram" ? "@taranom_hamdeli_bot" : "ble.ir/taranom_hamdeli_bot";
@@ -2254,13 +2318,13 @@ async function handleBotUpdate(
       text: `سلام ${userName} عزیز! 🌸\n\nبه ربات هوشمند ترنم همدلی (${home}) خوش آمدید.\nمن دکتر رادان هستم؛ مشاور تحصیلی شما در مسیر کنکور. 🚀`,
       reply_markup: BOT_MENU_KEYBOARD,
     });
-    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, step: "field" });
+    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, last_name: userLastName, step: "field" });
     await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName) });
     return json({ ok: true });
   }
   // فقط دستور صریح «تغییر رشته» پروفایل را ریست می‌کند
   if (text === "/register" || text === "📋 ثبت‌نام / تغییر رشته") {
-    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, step: "field" });
+    await upsertBotProfile(ctx.env, platform, chatId, { name: userName, last_name: userLastName, step: "field" });
     await send("sendMessage", { chat_id: chatId, text: fieldQuestionText(userName), reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }
@@ -2289,6 +2353,32 @@ async function handleBotUpdate(
     const bank = await getBotQuizBank(ctx.env);
     const subs = subjectsForField(bank, prof?.field);
     await send("sendMessage", { chat_id: chatId, text: "📚 کدام درس؟", reply_markup: subjectMenuKeyboard(subs) });
+    return json({ ok: true });
+  }
+  // ✏️ ویرایش اطلاعات ثبت‌نامی: تغییر نام و نام خانوادگی
+  if (text.startsWith("/setname")) {
+    const parts = text.replace("/setname", "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      await send("sendMessage", { chat_id: chatId, text: "✏️ فرمت: /setname نام نام‌خانوادگی\nمثال: /setname علی رضایی\n\n(برای تغییر رشته/پایه/معدل: «📋 ثبت‌نام / تغییر رشته» در ☰ منو)", reply_markup: BOT_MENU_KEYBOARD });
+      return json({ ok: true });
+    }
+    const newFirst = parts[0].slice(0, 40);
+    const newLast = parts.slice(1).join(" ").slice(0, 60) || null;
+    await upsertBotProfile(ctx.env, platform, chatId, { name: newFirst, last_name: newLast });
+    await send("sendMessage", { chat_id: chatId, text: `✅ نام به‌روزرسانی شد: ${newFirst}${newLast ? " " + newLast : ""}`, reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  // 📢 پست روزانه کانال — فقط ادمین ربات
+  if (text === "/post_channel" || text === "/daily_post") {
+    if (!isBotAdmin(ctx.env, chatId)) {
+      await send("sendMessage", { chat_id: chatId, text: "⛔ این دستور مخصوص ادمین ربات است." });
+      return json({ ok: true });
+    }
+    const post = await buildChannelDailyPost(ctx.env);
+    if (!post) { await send("sendMessage", { chat_id: chatId, text: "بانک سوال در دسترس نیست." }); return json({ ok: true }); }
+    const channel = (ctx.env as any).CHANNEL_ID || "@ai_exam_iran";
+    await send("sendMessage", { chat_id: channel, text: post.text, reply_markup: post.reply_markup });
+    await send("sendMessage", { chat_id: chatId, text: `✅ سوال روز در کانال ${channel} منتشر شد.`, reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }
   if (text === "☰ منو" || text === "/menu") {
@@ -2392,7 +2482,7 @@ async function handleBotUpdate(
     const st = await getBotQuizStats(ctx.env, platform, chatId);
     await send("sendMessage", {
       chat_id: chatId,
-      text: st ? buildBotDashboard(st) : "داشبورد فعلاً در دسترس نیست.",
+      text: st ? buildBotDashboard(st, await getBotProfile(ctx.env, platform, chatId)) : "داشبورد فعلاً در دسترس نیست.",
       reply_markup: BOT_MENU_KEYBOARD,
     });
     return json({ ok: true });
@@ -2417,7 +2507,18 @@ async function handleBotUpdate(
   }
 
   // --- 3) free text → AI counselor (RAG + Hugging Face Llama) ---
+  // سهمیه روزانه: جلوگیری از مصرف بی‌رویه AI (هر کاربر جدا شمرده می‌شود)
+  const quota = await checkChatQuota(ctx.env, platform, chatId);
+  if (!quota.ok) {
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: `⏳ سهمیه مشاوره امروزت تمام شد (${faNum(quota.limit)} پیام در روز).\n\nفردا دوباره می‌توانی سوال بپرسی — تا آن موقع «📝 تست» و «📊 داشبورد» بدون محدودیت فعال‌اند!\n🌐 مشاوره نامحدود: hamdeltar.ir`,
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
+    return json({ ok: true });
+  }
   let replyText = "";
+  let usedEngine = "";
   try {
     // ۱) بازیابی سوالات مرتبط از بانک RAG هاگینگ‌فیس برای زمینه (کاهش هالوسینیشن)
     const rag = await botRagContext(ctx.env, text);
@@ -2428,7 +2529,7 @@ async function handleBotUpdate(
 
     // ۲) مسابقه موازی دو Llama-70B (هاگینگ‌فیس + Workers AI) — سریع‌ترین موفق برنده
     const race = await bestAiReply(ctx.env, sys, text);
-    if (race) replyText = race.text;
+    if (race) { replyText = race.text; usedEngine = race.engine; }
     if (!replyText) {
       const ai = getAI(ctx.request, { message: text }, ctx.env, meta);
       if (ai) {
@@ -2462,7 +2563,9 @@ async function handleBotUpdate(
   } catch (_) {
     replyText = replyText || getOfflineChatReply(text);
   }
-  await send("sendMessage", { chat_id: chatId, text: replyText, reply_markup: BOT_MENU_KEYBOARD });
+  const engineFa = usedEngine === "hf-llama-70b" ? "Llama-70B (هاگینگ‌فیس)" : usedEngine === "workers-ai-llama-70b" ? "Llama-70B (کلودفلر)" : "موتور آفلاین";
+  const footer = `\n\n─────\n🤖 ${engineFa} | 💬 ${faNum(quota.used)}/${faNum(quota.limit)} پیام امروز`;
+  await send("sendMessage", { chat_id: chatId, text: replyText + footer, reply_markup: BOT_MENU_KEYBOARD });
   return json({ ok: true });
 }
 
