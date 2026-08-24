@@ -67,6 +67,10 @@ export interface Env {
   KAVENEGAR_SENDER?: string;
   /** Comma-separated Telegram chat IDs allowed to run admin bot commands (/post_channel). */
   BOT_ADMIN_IDS?: string;
+  /** شماره کارت برای پرداخت کارت‌به‌کارت در ربات (مثلاً 6037-xxxx-xxxx-xxxx). */
+  PAYMENT_CARD_NUMBER?: string;
+  /** نام صاحب کارت برای پرداخت کارت‌به‌کارت. */
+  PAYMENT_CARD_NAME?: string;
   /** Channel for daily posts, e.g. "@ai_exam_iran". */
   CHANNEL_ID?: string;
   /** Local development only. Never set this to true in production. */
@@ -1417,6 +1421,7 @@ function faNum(n: number): string { return String(n).split("").map((c) => /\d/.t
 const BOT_MENU_KEYBOARD = {
   keyboard: [
     [{ text: "📝 تست" }, { text: "🤖 تست هوشمند" }, { text: "☰ منو" }],
+    [{ text: "📜 تاریخچه" }, { text: "💳 اعتبار من" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -1429,6 +1434,7 @@ const BOT_FULL_MENU_INLINE = {
     [{ text: "📚 تست موضوعی (انتخاب درس)", callback_data: "menu:subjects" }, { text: "🗓 تست بر اساس سال", callback_data: "menu:years" }],
     [{ text: "📊 داشبورد من", callback_data: "qz:dash" }, { text: "🧠 تحلیل روانشناسی", callback_data: "menu:analysis" }],
     [{ text: "💬 مشاوره", callback_data: "menu:chat" }, { text: "📋 ثبت‌نام/تغییر رشته", callback_data: "menu:register" }],
+    [{ text: "📜 تاریخچه من", callback_data: "menu:history" }, { text: "💳 اعتبار و خرید", callback_data: "menu:credit" }],
     [{ text: "📈 وضعیت", callback_data: "menu:status" }, { text: "ℹ️ راهنما", callback_data: "menu:help" }],
   ],
 };
@@ -1664,6 +1670,186 @@ async function checkChatQuota(env: Env, platform: string, chatId: string | numbe
     ).bind(platform, cid, day).run();
     return { ok: true, used: used + 1, limit: BOT_CHAT_DAILY_LIMIT };
   } catch (_) { return { ok: true, used: 0, limit: BOT_CHAT_DAILY_LIMIT }; }
+}
+
+/* ── سیستم اعتبار ربات ──
+ * ۱) هر کاربر از لحظه ثبت‌نام ۷ روز «اشتراک رایگان» دارد (همه‌چیز آزاد).
+ * ۲) بعد از پایان هفته رایگان، اعتبار هدیه ۱۰۰,۰۰۰ تومانی سایت فعال می‌شود؛
+ *    هر پیام مشاوره هوشمند ۲,۰۰۰ تومان از آن کم می‌کند (تست و داشبورد همیشه رایگان).
+ * ۳) بعد از اتمام اعتبار → خرید از طریق زرین‌پال (سایت) یا کارت‌به‌کارت.
+ * مصرف از جدول bot_chat_quota (روزهای بعد از پایان دوره رایگان) محاسبه می‌شود و
+ * پرداخت‌ها در bot_payments ثبت می‌شوند — همه در دیتابیس مرکزی D1. */
+const BOT_TRIAL_DAYS = 7;
+const BOT_FREE_CREDIT_TOMAN = 100_000;
+const BOT_CHAT_COST_TOMAN = 2_000;
+
+interface BotCredit {
+  hasProfile: boolean;
+  inTrial: boolean;
+  trialDaysLeft: number;
+  trialEndDay: string;      // YYYY-MM-DD
+  signupDay: string;        // YYYY-MM-DD
+  consumedToman: number;    // مصرف بعد از دوره رایگان
+  paidToman: number;        // مجموع شارژهای خریداری‌شده
+  totalToman: number;       // 100هزار هدیه + شارژها
+  balanceToman: number;     // مانده
+}
+
+async function getBotCredit(env: Env, platform: string, chatId: string | number): Promise<BotCredit> {
+  const none: BotCredit = { hasProfile: false, inTrial: true, trialDaysLeft: BOT_TRIAL_DAYS, trialEndDay: "", signupDay: "", consumedToman: 0, paidToman: 0, totalToman: BOT_FREE_CREDIT_TOMAN, balanceToman: BOT_FREE_CREDIT_TOMAN };
+  try {
+    if (!env.DB) return none;
+    const cid = String(chatId);
+    const prof: any = await env.DB.prepare("SELECT created_at FROM bot_profiles WHERE platform=? AND chat_id=?").bind(platform, cid).first();
+    if (!prof?.created_at) return none;
+    const signup = Date.parse(prof.created_at);
+    const trialEnd = signup + BOT_TRIAL_DAYS * 86400000;
+    const nowMs = Date.now();
+    const inTrial = nowMs < trialEnd;
+    const trialDaysLeft = inTrial ? Math.max(0, Math.ceil((trialEnd - nowMs) / 86400000)) : 0;
+    const trialEndDay = new Date(trialEnd).toISOString().slice(0, 10);
+    // مصرف: پیام‌های مشاوره در روزهای بعد از پایان دوره رایگان
+    const usedRow: any = await env.DB.prepare(
+      "SELECT COALESCE(SUM(used),0) n FROM bot_chat_quota WHERE platform=? AND chat_id=? AND day >= ?"
+    ).bind(platform, cid, trialEndDay).first();
+    const consumedToman = inTrial ? 0 : Number(usedRow?.n || 0) * BOT_CHAT_COST_TOMAN;
+    let paidToman = 0;
+    try {
+      const payRow: any = await env.DB.prepare(
+        "SELECT COALESCE(SUM(amount),0) s FROM bot_payments WHERE platform=? AND chat_id=?"
+      ).bind(platform, cid).first();
+      paidToman = Number(payRow?.s || 0);
+    } catch (_) { /* جدول هنوز ساخته نشده */ }
+    const totalToman = BOT_FREE_CREDIT_TOMAN + paidToman;
+    return {
+      hasProfile: true, inTrial, trialDaysLeft, trialEndDay,
+      signupDay: prof.created_at.slice(0, 10),
+      consumedToman, paidToman, totalToman,
+      balanceToman: Math.max(0, totalToman - consumedToman),
+    };
+  } catch (_) { return none; }
+}
+
+function faDate(isoDay: string): string {
+  try { return new Date(isoDay + "T12:00:00Z").toLocaleDateString("fa-IR"); } catch (_) { return isoDay; }
+}
+function faMoney(n: number): string {
+  // جداکننده هزارگان با ارقام فارسی
+  const s = String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return s.split("").map((c) => (/\d/.test(c) ? FA_DIGITS[Number(c)] : c)).join("");
+}
+
+/** پیام گرافیکی «💳 اعتبار من» + دکمه‌های خرید. */
+function buildBotCreditView(env: Env, credit: BotCredit, profileName?: string | null): { text: string; reply_markup: any } {
+  const lines: string[] = [`💳 اعتبار ${profileName || "شما"} — متصل به حساب مرکزی hamdeltar.ir`, "━━━━━━━━━━━━━━━"];
+  if (!credit.hasProfile) {
+    lines.push("هنوز ثبت‌نام نکرده‌ای! اول /start را بزن تا هفته رایگان و اعتبار هدیه فعال شود. 🎁");
+    return { text: lines.join("\n"), reply_markup: BOT_MENU_KEYBOARD };
+  }
+  if (credit.inTrial) {
+    const usedDays = BOT_TRIAL_DAYS - credit.trialDaysLeft;
+    const pct = Math.min(100, Math.round((100 * usedDays) / BOT_TRIAL_DAYS));
+    lines.push(
+      "🎁 اشتراک هدیه ۱ هفته‌ای: فعال ✅",
+      `${progressBar(pct)} ${faNum(usedDays)} از ${faNum(BOT_TRIAL_DAYS)} روز گذشته`,
+      `⏳ ${faNum(credit.trialDaysLeft)} روز دیگر از هفته رایگان مانده (تا ${faDate(credit.trialEndDay)})`,
+      "",
+      `بعد از پایان هفته رایگان، اعتبار هدیه ${faMoney(BOT_FREE_CREDIT_TOMAN)} تومانی سایت فعال می‌شود:`,
+      `💬 هر پیام مشاوره هوشمند = ${faMoney(BOT_CHAT_COST_TOMAN)} تومان`,
+      "📝 تست، داشبورد و تحلیل = همیشه رایگان",
+    );
+  } else {
+    const pct = credit.totalToman > 0 ? Math.min(100, Math.round((100 * credit.consumedToman) / credit.totalToman)) : 100;
+    lines.push(
+      `🎁 هفته رایگان: تمام شد (${faDate(credit.signupDay)} تا ${faDate(credit.trialEndDay)})`,
+      "",
+      `💰 اعتبار کل: ${faMoney(credit.totalToman)} تومان` + (credit.paidToman > 0 ? ` (${faMoney(BOT_FREE_CREDIT_TOMAN)} هدیه + ${faMoney(credit.paidToman)} شارژ)` : " (هدیه سایت)"),
+      `📉 مصرف‌شده: ${faMoney(Math.min(credit.consumedToman, credit.totalToman))} تومان`,
+      `${progressBar(pct)} ${faNum(pct)}٪ مصرف شده`,
+      `✅ مانده: ${faMoney(credit.balanceToman)} تومان (≈ ${faNum(Math.floor(credit.balanceToman / BOT_CHAT_COST_TOMAN))} پیام مشاوره)`,
+      "",
+      `💬 هر پیام مشاوره = ${faMoney(BOT_CHAT_COST_TOMAN)} تومان | 📝 تست و داشبورد رایگان`,
+    );
+    if (credit.balanceToman <= 0) {
+      lines.push("", "⛔ اعتبارت تمام شده — برای ادامه مشاوره هوشمند، شارژ کن:");
+    } else if (credit.balanceToman <= 10 * BOT_CHAT_COST_TOMAN) {
+      lines.push("", "⚠️ اعتبارت رو به اتمام است — همین حالا شارژ کن تا مشاوره قطع نشود:");
+    }
+  }
+  const rows: any[] = [
+    [{ text: "🛒 خرید اعتبار (زرین‌پال - سایت)", url: (env.APP_URL || "https://hamdeltar.ir") + "/?buy=credit" }],
+    [{ text: "🏦 کارت‌به‌کارت (نمایش شماره کارت)", callback_data: "credit:card" }],
+    [{ text: "🔄 به‌روزرسانی اعتبار", callback_data: "menu:credit" }, { text: "📜 تاریخچه من", callback_data: "menu:history" }],
+  ];
+  return { text: lines.join("\n"), reply_markup: { inline_keyboard: rows } };
+}
+
+/** پیام کارت‌به‌کارت. */
+function buildCardToCardText(env: Env): string {
+  const card = (env as any).PAYMENT_CARD_NUMBER || "";
+  const name = (env as any).PAYMENT_CARD_NAME || "ترنم همدلی";
+  const lines = ["🏦 پرداخت کارت‌به‌کارت", "━━━━━━━━━━━━━━━"];
+  if (card) {
+    lines.push(`💳 شماره کارت: \n${card}`, `👤 به نام: ${name}`, "", `مبلغ پیشنهادی: ${faMoney(BOT_FREE_CREDIT_TOMAN)} تومان (۵۰ پیام مشاوره)`,
+      "", "بعد از واریز، تصویر رسید را همین‌جا بفرست یا به پشتیبانی سایت hamdeltar.ir اطلاع بده تا اعتبارت ظرف چند ساعت شارژ شود. ✅");
+  } else {
+    lines.push("شماره کارت به‌زودی اعلام می‌شود.", "", "فعلاً از دکمه «🛒 خرید اعتبار (زرین‌پال)» استفاده کن یا از طریق سایت hamdeltar.ir اقدام کن.");
+  }
+  return lines.join("\n");
+}
+
+/** 📜 تاریخچه کامل کاربر از دیتابیس مرکزی سایت (پروفایل + تست‌ها + مشاوره‌ها). */
+async function buildBotHistory(env: Env, platform: string, chatId: string | number): Promise<string> {
+  const cid = String(chatId);
+  const lines: string[] = ["📜 تاریخچه تو — از دیتابیس مرکزی hamdeltar.ir", "━━━━━━━━━━━━━━━"];
+  try {
+    if (!env.DB) return "تاریخچه فعلاً در دسترس نیست.";
+    const p: any = await env.DB.prepare(
+      "SELECT name, last_name, field, grade, gpa, created_at, updated_at FROM bot_profiles WHERE platform=? AND chat_id=?"
+    ).bind(platform, cid).first();
+    if (p) {
+      const fullName = `${p.name || ""}${p.last_name ? " " + p.last_name : ""}`.trim() || "دوست عزیز";
+      lines.push(`👤 ${fullName} | 📚 ${p.field || "—"} | 🎓 ${p.grade || "—"}${p.gpa ? ` | 📊 معدل ${faNum(p.gpa)}` : ""}`);
+      if (p.created_at) lines.push(`🗓 عضو از: ${faDate(String(p.created_at).slice(0, 10))}`);
+    } else {
+      lines.push("هنوز ثبت‌نام نکرده‌ای — /start را بزن تا پروفایلت ساخته شود.");
+      return lines.join("\n");
+    }
+    // آمار کلی تست‌ها
+    const tot: any = await env.DB.prepare(
+      "SELECT COUNT(*) n, COALESCE(SUM(correct),0) c FROM bot_quiz_log WHERE platform=? AND chat_id=?"
+    ).bind(platform, cid).first();
+    const nTests = Number(tot?.n || 0);
+    if (nTests > 0) {
+      const acc = Math.round((100 * Number(tot?.c || 0)) / nTests);
+      lines.push("", `📝 کل تست‌ها: ${faNum(nTests)} | دقت کلی: ${progressBar(acc)} ${faNum(acc)}٪`);
+      // ۱۰ تست آخر با تاریخ و درس
+      const last: any = await env.DB.prepare(
+        "SELECT subject, year, correct, substr(created_at,1,10) day FROM bot_quiz_log WHERE platform=? AND chat_id=? ORDER BY created_at DESC LIMIT 10"
+      ).bind(platform, cid).all();
+      const rows = last.results || [];
+      if (rows.length) {
+        lines.push("", "🕐 ۱۰ تست آخر:");
+        for (const r of rows) {
+          lines.push(`${r.correct ? "✅" : "❌"} ${r.subject || "عمومی"}${r.year ? ` (کنکور ${faNum(Number(r.year))})` : ""} — ${String(r.day).slice(5)}`);
+        }
+      }
+    } else {
+      lines.push("", "📝 هنوز تستی نزده‌ای — دکمه «📝 تست» را بزن!");
+    }
+    // مشاوره‌ها (از جدول سهمیه روزانه)
+    const chats: any = await env.DB.prepare(
+      "SELECT day, used FROM bot_chat_quota WHERE platform=? AND chat_id=? ORDER BY day DESC LIMIT 7"
+    ).bind(platform, cid).all();
+    const cRows = chats.results || [];
+    if (cRows.length) {
+      const totalChats = cRows.reduce((a: number, r: any) => a + Number(r.used || 0), 0);
+      lines.push("", `💬 مشاوره‌های اخیر (${faNum(totalChats)} پیام در ${faNum(cRows.length)} روز):`);
+      for (const r of cRows) lines.push(`• ${String(r.day).slice(5)} → ${faNum(Number(r.used))} پیام`);
+    }
+    lines.push("", "━━━━━━━━━━━━━━━", "🌐 نسخه کامل کارنامه و برنامه مطالعاتی: hamdeltar.ir");
+  } catch (_) { /* silent */ }
+  return lines.join("\n");
 }
 
 /* ── پست روزانه کانال (@ai_exam_iran): سوال روز + نکته — فقط ادمین ربات ── */
@@ -1922,7 +2108,7 @@ function profileSummary(p: BotProfile): string {
   const moodTxt = p.mood && p.mood >= 1 && p.mood <= 4 ? `\n💚 خلق امروز: ${BOT_MOODS[p.mood - 1]}` : "";
   const subj = subjectsTextForProfile(p.field, p.grade);
   const fullName = `${p.name || "دوست عزیز"}${p.last_name ? " " + p.last_name : ""}`;
-  return `🎉 ثبت‌نام کامل شد!\n\n👤 ${fullName}\n📚 رشته: ${p.field}\n🎓 پایه: ${p.grade}${gpaTxt}${ageTxt}${moodTxt}\n\n${subj}\n\n📝 «تست کنکور واقعی» = تصادفی از رشته‌ات\n🤖 «تست هوشمند RAG» = بر اساس نقاط ضعفت!`;
+  return `🎉 ثبت‌نام کامل شد!\n\n👤 ${fullName}\n📚 رشته: ${p.field}\n🎓 پایه: ${p.grade}${gpaTxt}${ageTxt}${moodTxt}\n\n${subj}\n\n🎁 هدیه ثبت‌نام: ۱ هفته اشتراک کامل رایگان + بعد از آن اعتبار ۱۰۰,۰۰۰ تومانی سایت («💳 اعتبار من» را بزن)\n\n📝 «تست کنکور واقعی» = تصادفی از رشته‌ات\n🤖 «تست هوشمند RAG» = بر اساس نقاط ضعفت!`;
 }
 
 /** درس‌های موجود در بانک برای رشته کاربر (مرتب بر اساس تعداد سوال). */
@@ -2134,8 +2320,11 @@ const BOT_HELP_TEXT = [
   "",
   "🤖 تست هوشمند RAG — سوال بعدی را بر اساس نقاط ضعف کارنامه و رشته/معدل تو انتخاب می‌کند",
   "",
+  "📜 تاریخچه — پروفایل + تست‌ها + مشاوره‌های قبلی‌ات از دیتابیس سایت",
+  "💳 اعتبار من — هفته اول رایگان 🎁، بعد اعتبار هدیه ۱۰۰,۰۰۰ تومانی سایت؛ شارژ با زرین‌پال یا کارت‌به‌کارت",
+  "",
   "✏️ /setname نام نام‌خانوادگی — اصلاح اطلاعات ثبت‌نامی",
-  "دستورات: /start /quiz /smartquiz /dashboard /analysis /setname /status /help",
+  "دستورات: /start /quiz /smartquiz /dashboard /analysis /history /credit /setname /status /help",
 ].join("\n");
 
 /** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
@@ -2226,6 +2415,17 @@ async function handleBotUpdate(
         return json({ ok: true });
       }
       if (item === "chat") { await send("sendMessage", { chat_id: chatId, text: "💬 سوالت را همین‌جا بنویس تا دکتر رادان جواب بدهد." }); return json({ ok: true }); }
+      if (item === "history") {
+        await send("sendMessage", { chat_id: chatId, text: await buildBotHistory(ctx.env, platform, chatId), reply_markup: BOT_MENU_KEYBOARD });
+        return json({ ok: true });
+      }
+      if (item === "credit") {
+        const prof = await getBotProfile(ctx.env, platform, chatId);
+        const credit = await getBotCredit(ctx.env, platform, chatId);
+        const v = buildBotCreditView(ctx.env, credit, prof?.name);
+        await send("sendMessage", { chat_id: chatId, text: v.text, reply_markup: v.reply_markup });
+        return json({ ok: true });
+      }
       if (item === "register") {
         await upsertBotProfile(ctx.env, platform, chatId, { field: null, grade: null, step: "field" });
         await send("sendMessage", { chat_id: chatId, text: fieldQuestionText("دوست عزیز") });
@@ -2233,6 +2433,10 @@ async function handleBotUpdate(
       }
       if (item === "status") { await send("sendMessage", { chat_id: chatId, text: await buildBotStatus(ctx.env, platform) }); return json({ ok: true }); }
       if (item === "help") { await send("sendMessage", { chat_id: chatId, text: BOT_HELP_TEXT }); return json({ ok: true }); }
+      return json({ ok: true });
+    }
+    if (data === "credit:card") {
+      await send("sendMessage", { chat_id: chatId, text: buildCardToCardText(ctx.env), reply_markup: BOT_MENU_KEYBOARD });
       return json({ ok: true });
     }
     const subM = data.match(/^qsub:(\d+)$/);
@@ -2299,9 +2503,15 @@ async function handleBotUpdate(
     // 🧠 حافظه: اگر قبلاً ثبت‌نام کرده، دوباره نپرس — خوش‌آمد با پروفایل ذخیره‌شده
     if (prof && prof.step === "done") {
       const gpaTxt = prof.gpa && prof.gpa > 0 ? ` | 📊 معدل ${faNum(prof.gpa)}` : "";
+      const cr = await getBotCredit(ctx.env, platform, chatId);
+      const crTxt = cr.inTrial
+        ? `🎁 اشتراک رایگان: ${faNum(cr.trialDaysLeft)} روز دیگر فعال است`
+        : cr.balanceToman > 0
+          ? `💳 اعتبار سایت: ${faMoney(cr.balanceToman)} تومان مانده`
+          : `⛔ اعتبارت تمام شده — «💳 اعتبار من» را بزن برای شارژ`;
       await send("sendMessage", {
         chat_id: chatId,
-        text: `سلام ${prof.name || userName} عزیز، خوش برگشتی! 🌸\n\nپروفایلت را یادم هست:\n📚 ${prof.field} | 🎓 ${prof.grade}${gpaTxt}\n\nهمین الان «📝 تست» یا «🤖 تست هوشمند» را بزن.\n(برای تغییر رشته: «📋 ثبت‌نام / تغییر رشته» در ☰ منو)`,
+        text: `سلام ${prof.name || userName} عزیز، خوش برگشتی! 🌸\n\nپروفایلت را یادم هست:\n📚 ${prof.field} | 🎓 ${prof.grade}${gpaTxt}\n${crTxt}\n\nهمین الان «📝 تست» یا «🤖 تست هوشمند» را بزن.\n📜 «تاریخچه» = همه تست‌ها و مشاوره‌های قبلی‌ات\n(برای تغییر رشته: «📋 ثبت‌نام / تغییر رشته» در ☰ منو)`,
         reply_markup: BOT_MENU_KEYBOARD,
       });
       return json({ ok: true });
@@ -2493,6 +2703,17 @@ async function handleBotUpdate(
     await send("sendMessage", { chat_id: chatId, text: msg, reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }
+  if (text === "/history" || text === "📜 تاریخچه" || text === "📜 تاریخچه من") {
+    await send("sendMessage", { chat_id: chatId, text: await buildBotHistory(ctx.env, platform, chatId), reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  if (text === "/credit" || text === "💳 اعتبار من" || text === "💳 اعتبار و خرید" || text === "💳 اعتبار") {
+    const profC = await getBotProfile(ctx.env, platform, chatId);
+    const credit = await getBotCredit(ctx.env, platform, chatId);
+    const v = buildBotCreditView(ctx.env, credit, profC?.name);
+    await send("sendMessage", { chat_id: chatId, text: v.text, reply_markup: v.reply_markup });
+    return json({ ok: true });
+  }
   if (text === "/status" || text === "📈 وضعیت سامانه" || text === "📊 وضعیت سامانه") {
     await send("sendMessage", { chat_id: chatId, text: await buildBotStatus(ctx.env, platform), reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
@@ -2508,6 +2729,32 @@ async function handleBotUpdate(
 
   // --- 3) free text → AI counselor (RAG + Hugging Face Llama) ---
   // سهمیه روزانه: جلوگیری از مصرف بی‌رویه AI (هر کاربر جدا شمرده می‌شود)
+  // 💳 کنترل اعتبار: بعد از هفته رایگان، هر پیام از اعتبار ۱۰۰هزار تومانی کم می‌شود
+  const creditPre = await getBotCredit(ctx.env, platform, chatId);
+  if (creditPre.hasProfile && !creditPre.inTrial && creditPre.balanceToman < BOT_CHAT_COST_TOMAN) {
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: [
+        "⛔ اعتبار مشاوره‌ات تمام شد!",
+        "━━━━━━━━━━━━━━━",
+        `🎁 هفته رایگان: مصرف شد (${faDate(creditPre.signupDay)} تا ${faDate(creditPre.trialEndDay)})`,
+        `💰 اعتبار هدیه ${faMoney(BOT_FREE_CREDIT_TOMAN)} تومانی سایت: مصرف شد (${faMoney(Math.min(creditPre.consumedToman, creditPre.totalToman))} تومان)`,
+        "",
+        "برای ادامه مشاوره هوشمند با دکتر رادان، اعتبار بخر:",
+        "🛒 پرداخت آنلاین زرین‌پال از سایت، یا 🏦 کارت‌به‌کارت",
+        "",
+        "📝 تست، داشبورد و تحلیل همچنان رایگان است!",
+      ].join("\n"),
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🛒 خرید اعتبار (زرین‌پال - سایت)", url: (ctx.env.APP_URL || "https://hamdeltar.ir") + "/?buy=credit" }],
+          [{ text: "🏦 کارت‌به‌کارت (شماره کارت)", callback_data: "credit:card" }],
+          [{ text: "💳 وضعیت اعتبار من", callback_data: "menu:credit" }],
+        ],
+      },
+    });
+    return json({ ok: true });
+  }
   const quota = await checkChatQuota(ctx.env, platform, chatId);
   if (!quota.ok) {
     await send("sendMessage", {
@@ -2564,7 +2811,12 @@ async function handleBotUpdate(
     replyText = replyText || getOfflineChatReply(text);
   }
   const engineFa = usedEngine === "hf-llama-70b" ? "Llama-70B (هاگینگ‌فیس)" : usedEngine === "workers-ai-llama-70b" ? "Llama-70B (کلودفلر)" : "موتور آفلاین";
-  const footer = `\n\n─────\n🤖 ${engineFa} | 💬 ${faNum(quota.used)}/${faNum(quota.limit)} پیام امروز`;
+  const creditTxt = creditPre.hasProfile && !creditPre.inTrial
+    ? ` | 💳 مانده: ${faMoney(Math.max(0, creditPre.balanceToman - BOT_CHAT_COST_TOMAN))} ت`
+    : creditPre.hasProfile && creditPre.inTrial
+      ? ` | 🎁 هفته رایگان (${faNum(creditPre.trialDaysLeft)} روز مانده)`
+      : "";
+  const footer = `\n\n─────\n🤖 ${engineFa} | 💬 ${faNum(quota.used)}/${faNum(quota.limit)} پیام امروز${creditTxt}`;
   await send("sendMessage", { chat_id: chatId, text: replyText + footer, reply_markup: BOT_MENU_KEYBOARD });
   return json({ ok: true });
 }

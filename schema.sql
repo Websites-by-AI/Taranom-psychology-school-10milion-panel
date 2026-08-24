@@ -125,6 +125,27 @@ CREATE TABLE IF NOT EXISTS bot_profiles (
 -- ALTER TABLE bot_profiles ADD COLUMN gpa REAL;
 -- ALTER TABLE bot_profiles ADD COLUMN age INTEGER;
 
+-- سهمیه/مصرف روزانه مشاوره هوشمند ربات (مبنای محاسبه اعتبار)
+CREATE TABLE IF NOT EXISTS bot_chat_quota (
+  platform TEXT NOT NULL,
+  chat_id  TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  used     INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (platform, chat_id, day)
+);
+
+-- شارژهای خریداری‌شده اعتبار ربات (زرین‌پال / کارت‌به‌کارت — تایید ادمین)
+CREATE TABLE IF NOT EXISTS bot_payments (
+  id         TEXT PRIMARY KEY,
+  platform   TEXT NOT NULL,
+  chat_id    TEXT NOT NULL,
+  amount     INTEGER NOT NULL,          -- تومان
+  method     TEXT,                      -- zarinpal | card | admin
+  note       TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bot_payments_user ON bot_payments (platform, chat_id);
+
 -- درخواست‌های ثبت‌نام مشاوره (CRM)
 CREATE TABLE IF NOT EXISTS counseling_requests (
   id         TEXT PRIMARY KEY,
