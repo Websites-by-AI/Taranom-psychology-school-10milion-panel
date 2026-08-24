@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { PlayCircle, ExternalLink, BookOpen, Clock, Star, GraduationCap, Filter } from "lucide-react";
+import { PlayCircle, ExternalLink, BookOpen, Clock, Star, GraduationCap, Filter, Users, Search } from "lucide-react";
 
 /**
  * CoursesView — دوره‌های آموزشی رایگان از یوتیوب، آپارات و فرادرس
@@ -53,11 +53,38 @@ const PROVIDER_STYLE: Record<string, string> = {
   "یوتیوب": "bg-red-50 text-red-600 border-red-200",
   "آپارات": "bg-pink-50 text-pink-600 border-pink-200",
   "فرادرس": "bg-blue-50 text-blue-600 border-blue-200",
+  "آلاء": "bg-emerald-50 text-emerald-600 border-emerald-200",
 };
+
+/* ── 👨‍🏫 دبیریاب کنکور — دبیرهای معروف هر درس + دوره رایگان (همان دیتای ربات تلگرام) ── */
+interface Teacher {
+  name: string; subject: string; fields: string[];
+  known: string;         // به چی معروف است
+  freeNote: string;      // دوره/محتوای رایگان
+  url: string; provider: "آلاء" | "آپارات" | "یوتیوب" | "فرادرس";
+}
+const TEACHERS: Teacher[] = [
+  { name: "جلال موقاری", subject: "زیست‌شناسی", fields: ["تجربی"], known: "زیست مفهومی و ترکیبی — محبوب‌ترین زیست آلاء", freeNote: "دوره کامل رایگان آلاء", url: "https://alaatv.com/c/33", provider: "آلاء" },
+  { name: "علی محمد عمارلو", subject: "زیست‌شناسی", fields: ["تجربی"], known: "جمع‌بندی و نکته‌وتست زیست", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/عمارلو_زیست", provider: "آپارات" },
+  { name: "شیروانی", subject: "شیمی", fields: ["تجربی", "ریاضی"], known: "شیمی از پایه تا کنکور — آلاء", freeNote: "دوره رایگان آلاء", url: "https://alaatv.com/c/13", provider: "آلاء" },
+  { name: "مهدی صنیعی طهرانی", subject: "شیمی", fields: ["تجربی", "ریاضی"], known: "تکنیک‌های حل تست سریع شیمی", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/صنیعی_شیمی_کنکور", provider: "آپارات" },
+  { name: "محمدصادق ثابتی", subject: "ریاضی", fields: ["تجربی", "ریاضی"], known: "ریاضی مفهومی از صفر — آلاء", freeNote: "دوره کامل رایگان", url: "https://alaatv.com/c/29", provider: "آلاء" },
+  { name: "علی هاشمی", subject: "ریاضی", fields: ["تجربی", "ریاضی"], known: "حسابان و ریاضی تجربی — کلاس‌های پرمخاطب", freeNote: "نمونه تدریس‌های آپارات", url: "https://www.aparat.com/result/علی_هاشمی_ریاضی", provider: "آپارات" },
+  { name: "فرشید داداشی", subject: "فیزیک", fields: ["تجربی", "ریاضی"], known: "فیزیک صفر تا صد — آلاء", freeNote: "دوره کامل رایگان آلاء", url: "https://alaatv.com/c/16", provider: "آلاء" },
+  { name: "کامیار کازرانیان", subject: "فیزیک", fields: ["تجربی", "ریاضی"], known: "نکته و تست فیزیک", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/کازرانیان_فیزیک", provider: "آپارات" },
+  { name: "علیرضا عبدالمحمدی", subject: "ادبیات فارسی", fields: ["عمومی"], known: "آرایه و قرابت — پرمخاطب‌ترین ادبیات", freeNote: "دوره رایگان آلاء", url: "https://alaatv.com/c/8", provider: "آلاء" },
+  { name: "ناصح‌زاده", subject: "عربی", fields: ["عمومی"], known: "قواعد + ترجمه با روش ساده", freeNote: "دوره کامل رایگان آلاء", url: "https://alaatv.com/c/10", provider: "آلاء" },
+  { name: "محمد کاغذی", subject: "دین و زندگی", fields: ["عمومی"], known: "آیات و روایات طبقه‌بندی‌شده", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/کاغذی_دینی", provider: "آپارات" },
+  { name: "دانیال نیک‌نداف", subject: "زبان انگلیسی", fields: ["عمومی", "زبان"], known: "واژگان و کلوز تست", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/زبان_کنکور_نیک_نداف", provider: "آپارات" },
+  { name: "امیر قاسمی", subject: "فلسفه و منطق", fields: ["انسانی"], known: "منطق مفهومی برای انسانی", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/فلسفه_منطق_کنکور", provider: "آپارات" },
+  { name: "سابقی", subject: "ریاضی و آمار", fields: ["انسانی"], known: "ریاضی انسانی از پایه", freeNote: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/ریاضی_انسانی_کنکور", provider: "آپارات" },
+];
 
 export default function CoursesView() {
   const [field, setField] = useState("همه");
   const [provider, setProvider] = useState("همه");
+  const [tQuery, setTQuery] = useState("");
+  const [tSubject, setTSubject] = useState("همه");
 
   const fields = ["همه", "تجربی", "ریاضی", "انسانی", "زبان", "عمومی"];
   const providers = ["همه", "آپارات", "یوتیوب", "فرادرس"];
@@ -65,6 +92,13 @@ export default function CoursesView() {
   const filtered = COURSES.filter((c) =>
     (field === "همه" || c.fields.includes(field) || c.fields.includes("عمومی")) &&
     (provider === "همه" || c.provider === provider)
+  );
+
+  const tSubjects = ["همه", ...Array.from(new Set(TEACHERS.map((t) => t.subject)))];
+  const teachersFiltered = TEACHERS.filter((t) =>
+    (field === "همه" || t.fields.includes(field) || t.fields.includes("عمومی")) &&
+    (tSubject === "همه" || t.subject === tSubject) &&
+    (tQuery.trim() === "" || t.name.includes(tQuery.trim()) || t.subject.includes(tQuery.trim()) || t.known.includes(tQuery.trim()))
   );
 
   return (
@@ -104,6 +138,54 @@ export default function CoursesView() {
           ))}
         </div>
         <span className="text-[10px] text-slate-400 font-bold mr-auto">{filtered.length} دوره</span>
+      </div>
+
+      {/* 👨‍🏫 دبیریاب کنکور */}
+      <div className="bg-white rounded-[28px] border border-slate-100 p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+            <Users size={22} className="text-violet-600" /> دبیریاب کنکور — دبیرهای معروف هر درس
+          </h2>
+          <span className="text-[10px] text-slate-400 font-bold">{teachersFiltered.length.toLocaleString("fa-IR")} دبیر</span>
+        </div>
+        <p className="text-[11px] text-slate-400 leading-6">
+          برای هر درس، دبیرهای شناخته‌شده کنکور + لینک <b className="text-emerald-600">دوره رایگان</b> آن‌ها (آلاء/آپارات).
+          فیلتر رشته بالای صفحه روی این بخش هم اثر می‌کند. در ربات تلگرام هم دکمه «🎬 دبیر و دوره رایگان» همین را بر اساس ضعیف‌ترین درسِ کارنامه‌ات پیشنهاد می‌دهد.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300" />
+            <input value={tQuery} onChange={(e) => setTQuery(e.target.value)} placeholder="جستجوی نام دبیر یا درس..."
+              className="pr-9 pl-3 py-2.5 rounded-xl border border-slate-200 text-[11px] font-bold focus:ring-2 focus:ring-violet-200 outline-none w-52" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {tSubjects.map((s) => (
+              <button key={s} onClick={() => setTSubject(s)}
+                className={`min-h-[36px] px-3 rounded-xl text-[10px] font-black transition ${tSubject === s ? "bg-violet-600 text-white" : "bg-slate-50 text-slate-500 hover:bg-slate-100"}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {teachersFiltered.map((t) => (
+            <a key={t.name + t.subject} href={t.url} target="_blank" rel="noopener noreferrer"
+              className="group bg-slate-50/60 hover:bg-white rounded-2xl border border-slate-100 hover:border-violet-200 hover:shadow-md transition-all p-4 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-black text-slate-800 group-hover:text-violet-700 transition">👨‍🏫 {t.name}</span>
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${PROVIDER_STYLE[t.provider]}`}>{t.provider}</span>
+              </div>
+              <span className="text-[10px] font-black text-indigo-500">{t.subject} • {t.fields.join("، ")}</span>
+              <p className="text-[10px] text-slate-500 leading-5">{t.known}</p>
+              <span className="mt-auto pt-2 border-t border-slate-100 text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                🆓 {t.freeNote} <ExternalLink size={10} className="mr-auto text-slate-300 group-hover:text-violet-400 transition" />
+              </span>
+            </a>
+          ))}
+          {teachersFiltered.length === 0 && (
+            <p className="text-[11px] text-slate-400 font-bold col-span-full text-center py-6">دبیری با این فیلتر پیدا نشد.</p>
+          )}
+        </div>
       </div>
 
       {/* کارت دوره‌ها */}

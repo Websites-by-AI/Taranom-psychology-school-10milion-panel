@@ -1435,6 +1435,7 @@ const BOT_FULL_MENU_INLINE = {
     [{ text: "📊 داشبورد من", callback_data: "qz:dash" }, { text: "🧠 تحلیل روانشناسی", callback_data: "menu:analysis" }],
     [{ text: "💬 مشاوره", callback_data: "menu:chat" }, { text: "📋 ثبت‌نام/تغییر رشته", callback_data: "menu:register" }],
     [{ text: "📜 تاریخچه من", callback_data: "menu:history" }, { text: "💳 اعتبار و خرید", callback_data: "menu:credit" }],
+    [{ text: "🎬 دبیر و دوره رایگان", callback_data: "menu:courses" }],
     [{ text: "📈 وضعیت", callback_data: "menu:status" }, { text: "ℹ️ راهنما", callback_data: "menu:help" }],
   ],
 };
@@ -2099,6 +2100,84 @@ function subjectsTextForProfile(field?: string | null, grade?: string | null): s
 }
 
 const BOT_MOODS = ["عالی و پرانرژی 😄", "معمولی 🙂", "خسته/بی‌حوصله 😔", "مضطرب/تحت فشار 😰"];
+
+/* ── 🎬 دوره‌ها و دبیرهای معروف کنکور — دیتای مشترک ربات (نسخه کامل: صفحه /courses سایت) ──
+ * دبیرهای شناخته‌شده هر درس + دوره‌های رایگان آپارات/آلاء/یوتیوب.
+ * لینک‌ها لینک جستجو/کانال عمومی‌اند (بدون embed) تا از ایران سریع باز شوند. */
+interface BotCourseTeacher { name: string; subject: string; fields: string[]; known: string; free: string; url: string; provider: string; }
+const BOT_COURSE_TEACHERS: BotCourseTeacher[] = [
+  // زیست
+  { name: "جلال موقاری", subject: "زیست‌شناسی", fields: ["تجربی"], known: "زیست مفهومی — آلاء", free: "دوره کامل رایگان آلاء", url: "https://alaatv.com/c/33", provider: "آلاء" },
+  { name: "علی محمد عمارلو", subject: "زیست‌شناسی", fields: ["تجربی"], known: "جمع‌بندی و نکته‌وتست", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/عمارلو_زیست", provider: "آپارات" },
+  // شیمی
+  { name: "شیروانی", subject: "شیمی", fields: ["تجربی", "ریاضی"], known: "شیمی از پایه — آلاء", free: "دوره رایگان آلاء", url: "https://alaatv.com/c/13", provider: "آلاء" },
+  { name: "مهدی صنیعی طهرانی", subject: "شیمی", fields: ["تجربی", "ریاضی"], known: "حل تست سریع", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/صنیعی_شیمی_کنکور", provider: "آپارات" },
+  // ریاضی
+  { name: "محمدصادق ثابتی", subject: "ریاضی", fields: ["تجربی", "ریاضی"], known: "ریاضی مفهومی — آلاء", free: "دوره کامل رایگان", url: "https://alaatv.com/c/29", provider: "آلاء" },
+  { name: "علی هاشمی", subject: "ریاضی", fields: ["تجربی", "ریاضی"], known: "حسابان و ریاضی تجربی", free: "نمونه تدریس‌های آپارات", url: "https://www.aparat.com/result/علی_هاشمی_ریاضی", provider: "آپارات" },
+  // فیزیک
+  { name: "فرشید داداشی", subject: "فیزیک", fields: ["تجربی", "ریاضی"], known: "فیزیک صفر تا صد — آلاء", free: "دوره کامل رایگان آلاء", url: "https://alaatv.com/c/16", provider: "آلاء" },
+  { name: "کامیار کازرانیان", subject: "فیزیک", fields: ["تجربی", "ریاضی"], known: "نکته و تست", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/کازرانیان_فیزیک", provider: "آپارات" },
+  // عمومی‌ها
+  { name: "علیرضا عبدالمحمدی", subject: "ادبیات فارسی", fields: ["عمومی"], known: "آرایه و قرابت — آلاء", free: "دوره رایگان آلاء", url: "https://alaatv.com/c/8", provider: "آلاء" },
+  { name: "ناصح‌زاده", subject: "عربی", fields: ["عمومی"], known: "قواعد + ترجمه — آلاء", free: "دوره کامل رایگان", url: "https://alaatv.com/c/10", provider: "آلاء" },
+  { name: "محمد کاغذی", subject: "دین و زندگی", fields: ["عمومی"], known: "آیات و روایات", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/کاغذی_دینی", provider: "آپارات" },
+  { name: "دانیال نیک‌نداف", subject: "زبان انگلیسی", fields: ["عمومی", "زبان"], known: "واژگان و کلوز تست", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/زبان_کنکور_نیک_نداف", provider: "آپارات" },
+  // انسانی
+  { name: "امیر قاسمی", subject: "فلسفه و منطق", fields: ["انسانی"], known: "منطق مفهومی", free: "جستجوی رایگان آپارات", url: "https://www.aparat.com/result/فلسفه_منطق_کنکور", provider: "آپارات" },
+  { name: "سابقی", subject: "ریاضی و آمار", fields: ["انسانی"], known: "ریاضی انسانی از پایه", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/ریاضی_انسانی_کنکور", provider: "آپارات" },
+];
+
+/** 🎬 پیام «دبیر و دوره رایگان» شخصی‌سازی‌شده بر اساس رشته + ضعیف‌ترین درس کارنامه. */
+async function buildBotCourseFinder(env: Env, platform: string, chatId: string | number, subjectFilter?: string): Promise<{ text: string; reply_markup: any }> {
+  const prof = await getBotProfile(env, platform, chatId);
+  const field = prof?.field || null;
+  // ضعیف‌ترین درس از کارنامه (اگر تست زده باشد) برای پیشنهاد اول
+  let weakest: string | null = null;
+  try {
+    if (env.DB) {
+      const w: any = await env.DB.prepare(
+        "SELECT subject, COUNT(*) n, SUM(correct) c FROM bot_quiz_log WHERE platform=? AND chat_id=? AND subject IS NOT NULL GROUP BY subject HAVING n>=2 ORDER BY (CAST(c AS REAL)/n) ASC LIMIT 1"
+      ).bind(platform, String(chatId)).first();
+      if (w?.subject) weakest = String(w.subject);
+    }
+  } catch (_) { /* silent */ }
+
+  const matches = BOT_COURSE_TEACHERS.filter((t) =>
+    (!field || t.fields.includes(field) || t.fields.includes("عمومی")) &&
+    (!subjectFilter || t.subject === subjectFilter)
+  );
+  const pick = subjectFilter ? matches : matches.slice(0, 8);
+  const lines: string[] = [subjectFilter ? `🎬 دبیرهای پیشنهادی «${subjectFilter}»` : `🎬 دبیر و دوره رایگان${field ? ` — رشته ${field}` : ""}`, "━━━━━━━━━━━━━━━"];
+  if (weakest && !subjectFilter) {
+    const wTeachers = BOT_COURSE_TEACHERS.filter((t) => t.subject === weakest);
+    if (wTeachers.length) {
+      lines.push(`🎯 بر اساس کارنامه‌ات، اول «${weakest}» را تقویت کن:`);
+      for (const t of wTeachers) lines.push(`⭐ ${t.name} — ${t.known}\n   🆓 ${t.free}`);
+      lines.push("");
+    }
+  }
+  if (pick.length === 0) {
+    lines.push("برای این درس هنوز دبیر ثبت نشده — لیست کامل در سایت:");
+  } else {
+    for (const t of pick) {
+      if (weakest && !subjectFilter && t.subject === weakest) continue; // تکراری نشود
+      lines.push(`👨‍🏫 ${t.name} | ${t.subject}\n   ${t.known} — 🆓 ${t.free}`);
+    }
+  }
+  lines.push("━━━━━━━━━━━━━━━", "🔗 لینک مستقیم دوره‌ها + فیلتر درس/رشته: دکمه‌های زیر 👇");
+  // دکمه‌ها: لینک وب هر دبیر (حداکثر ۴) + لینک صفحه کامل سایت + فیلتر درس
+  const rows: any[] = [];
+  const linkTeachers = (subjectFilter ? matches : (weakest ? BOT_COURSE_TEACHERS.filter((t) => t.subject === weakest) : pick)).slice(0, 4);
+  for (const t of linkTeachers) rows.push([{ text: `▶️ ${t.name} (${t.provider})`, url: t.url }]);
+  // فیلتر درس‌ها (درس‌های رشته کاربر)
+  const subjectsAvail = [...new Set(matches.map((t) => t.subject))].slice(0, 6);
+  for (let i = 0; i < subjectsAvail.length; i += 3) {
+    rows.push(subjectsAvail.slice(i, i + 3).map((s) => ({ text: s, callback_data: `crs:${s.slice(0, 30)}` })));
+  }
+  rows.push([{ text: "🌐 صفحه کامل دوره‌ها + دبیرها در سایت", url: (env.APP_URL || "https://hamdeltar.ir") + "/courses" }]);
+  return { text: lines.join("\n"), reply_markup: { inline_keyboard: rows } };
+}
 function fieldQuestionText(userName: string): string {
   return `📋 ${userName} عزیز، برای اینکه تست‌های مناسب خودت را بدهم، ثبت‌نام کوتاه (۵ مرحله):\n\n۱از۵) رشته‌ات کدام است؟ عددش را بفرست:\n${BOT_FIELDS.map((f, i) => `${faNum(i + 1)}) ${f}`).join("\n")}\n\n(اگر متوسطه اول هستی و هنوز رشته نداری، ۱ را بزن — در مرحله بعد پایه را مشخص کن)`;
 }
@@ -2346,9 +2425,10 @@ const BOT_HELP_TEXT = [
   "",
   "📜 تاریخچه — پروفایل + تست‌ها + مشاوره‌های قبلی‌ات از دیتابیس سایت",
   "💳 اعتبار من — هفته اول رایگان 🎁، بعد اعتبار هدیه ۱۰۰,۰۰۰ تومانی سایت؛ شارژ با زرین‌پال یا کارت‌به‌کارت",
+  "🎬 دبیر و دوره رایگان — دبیرهای معروف هر درس + لینک دوره رایگان (آلاء/آپارات)، شخصی‌سازی با ضعیف‌ترین درست",
   "",
   "✏️ /setname نام نام‌خانوادگی — اصلاح اطلاعات ثبت‌نامی",
-  "دستورات: /start /quiz /smartquiz /dashboard /analysis /history /credit /setname /status /help",
+  "دستورات: /start /quiz /smartquiz /dashboard /analysis /history /credit /courses /setname /status /help",
 ].join("\n");
 
 /** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
@@ -2451,6 +2531,11 @@ async function handleBotUpdate(
         await send("sendMessage", { chat_id: chatId, text: v.text, reply_markup: v.reply_markup });
         return json({ ok: true });
       }
+      if (item === "courses") {
+        const cf = await buildBotCourseFinder(ctx.env, platform, chatId);
+        await send("sendMessage", { chat_id: chatId, text: cf.text, reply_markup: cf.reply_markup });
+        return json({ ok: true });
+      }
       if (item === "register") {
         await upsertBotProfile(ctx.env, platform, chatId, { field: null, grade: null, step: "field" });
         await send("sendMessage", { chat_id: chatId, text: fieldQuestionText("دوست عزیز") });
@@ -2462,6 +2547,12 @@ async function handleBotUpdate(
     }
     if (data === "credit:card") {
       await send("sendMessage", { chat_id: chatId, text: buildCardToCardText(ctx.env), reply_markup: BOT_MENU_KEYBOARD });
+      return json({ ok: true });
+    }
+    const crsM = data.match(/^crs:(.+)$/);
+    if (crsM) {
+      const cf = await buildBotCourseFinder(ctx.env, platform, chatId, crsM[1]);
+      await send("sendMessage", { chat_id: chatId, text: cf.text, reply_markup: cf.reply_markup });
       return json({ ok: true });
     }
     const subM = data.match(/^qsub:(\d+)$/);
@@ -2734,6 +2825,11 @@ async function handleBotUpdate(
   }
   if (text === "/history" || text === "📜 تاریخچه" || text === "📜 تاریخچه من") {
     await send("sendMessage", { chat_id: chatId, text: await buildBotHistory(ctx.env, platform, chatId), reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  if (text === "/courses" || text === "🎬 دبیر و دوره رایگان" || text === "🎬 دوره‌ها") {
+    const cf = await buildBotCourseFinder(ctx.env, platform, chatId);
+    await send("sendMessage", { chat_id: chatId, text: cf.text, reply_markup: cf.reply_markup });
     return json({ ok: true });
   }
   if (text === "/credit" || text === "💳 اعتبار من" || text === "💳 اعتبار و خرید" || text === "💳 اعتبار") {
