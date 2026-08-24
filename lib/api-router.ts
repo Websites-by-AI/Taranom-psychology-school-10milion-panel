@@ -2360,6 +2360,27 @@ function yearsForField(bank: BotQuizItem[], field?: string | null): { year: stri
 }
 
 /** سوال تصادفی از یک درس یا سال مشخص (در محدوده رشته کاربر). */
+/* فیلتر فعال تست هر کاربر (درس/سال) — تا «🔄 سوال بعدی» در همان درس بماند */
+async function setQuizFilter(env: Env, platform: string, chatId: string | number, subject: string | null, year: string | null): Promise<void> {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(
+      "INSERT INTO bot_quiz_filter (platform, chat_id, subject, year, created_at) VALUES (?,?,?,?,?) " +
+      "ON CONFLICT(platform, chat_id) DO UPDATE SET subject=excluded.subject, year=excluded.year, created_at=excluded.created_at"
+    ).bind(platform, String(chatId), subject, year, new Date().toISOString()).run();
+  } catch (_) { /* silent */ }
+}
+async function getQuizFilter(env: Env, platform: string, chatId: string | number): Promise<{ subject: string | null; year: string | null } | null> {
+  try {
+    if (!env.DB) return null;
+    const r: any = await env.DB.prepare("SELECT subject, year FROM bot_quiz_filter WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).first();
+    return r ? { subject: r.subject || null, year: r.year || null } : null;
+  } catch (_) { return null; }
+}
+async function clearQuizFilter(env: Env, platform: string, chatId: string | number): Promise<void> {
+  try { if (env.DB) await env.DB.prepare("DELETE FROM bot_quiz_filter WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).run(); } catch (_) { /* silent */ }
+}
+
 function pickFiltered(bank: BotQuizItem[], field: string | null | undefined, subject?: string, year?: string): { qi: number; item: BotQuizItem } | null {
   const idxs = bank.map((it, i) => ({ it, i }))
     .filter(({ it }) => !field || field === "عمومی" || it.f === field || it.f === "عمومی")
@@ -2699,6 +2720,19 @@ async function handleBotUpdate(
 
     if (data === "qz:next") {
       const profNext = await getBotProfile(ctx.env, platform, chatId);
+      // اگر کاربر درس/سال خاصی انتخاب کرده، سوال بعدی هم از همان باشد
+      const filt = await getQuizFilter(ctx.env, platform, chatId);
+      if (filt && (filt.subject || filt.year)) {
+        const bankN = await getBotQuizBank(ctx.env);
+        const pickN = pickFiltered(bankN, profNext?.field, filt.subject || undefined, filt.year || undefined);
+        if (pickN) {
+          const qN = formatBotQuiz(pickN.item, pickN.qi, platform);
+          await saveBotQuizState(ctx.env, platform, chatId, pickN.qi, pickN.item.a);
+          const tag = filt.subject ? `📚 ادامه تست ${filt.subject}` : `🗓 ادامه کنکور ${faNum(Number(filt.year))}`;
+          await send("sendMessage", { chat_id: chatId, text: `${tag}\n(برای تست از همه درس‌ها: «📝 تست» را بزن)\n\n${qN.text}`, reply_markup: qN.reply_markup });
+          return json({ ok: true });
+        }
+      }
       const quiz = await buildBotQuiz(ctx.env, platform, profNext);
       await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
       await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
@@ -2730,6 +2764,7 @@ async function handleBotUpdate(
           await send("sendMessage", { chat_id: chatId, text: `اول ثبت‌نام کوتاه را تمام کنیم تا تست مناسب خودت بیاید:\n\n${stepMsg}` });
           return json({ ok: true });
         }
+        await clearQuizFilter(ctx.env, platform, chatId);
         const q = item === "smart"
           ? await buildSmartQuiz(ctx.env, platform, chatId, prof)
           : await buildBotQuiz(ctx.env, platform, prof);
@@ -2853,6 +2888,7 @@ async function handleBotUpdate(
       const s = subs[Number(subM[1])];
       const pick = s ? pickFiltered(bank, prof?.field, s.subject) : null;
       if (pick) {
+        await setQuizFilter(ctx.env, platform, chatId, s.subject, null);
         const q = formatBotQuiz(pick.item, pick.qi, platform);
         await saveBotQuizState(ctx.env, platform, chatId, pick.qi, pick.item.a);
         await send("sendMessage", { chat_id: chatId, text: `📚 تست ${s.subject}\n\n${q.text}`, reply_markup: q.reply_markup });
@@ -2867,6 +2903,7 @@ async function handleBotUpdate(
       const bank = await getBotQuizBank(ctx.env);
       const pick = pickFiltered(bank, prof?.field, undefined, yearM[1]);
       if (pick) {
+        await setQuizFilter(ctx.env, platform, chatId, null, yearM[1]);
         const q = formatBotQuiz(pick.item, pick.qi, platform);
         await saveBotQuizState(ctx.env, platform, chatId, pick.qi, pick.item.a);
         await send("sendMessage", { chat_id: chatId, text: `🗓 کنکور ${faNum(Number(yearM[1]))}\n\n${q.text}`, reply_markup: q.reply_markup });
@@ -2880,7 +2917,12 @@ async function handleBotUpdate(
       await send("sendMessage", {
         chat_id: chatId,
         text: st ? buildBotDashboard(st, await getBotProfile(ctx.env, platform, chatId)) : "داشبورد فعلاً در دسترس نیست.",
-        reply_markup: BOT_MENU_KEYBOARD,
+        reply_markup: st ? {
+        inline_keyboard: [
+          [{ text: "🧠 تحلیل روانشناسی + پیشنهاد مسیر", callback_data: "menu:analysis" }],
+          [{ text: "🤖 تست هوشمند (نقطه‌ضعف)", callback_data: "menu:smart" }, { text: "📚 تست موضوعی", callback_data: "menu:subjects" }],
+        ],
+      } : BOT_MENU_KEYBOARD,
       });
       return json({ ok: true });
     }
@@ -3033,6 +3075,7 @@ async function handleBotUpdate(
     if (prof && prof.step === "gpa") { await send("sendMessage", { chat_id: chatId, text: gpaQuestionText() }); return json({ ok: true }); }
     if (prof && prof.step === "age") { await send("sendMessage", { chat_id: chatId, text: ageQuestionText() }); return json({ ok: true }); }
     if (prof && prof.step === "mood") { await send("sendMessage", { chat_id: chatId, text: moodQuestionText() }); return json({ ok: true }); }
+    await clearQuizFilter(ctx.env, platform, chatId);
     const quiz = await buildBotQuiz(ctx.env, platform, prof);
     await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
     await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
@@ -3171,7 +3214,12 @@ async function handleBotUpdate(
     await send("sendMessage", {
       chat_id: chatId,
       text: st ? buildBotDashboard(st, await getBotProfile(ctx.env, platform, chatId)) : "داشبورد فعلاً در دسترس نیست.",
-      reply_markup: BOT_MENU_KEYBOARD,
+      reply_markup: st ? {
+        inline_keyboard: [
+          [{ text: "🧠 تحلیل روانشناسی + پیشنهاد مسیر", callback_data: "menu:analysis" }],
+          [{ text: "🤖 تست هوشمند (نقطه‌ضعف)", callback_data: "menu:smart" }, { text: "📚 تست موضوعی", callback_data: "menu:subjects" }],
+        ],
+      } : BOT_MENU_KEYBOARD,
     });
     return json({ ok: true });
   }

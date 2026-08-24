@@ -168,6 +168,16 @@ CREATE TABLE IF NOT EXISTS bot_comment_state (
   PRIMARY KEY (platform, chat_id)
 );
 
+-- فیلتر فعال تست هر کاربر ربات (درس/سال) — «سوال بعدی» در همان درس می‌ماند
+CREATE TABLE IF NOT EXISTS bot_quiz_filter (
+  platform   TEXT NOT NULL,
+  chat_id    TEXT NOT NULL,
+  subject    TEXT,
+  year       TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (platform, chat_id)
+);
+
 -- اتصال کاربر ربات به حساب سایت + توکن ورود یک‌بارمصرف (ورود یک‌کلیکی از تلگرام/بله)
 CREATE TABLE IF NOT EXISTS bot_login_tokens (
   token      TEXT PRIMARY KEY,
