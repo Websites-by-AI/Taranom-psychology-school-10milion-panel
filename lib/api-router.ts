@@ -1392,7 +1392,7 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
  * - Reply keyboard menu, live /status backed by D1
  * ------------------------------------------------------------------------- */
 
-interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; }
+interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; }
 let botQuizCache: { at: number; items: BotQuizItem[] } | null = null;
 
 async function getBotQuizBank(env: Env): Promise<BotQuizItem[]> {
@@ -2403,11 +2403,19 @@ async function buildSmartQuiz(env: Env, platform: string, chatId: string | numbe
   }
   if (candidates.length === 0) { candidates = pool; reason = reason || "تصادفی از رشته تو"; }
 
-  // ۳) سطح‌بندی با معدل: معدل بالا → سال‌های جدیدتر (سخت‌تر)، معدل پایین → قدیمی‌تر
+  // ۳) سطح‌بندی با معدل: اول با فیلد level بانک (l)، بعد سال به‌عنوان فال‌بک
   const gpa = profile?.gpa || 0;
   if (gpa > 0 && candidates.length > 6) {
-    const sorted = [...candidates].sort((a, b) => Number(b.it.y) - Number(a.it.y));
-    candidates = gpa >= 17 ? sorted.slice(0, Math.ceil(sorted.length / 2)) : sorted.slice(Math.floor(sorted.length / 2));
+    const lvlRank = (it: BotQuizItem) => it.l === "سخت" ? 2 : it.l === "آسان" ? 0 : 1;
+    const hasLvl = candidates.some((c: any) => c.it.l);
+    if (hasLvl) {
+      const wanted = gpa >= 17 ? [2, 1] : [0, 1];
+      const filtered = candidates.filter((c: any) => wanted.includes(lvlRank(c.it)));
+      if (filtered.length >= 3) candidates = filtered;
+    } else {
+      const sorted = [...candidates].sort((a, b) => Number(b.it.y) - Number(a.it.y));
+      candidates = gpa >= 17 ? sorted.slice(0, Math.ceil(sorted.length / 2)) : sorted.slice(Math.floor(sorted.length / 2));
+    }
   }
 
   // ۴) 📊 مرتب‌سازی با سختی واقعی (question_stats از پاسخ همه کاربران):
@@ -2476,7 +2484,8 @@ function formatBotQuiz(item: BotQuizItem, qi: number, platform?: string): { text
   const numHint = platform === "bale"
     ? "\n\n👇 پاسخ را با ارسال «عدد گزینه» بدهید (مثلاً 2)"
     : "\n\n👇 گزینه را لمس کنید یا عددش را بفرستید:";
-  const text = `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})\n\n${item.q}\n\n${lines.join("\n")}${numHint}`;
+  const lvl = item.l === "سخت" ? " 🔴 سخت" : item.l === "آسان" ? " 🟢 آسان" : item.l === "متوسط" ? " 🟡 متوسط" : "";
+  const text = `📝 سوال واقعی کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})${lvl}\n\n${item.q}\n\n${lines.join("\n")}${numHint}`;
   const reply_markup = {
     inline_keyboard: [
       item.o.map((_, i) => ({ text: faNum(i + 1), callback_data: `qz:${qi}:${item.a}:${i}` })),
