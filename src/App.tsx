@@ -405,8 +405,10 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
             --color-indigo-100: #d2e3fc !important;
           }
         `;
-      case "amber":
       case "classic":
+        // پالت اصلی (بنفش/سورمه‌ای) — بدون بازنویسی متغیرها
+        return "";
+      case "amber":
       default:
         return `
           :root {
@@ -677,7 +679,11 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
           <div className="grid grid-cols-2 gap-1.5 mt-1.5">
             {[
               { id: "amber", name: lang === "fa" ? "کهربایی" : "Amber", color: "bg-amber-400" },
-              { id: "classic", name: lang === "fa" ? "بنفش اصیل" : "Indigo", color: "bg-indigo-600" }
+              { id: "classic", name: lang === "fa" ? "بنفش اصیل" : "Indigo", color: "bg-indigo-600" },
+              { id: "emerald", name: lang === "fa" ? "سبز کانون" : "Emerald", color: "bg-emerald-600" },
+              { id: "ruby", name: lang === "fa" ? "یاقوت سرخ" : "Ruby", color: "bg-rose-600" },
+              { id: "obsidian", name: lang === "fa" ? "فولاد دودی" : "Obsidian", color: "bg-slate-500" },
+              { id: "chromebook", name: lang === "fa" ? "آبی متریال" : "Material Blue", color: "bg-blue-600" }
             ].map(t => (
               <button
                 key={t.id}
@@ -1009,8 +1015,8 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
                         { id: "classic", name: `سورمه‌ای اصیل (${BRAND_CONFIG.name})`, color: "bg-blue-900" },
                         { id: "emerald", name: "سبز کانون (آموزشی)", color: "bg-emerald-800" },
                         { id: "ruby", name: "یاقوت درخشان (زرشکی)", color: "bg-rose-900" },
-                        { id: "amber", name: "کهربایی گرم (طلایی)", color: "bg-amber-850" },
-                        { id: "obsidian", name: "فولاد دودی (مدرن)", color: "bg-slate-705" },
+                        { id: "amber", name: "کهربایی گرم (طلایی)", color: "bg-amber-500" },
+                        { id: "obsidian", name: "فولاد دودی (مدرن)", color: "bg-slate-600" },
                         { id: "chromebook", name: "آبی متریال کروم‌بوک (گوگل)", color: "bg-blue-600" }
                       ].map((t) => (
                         <button
