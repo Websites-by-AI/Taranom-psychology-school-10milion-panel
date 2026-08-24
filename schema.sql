@@ -146,6 +146,42 @@ CREATE TABLE IF NOT EXISTS bot_payments (
 );
 CREATE INDEX IF NOT EXISTS idx_bot_payments_user ON bot_payments (platform, chat_id);
 
+-- رزرو جلسه حضوری «اسنپی» (دانش‌آموز ↔ مربی ↔ محل: مدرسه/فضای کار اشتراکی)
+CREATE TABLE IF NOT EXISTS inperson_bookings (
+  id             TEXT PRIMARY KEY,
+  name           TEXT NOT NULL,
+  mobile         TEXT NOT NULL,
+  requester_role TEXT,               -- student | parent | coach
+  city           TEXT,
+  venue_id       TEXT,
+  venue_name     TEXT,
+  tutor_tier     TEXT,               -- همراه | ارشد | ویژه
+  session_type   TEXT,               -- تحلیل کارنامه | برنامه‌ریزی جمع‌بندی | رفع اشکال | مشاوره روانشناسی
+  preferred_date TEXT,
+  est_price      INTEGER,            -- تومان (مربی + اجاره فضا)
+  note           TEXT,
+  status         TEXT NOT NULL DEFAULT 'new',  -- new | contacted | confirmed | done | canceled
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+
+-- ثبت فضای اجاره‌ای توسط مدرسه/دفتر/فضای کار اشتراکی (سمت عرضه)
+CREATE TABLE IF NOT EXISTS venue_offers (
+  id             TEXT PRIMARY KEY,
+  org_name       TEXT NOT NULL,
+  contact_name   TEXT,
+  mobile         TEXT NOT NULL,
+  city           TEXT,
+  address        TEXT,
+  venue_type     TEXT,               -- مدرسه | فضای کار اشتراکی | دفتر آموزشی
+  capacity       INTEGER,
+  price_per_hour INTEGER,            -- تومان
+  note           TEXT,
+  status         TEXT NOT NULL DEFAULT 'new',  -- new | reviewing | approved | rejected
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+
 -- درخواست‌های ثبت‌نام مشاوره (CRM)
 CREATE TABLE IF NOT EXISTS counseling_requests (
   id         TEXT PRIMARY KEY,

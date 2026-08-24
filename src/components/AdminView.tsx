@@ -21,6 +21,7 @@ import DevTestingSection from "./DevTestingSection";
 import RoleManagement from "./admin/RoleManagement";
 import StartupCallsTracker from "./admin/StartupCallsTracker";
 import BotAdminPanel from "./admin/BotAdminPanel";
+import InPersonCRM from "./admin/InPersonCRM";
 import IntegrationsPanel from "./admin/IntegrationsPanel";
 import StudentManagement from "./admin/StudentManagement";
 
@@ -150,6 +151,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
       case "roles": return <RoleManagement />;
       case "startup_calls": return <StartupCallsTracker />;
       case "bots": return <BotAdminPanel />;
+      case "inperson_crm": return <InPersonCRM />;
       case "registration_form": return <StudentRegistrationForm onSuccess={() => setActiveTab("students")} />;
       case "investment": return <InvestmentView />;
       case "audit": return <ContentAuditModule />;
@@ -172,6 +174,7 @@ export default function AdminView({ student, onUpdateBrand }: { student?: Studen
           { id: "roles", label: "مدیریت نقش‌ها", icon: ShieldCheck },
           { id: "startup_calls", label: "فراخوان‌های استارتاپی 🇨🇦", icon: TrendingUp },
           { id: "bots", label: "ربات‌ها و کانال 🤖", icon: Activity },
+          { id: "inperson_crm", label: "جلسات حضوری اسنپی 📍", icon: Activity },
           { id: "dev_testing", label: "توسعه و تست", icon: FlaskConical },
           { id: "central_database", label: "بانک اطلاعاتی", icon: Database },
           { id: "students", label: "داوطلبان", icon: Users },

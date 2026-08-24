@@ -21,6 +21,7 @@ const SmartStressTrainerView = lazy(() => import("./SmartStressTrainerView"));
 const ParentsView = lazy(() => import("./ParentsView"));
 const CounselorDashboardView = lazy(() => import("./CounselorDashboardView"));
 const CoursesView = lazy(() => import("./CoursesView"));
+const InPersonView = lazy(() => import("./InPersonView"));
 const TeacherDashboardView = lazy(() => import("./TeacherDashboardView"));
 const StudyDashboardView = lazy(() => import("./StudyDashboardView"));
 const KonkurExamView = lazy(() => import("./KonkurExamView"));
@@ -48,21 +49,21 @@ export const ALLOWED_VIEWS_BY_ROLE: Record<RoleType, string[]> = {
   student: [
     "welcome", "dashboard", "manova", "report", "schedule", "counselor", 
     "progress", "traps", "quiz", "psychology", "metacognition", "counseling", 
-    "historical-db", "courses", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download", "planner-gen", "counselor-chat"
+    "historical-db", "courses", "inperson", "shop", "blog", "contact", "study-planner", "smart-stress-trainer", "konkur", "download", "planner-gen", "counselor-chat"
   ],
   parent: [
     "welcome", "parents", "manova", "report", "psychology", "counseling", 
-    "historical-db", "courses", "shop", "blog", "contact", "konkur", "download"
+    "historical-db", "courses", "inperson", "shop", "blog", "contact", "konkur", "download"
   ],
   admin: [
-    "welcome", "admin", "manova", "courses", "shop", "blog", "contact", "download"
+    "welcome", "admin", "manova", "courses", "inperson", "shop", "blog", "contact", "download"
   ],
   counselor: [
     "welcome", "counselor-dashboard", "manova", "report", "psychology", 
-    "counselor-chat", "traps", "courses", "shop", "blog", "contact", "download"
+    "counselor-chat", "traps", "courses", "inperson", "shop", "blog", "contact", "download"
   ],
   teacher: [
-    "welcome", "teacher-dashboard", "report", "traps", "courses", "shop", "blog", "contact", "download"
+    "welcome", "teacher-dashboard", "report", "traps", "courses", "inperson", "shop", "blog", "contact", "download"
   ]
 };
 
@@ -95,7 +96,7 @@ export default function ViewFactory({
   
   if (isAllowed && role === "student") {
     // Demo Tier logic for testing constraints
-    const basicViews = ["welcome", "dashboard", "schedule", "report", "courses", "shop", "blog", "contact", "study-planner"];
+    const basicViews = ["welcome", "dashboard", "schedule", "report", "courses", "inperson", "shop", "blog", "contact", "study-planner"];
     const intermediateViews = [...basicViews, "progress", "traps", "quiz"];
     
     if (demoTier === "Basic" && !basicViews.includes(view)) {
@@ -230,6 +231,9 @@ export default function ViewFactory({
 
     case "courses":
       return <CoursesView />;
+
+    case "inperson":
+      return <InPersonView />;
 
     case "shop":
       return (

@@ -8,7 +8,7 @@ import {
   Plus, LogOut, LayoutDashboard, FileSpreadsheet, 
   Calendar, MessageSquare, LineChart, Users, BellRing, Sparkles, Layers, Shield, Target,
   Palette, Building2, Menu, X, ChevronLeft, Pipette, GraduationCap, BookOpen, Zap
-, PlayCircle } from "lucide-react";
+, PlayCircle, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Student } from "./types";
 import LoginView from "./components/LoginView";
@@ -253,6 +253,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "historical-db", label: "بانک اطلاعات کنکور", icon: Database },
       { id: "konkur", label: "بانک سؤالات کنکور", icon: LibraryBig },
       { id: "courses", label: "دوره‌های آموزشی", icon: PlayCircle },
+      { id: "inperson", label: "جلسه حضوری اسنپی", icon: MapPin },
       { id: "admin", label: "تنظیمات", icon: Shield },
       { id: "study-planner", label: "میز مطالعه", icon: BookOpen },
       { id: "smart-stress-trainer", label: "شبیه‌ساز آزمون", icon: Zap },
@@ -266,6 +267,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "counseling", label: "تخمین رتبه", icon: GraduationCap },
       { id: "historical-db", label: "اطلاعات کنکور", icon: Database },
       { id: "konkur", label: "بانک سؤالات", icon: LibraryBig },
+      { id: "inperson", label: "جلسه حضوری اسنپی", icon: MapPin },
       { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     counselor: [
@@ -276,6 +278,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "psychology", label: "وضعیت دانش‌آموزان", icon: Brain },
       { id: "counselor-chat", label: "پیام‌ها", icon: MessageSquare },
       { id: "traps", label: "تحلیل اشتباهات", icon: Target },
+      { id: "inperson", label: "جلسه حضوری اسنپی", icon: MapPin },
       { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     teacher: [
@@ -283,6 +286,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
       { id: "teacher-dashboard", label: "داشبورد دبیر", icon: Users },
       { id: "report", label: "نمرات دانش‌آموزان", icon: FileSpreadsheet },
       { id: "traps", label: "اشتباهات پرتکرار", icon: Target },
+      { id: "inperson", label: "جلسه حضوری اسنپی", icon: MapPin },
       { id: "admin", label: "تنظیمات", icon: Shield },
     ],
     admin: [
@@ -295,7 +299,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
   const navigationGroups: Record<RoleType, { title: string; items: string[] }[]> = {
     student: [
       { title: "🏠 خانه", items: ["dashboard", "welcome", "study-planner"] },
-      { title: "📅 برنامه‌ریزی", items: ["schedule", "counseling"] },
+      { title: "📅 برنامه‌ریزی", items: ["schedule", "counseling", "inperson"] },
       { title: "✍️ تمرین و آزمون", items: ["quiz", "traps", "smart-stress-trainer", "konkur"] },
       { title: "📊 کارنامه‌ام", items: ["report", "progress", "psychology"] },
       { title: "💬 مربی هوشمند", items: ["counselor"] },
@@ -303,16 +307,16 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     ],
     parent: [
       { title: "پیشخوان", items: ["welcome", "parents", "manova"] },
-      { title: "گزارش‌های فرزند", items: ["report", "psychology", "counseling", "historical-db", "konkur"] },
+      { title: "گزارش‌های فرزند", items: ["report", "psychology", "counseling", "historical-db", "konkur", "inperson"] },
       { title: "تنظیمات", items: ["admin"] }
     ],
     counselor: [
       { title: "پیشخوان مشاور", items: ["welcome", "counselor-dashboard", "manova"] },
-      { title: "تحلیل‌ها", items: ["report", "psychology", "traps", "counselor-chat"] },
+      { title: "تحلیل‌ها", items: ["report", "psychology", "traps", "counselor-chat", "inperson"] },
       { title: "تنظیمات", items: ["admin"] }
     ],
     teacher: [
-      { title: "آموزش و آزمون", items: ["welcome", "teacher-dashboard", "report", "traps"] },
+      { title: "آموزش و آزمون", items: ["welcome", "teacher-dashboard", "report", "traps", "inperson"] },
       { title: "تنظیمات", items: ["admin"] }
     ],
     admin: [

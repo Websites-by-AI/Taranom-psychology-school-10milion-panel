@@ -3979,6 +3979,116 @@ async function counselingRequestRoute(ctx: Ctx, store: AuthStore, method: string
 }
 
 /* ----------------------------------------------------------------------------
+ * جلسه حضوری «اسنپی» — رزرو دانش‌آموز/والد + ثبت فضای مدرسه/فضای کار اشتراکی
+ * ------------------------------------------------------------------------- */
+async function inpersonBookingRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "D1 لازم است" }, 503);
+  if (method === "POST") {
+    const body = await readJson(ctx.request);
+    const name = String(body?.name || "").trim().slice(0, 100);
+    const mobile = String(body?.mobile || "").trim();
+    if (!name || name.length < 2) return json({ error: "نام معتبر وارد کنید." }, 400);
+    if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست (مثل 09121234567)." }, 400);
+    const ip = getClientIp(ctx.request);
+    const rlKey = `inperson-req:${ip}`;
+    const rl = await rateLimitStatus(store, rlKey, 3600000, 5);
+    if (rl.blocked) return rateLimited(rl.retryAfterSec);
+    await recordRateLimit(store, rlKey, 3600000);
+    const now = new Date().toISOString();
+    const id = randomToken(12);
+    await ctx.env.DB.prepare(
+      "INSERT INTO inperson_bookings (id,name,mobile,requester_role,city,venue_id,venue_name,tutor_tier,session_type,preferred_date,est_price,note,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(
+      id, name, mobile,
+      String(body?.requester_role || "student").slice(0, 20),
+      String(body?.city || "").slice(0, 40) || null,
+      String(body?.venue_id || "").slice(0, 40) || null,
+      String(body?.venue_name || "").slice(0, 120) || null,
+      String(body?.tutor_tier || "").slice(0, 30) || null,
+      String(body?.session_type || "").slice(0, 60) || null,
+      String(body?.preferred_date || "").slice(0, 40) || null,
+      Number(body?.est_price || 0) || null,
+      String(body?.note || "").slice(0, 500) || null,
+      "new", now, now
+    ).run();
+    return json({ ok: true, id, message: "درخواست جلسه حضوری ثبت شد؛ برای هماهنگی نهایی با شما تماس می‌گیریم." });
+  }
+  if (method === "GET") {
+    const requester = await getSessionUser(ctx.request, store);
+    if (!requester || (requester.role !== "admin" && requester.role !== "counselor")) return json({ error: "دسترسی مشاور/ادمین لازم است" }, 403);
+    const res = await ctx.env.DB.prepare(
+      "SELECT id,name,mobile,requester_role,city,venue_name,tutor_tier,session_type,preferred_date,est_price,note,status,created_at FROM inperson_bookings ORDER BY created_at DESC LIMIT 200"
+    ).all();
+    return json({ bookings: res.results || [] });
+  }
+  if (method === "PATCH") {
+    const requester = await getSessionUser(ctx.request, store);
+    if (!requester || (requester.role !== "admin" && requester.role !== "counselor")) return json({ error: "دسترسی مشاور/ادمین لازم است" }, 403);
+    const body = await readJson(ctx.request);
+    const id = String(body?.id || "");
+    const status = String(body?.status || "");
+    if (!id || !["new", "contacted", "confirmed", "done", "canceled"].includes(status)) return json({ error: "id/status نامعتبر" }, 400);
+    await ctx.env.DB.prepare("UPDATE inperson_bookings SET status=?, updated_at=? WHERE id=?")
+      .bind(status, new Date().toISOString(), id).run();
+    return json({ ok: true });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
+
+async function venueOfferRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "D1 لازم است" }, 503);
+  if (method === "POST") {
+    const body = await readJson(ctx.request);
+    const orgName = String(body?.org_name || "").trim().slice(0, 120);
+    const mobile = String(body?.mobile || "").trim();
+    if (!orgName || orgName.length < 2) return json({ error: "نام مجموعه/مدرسه را وارد کنید." }, 400);
+    if (!/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست." }, 400);
+    const ip = getClientIp(ctx.request);
+    const rlKey = `venue-offer:${ip}`;
+    const rl = await rateLimitStatus(store, rlKey, 3600000, 5);
+    if (rl.blocked) return rateLimited(rl.retryAfterSec);
+    await recordRateLimit(store, rlKey, 3600000);
+    const now = new Date().toISOString();
+    const id = randomToken(12);
+    await ctx.env.DB.prepare(
+      "INSERT INTO venue_offers (id,org_name,contact_name,mobile,city,address,venue_type,capacity,price_per_hour,note,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(
+      id, orgName,
+      String(body?.contact_name || "").slice(0, 80) || null,
+      mobile,
+      String(body?.city || "").slice(0, 40) || null,
+      String(body?.address || "").slice(0, 300) || null,
+      String(body?.venue_type || "").slice(0, 40) || null,
+      Number(body?.capacity || 0) || null,
+      Number(body?.price_per_hour || 0) || null,
+      String(body?.note || "").slice(0, 500) || null,
+      "new", now, now
+    ).run();
+    return json({ ok: true, id, message: "ثبت فضا انجام شد؛ تیم ترنم همدلی برای عقد قرارداد اجاره با شما تماس می‌گیرد." });
+  }
+  if (method === "GET") {
+    const requester = await getSessionUser(ctx.request, store);
+    if (!requester || requester.role !== "admin") return json({ error: "دسترسی ادمین لازم است" }, 403);
+    const res = await ctx.env.DB.prepare(
+      "SELECT id,org_name,contact_name,mobile,city,address,venue_type,capacity,price_per_hour,note,status,created_at FROM venue_offers ORDER BY created_at DESC LIMIT 200"
+    ).all();
+    return json({ offers: res.results || [] });
+  }
+  if (method === "PATCH") {
+    const requester = await getSessionUser(ctx.request, store);
+    if (!requester || requester.role !== "admin") return json({ error: "دسترسی ادمین لازم است" }, 403);
+    const body = await readJson(ctx.request);
+    const id = String(body?.id || "");
+    const status = String(body?.status || "");
+    if (!id || !["new", "reviewing", "approved", "rejected"].includes(status)) return json({ error: "id/status نامعتبر" }, 400);
+    await ctx.env.DB.prepare("UPDATE venue_offers SET status=?, updated_at=? WHERE id=?")
+      .bind(status, new Date().toISOString(), id).run();
+    return json({ ok: true });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
+
+/* ----------------------------------------------------------------------------
  * Body parsing + router
  * ------------------------------------------------------------------------- */
 
@@ -4044,6 +4154,18 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await counselingRequestRoute(ctx, store, method);
+    }
+
+    if (path === "inperson-booking") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await inpersonBookingRoute(ctx, store, method);
+    }
+
+    if (path === "venue-offer") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await venueOfferRoute(ctx, store, method);
     }
 
     if (path === "dashboard-stats") {
