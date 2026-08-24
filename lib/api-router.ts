@@ -1730,6 +1730,12 @@ async function getBotCredit(env: Env, platform: string, chatId: string | number)
   } catch (_) { return none; }
 }
 
+function faDayShort(isoDay: string): string {
+  try {
+    const parts = new Date(isoDay + "T12:00:00Z").toLocaleDateString("fa-IR").split("/");
+    return parts.length === 3 ? `${parts[1]}/${parts[2]}` : isoDay.slice(5);
+  } catch (_) { return isoDay.slice(5); }
+}
 function faDate(isoDay: string): string {
   try { return new Date(isoDay + "T12:00:00Z").toLocaleDateString("fa-IR"); } catch (_) { return isoDay; }
 }
@@ -1808,8 +1814,14 @@ async function buildBotHistory(env: Env, platform: string, chatId: string | numb
       "SELECT name, last_name, field, grade, gpa, created_at, updated_at FROM bot_profiles WHERE platform=? AND chat_id=?"
     ).bind(platform, cid).first();
     if (p) {
+      // ثبت‌نام ناقص → دعوت به تکمیل به‌جای نمایش خط تیره‌های زشت
+      if (!p.field || !p.grade) {
+        lines.push(`👤 ${p.name || "دوست عزیز"}`, "");
+        lines.push("⏳ ثبت‌نامت هنوز کامل نشده — چند سوال کوتاه مانده تا پروفایل و کارنامه‌ات فعال شود.", "", "همین الان /start را بزن و ادامه بده! 🚀");
+        return lines.join("\n");
+      }
       const fullName = `${p.name || ""}${p.last_name ? " " + p.last_name : ""}`.trim() || "دوست عزیز";
-      lines.push(`👤 ${fullName} | 📚 ${p.field || "—"} | 🎓 ${p.grade || "—"}${p.gpa ? ` | 📊 معدل ${faNum(p.gpa)}` : ""}`);
+      lines.push(`👤 ${fullName} | 📚 ${p.field} | 🎓 ${p.grade}${p.gpa ? ` | 📊 معدل ${faNum(p.gpa)}` : ""}`);
       if (p.created_at) lines.push(`🗓 عضو از: ${faDate(String(p.created_at).slice(0, 10))}`);
     } else {
       lines.push("هنوز ثبت‌نام نکرده‌ای — /start را بزن تا پروفایلت ساخته شود.");
@@ -1831,7 +1843,7 @@ async function buildBotHistory(env: Env, platform: string, chatId: string | numb
       if (rows.length) {
         lines.push("", "🕐 ۱۰ تست آخر:");
         for (const r of rows) {
-          lines.push(`${r.correct ? "✅" : "❌"} ${r.subject || "عمومی"}${r.year ? ` (کنکور ${faNum(Number(r.year))})` : ""} — ${String(r.day).slice(5)}`);
+          lines.push(`${r.correct ? "✅" : "❌"} ${r.subject || "عمومی"}${r.year ? ` (کنکور ${faNum(Number(r.year))})` : ""} — ${faDayShort(String(r.day))}`);
         }
       }
     } else {
@@ -1845,7 +1857,7 @@ async function buildBotHistory(env: Env, platform: string, chatId: string | numb
     if (cRows.length) {
       const totalChats = cRows.reduce((a: number, r: any) => a + Number(r.used || 0), 0);
       lines.push("", `💬 مشاوره‌های اخیر (${faNum(totalChats)} پیام در ${faNum(cRows.length)} روز):`);
-      for (const r of cRows) lines.push(`• ${String(r.day).slice(5)} → ${faNum(Number(r.used))} پیام`);
+      for (const r of cRows) lines.push(`• ${faDayShort(String(r.day))} → ${faNum(Number(r.used))} پیام`);
     }
     lines.push("", "━━━━━━━━━━━━━━━", "🌐 نسخه کامل کارنامه و برنامه مطالعاتی: hamdeltar.ir");
   } catch (_) { /* silent */ }
@@ -1898,7 +1910,7 @@ async function buildBotTimeline(env: Env, platform: string, chatId: string | num
     const lines = ["", "🗓 نمودار روند (۷ روز اخیر — تاریخ | تعداد | دقت):"];
     for (const d of days) {
       const pct = Math.round((100 * Number(d.c || 0)) / Number(d.n));
-      lines.push(`${String(d.day).slice(5)} | ${faNum(Number(d.n))} تست | ${progressBar(pct)} ${faNum(pct)}٪`);
+      lines.push(`${faDayShort(String(d.day))} | ${faNum(Number(d.n))} تست | ${progressBar(pct)} ${faNum(pct)}٪`);
     }
     return lines.join("\n");
   } catch (_) { return ""; }
@@ -2272,9 +2284,21 @@ async function gradeBotAnswer(
     : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
   const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
   await logBotQuizAnswer(env, platform, chatId, item, chosen === correct);
+  // 🔥 امتیاز امروز — بازخورد فوری برای ادامه دادن
+  let todayLine = "";
+  try {
+    if (env.DB) {
+      const day = new Date().toISOString().slice(0, 10);
+      const t: any = await env.DB.prepare(
+        "SELECT COUNT(*) n, COALESCE(SUM(correct),0) c FROM bot_quiz_log WHERE platform=? AND chat_id=? AND substr(created_at,1,10)=?"
+      ).bind(platform, String(chatId), day).first();
+      const n = Number(t?.n || 0), c = Number(t?.c || 0);
+      if (n > 0) todayLine = `\n🔥 امروز: ${faNum(c)} از ${faNum(n)} درست${n >= 5 && c / n >= 0.8 ? " — عالی داری پیش می‌ری! 👏" : ""}`;
+    }
+  } catch (_) { /* silent */ }
   await send("sendMessage", {
     chat_id: chatId,
-    text: `${verdict}${src}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
+    text: `${verdict}${src}${todayLine}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
     reply_markup: {
       inline_keyboard: [[
         { text: "🔄 سوال بعدی", callback_data: "qz:next" },
@@ -2397,9 +2421,10 @@ async function handleBotUpdate(
         return json({ ok: true });
       }
       if (item === "analysis") {
+        await send("sendChatAction", { chat_id: chatId, action: "typing" });
         const st = await getBotQuizStats(ctx.env, platform, chatId);
         const msg = st ? await buildBotPsychAnalysis(ctx, meta, st, platform, chatId) : "تحلیل فعلاً در دسترس نیست.";
-        await send("sendMessage", { chat_id: chatId, text: msg });
+        await send("sendMessage", { chat_id: chatId, text: msg, reply_markup: BOT_MENU_KEYBOARD });
         return json({ ok: true });
       }
       if (item === "subjects" || item === "years") {
@@ -2646,6 +2671,9 @@ async function handleBotUpdate(
             text: "📚 دوست داری از کدام درس تست بزنی؟ (عدد داخل پرانتز = تعداد سوال موجود)",
             reply_markup: subjectMenuKeyboard(subsD),
           });
+        } else {
+          // بانک در دسترس نبود/درسی پیدا نشد — کاربر را بلاتکلیف نگذار
+          await send("sendMessage", { chat_id: chatId, text: "برای شروع، دکمه «📝 تست» را بزن تا اولین سوال کنکور واقعی برایت بیاید! 🚀", reply_markup: BOT_MENU_KEYBOARD });
         }
         return json({ ok: true });
       }
@@ -2698,6 +2726,7 @@ async function handleBotUpdate(
     return json({ ok: true });
   }
   if (text === "/analysis" || text === "🧠 تحلیل روانشناسی") {
+    await send("sendChatAction", { chat_id: chatId, action: "typing" });
     const st = await getBotQuizStats(ctx.env, platform, chatId);
     const msg = st ? await buildBotPsychAnalysis(ctx, meta, st, platform, chatId) : "تحلیل فعلاً در دسترس نیست.";
     await send("sendMessage", { chat_id: chatId, text: msg, reply_markup: BOT_MENU_KEYBOARD });
@@ -2766,6 +2795,8 @@ async function handleBotUpdate(
   }
   let replyText = "";
   let usedEngine = "";
+  // ⌨️ نشانگر «در حال نوشتن…» — کاربر بداند ربات مشغول فکر کردن است (پاسخ AI چند ثانیه طول می‌کشد)
+  await send("sendChatAction", { chat_id: chatId, action: "typing" });
   try {
     // ۱) بازیابی سوالات مرتبط از بانک RAG هاگینگ‌فیس برای زمینه (کاهش هالوسینیشن)
     const rag = await botRagContext(ctx.env, text);
