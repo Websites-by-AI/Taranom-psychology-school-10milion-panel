@@ -2570,8 +2570,13 @@ async function handleBotUpdate(
       if (item === "quiz" || item === "smart") {
         const prof = await getBotProfile(ctx.env, platform, chatId);
         if (!prof || prof.step !== "done") {
-          await upsertBotProfile(ctx.env, platform, chatId, { name: "دوست عزیز", field: null, grade: null, step: "field" });
-          await send("sendMessage", { chat_id: chatId, text: fieldQuestionText("دوست عزیز") });
+          // نام موجود کاربر را حفظ کن؛ اگر پروفایل نیست فقط رکورد ناقص بساز (COALESCE در upsert نام قبلی را نگه می‌دارد)
+          const keepName = prof?.name || "دوست عزیز";
+          if (!prof) await upsertBotProfile(ctx.env, platform, chatId, { name: keepName, step: "field" });
+          // اگر پروفایل نیمه‌کاره است، از همان مرحله ادامه بده — ریست نکن
+          const step = prof?.step || "field";
+          const stepMsg = step === "grade" ? gradeQuestionText() : step === "gpa" ? gpaQuestionText() : step === "age" ? ageQuestionText() : step === "mood" ? moodQuestionText() : fieldQuestionText(keepName);
+          await send("sendMessage", { chat_id: chatId, text: `اول ثبت‌نام کوتاه را تمام کنیم تا تست مناسب خودت بیاید:\n\n${stepMsg}` });
           return json({ ok: true });
         }
         const q = item === "smart"
@@ -2706,6 +2711,22 @@ async function handleBotUpdate(
     }
     const m = data.match(/^qz:(\d+):(\d+):(\d+)$/);
     if (m) {
+      // ضد double-count: اگر همین سوال در ۲ دقیقه اخیر تصحیح شده، کلیک دوم روی گزینه‌ها را نادیده بگیر
+      try {
+        if (ctx.env.DB) {
+          const bank0 = await getBotQuizBank(ctx.env);
+          const subj0 = bank0[Number(m[1])]?.s || null;
+          const recent: any = await ctx.env.DB.prepare(
+            "SELECT COUNT(*) n FROM bot_quiz_log WHERE platform=? AND chat_id=? AND subject IS ? AND created_at > ?"
+          ).bind(platform, String(chatId), subj0, new Date(Date.now() - 120000).toISOString()).first();
+          const st0 = await ctx.env.DB.prepare("SELECT qi FROM bot_quiz_state WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).first() as any;
+          const stateMatches = st0 && Number(st0.qi) === Number(m[1]);
+          if (!stateMatches && Number(recent?.n || 0) > 0) {
+            await send("sendMessage", { chat_id: chatId, text: "این سوال قبلاً تصحیح شده ✅ — «🔄 سوال بعدی» را بزن!", reply_markup: { inline_keyboard: [[{ text: "🔄 سوال بعدی", callback_data: "qz:next" }]] } });
+            return json({ ok: true });
+          }
+        }
+      } catch (_) { /* silent */ }
       await popBotQuizState(ctx.env, platform, chatId); // پاک‌سازی سوال فعال
       await gradeBotAnswer(ctx.env, send, platform, chatId, Number(m[1]), Number(m[2]), Number(m[3]));
       return json({ ok: true });
@@ -2720,6 +2741,15 @@ async function handleBotUpdate(
   }
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
+  // پیام غیرمتنی (عکس/استیکر/ویس/فایل) → راهنمای کوتاه، نه AI و نه مصرف سهمیه
+  if (!text) {
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: "فعلاً فقط پیام متنی می‌فهمم! 🙏\n\n📷 اگر رسید کارت‌به‌کارت فرستادی، لطفاً «مبلغ + ۴ رقم آخر کارت» را به‌صورت متن هم بنویس تا پشتیبانی سریع‌تر شارژ کند.\nسوالت را به‌صورت متن بنویس یا «📝 تست» را بزن.",
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
+    return json({ ok: true });
+  }
   const userName = message.from?.first_name || "همسفر";
   const userLastName = message.from?.last_name || null;
 
@@ -2744,7 +2774,7 @@ async function handleBotUpdate(
     }
     // اگر ثبت‌نام نیمه‌کاره است، از همان مرحله ادامه بده — از اول شروع نکن
     if (prof && prof.step !== "done") {
-      const stepMsg = prof.step === "grade" ? gradeQuestionText() : prof.step === "gpa" ? gpaQuestionText() : prof.step === "age" ? ageQuestionText() : fieldQuestionText(userName);
+      const stepMsg = prof.step === "grade" ? gradeQuestionText() : prof.step === "gpa" ? gpaQuestionText() : prof.step === "age" ? ageQuestionText() : prof.step === "mood" ? moodQuestionText() : fieldQuestionText(userName);
       await send("sendMessage", { chat_id: chatId, text: `سلام ${userName}! ثبت‌نامت نیمه‌کاره مانده — ادامه بدهیم:\n\n${stepMsg}`, reply_markup: BOT_MENU_KEYBOARD });
       return json({ ok: true });
     }
@@ -3001,6 +3031,16 @@ async function handleBotUpdate(
     await send("sendMessage", {
       chat_id: chatId,
       text: "💬 بفرمایید! سوال درسی، برنامه‌ریزی یا هر دغدغه‌ای دارید همین‌جا بنویسید تا پاسخ بدهم.",
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
+    return json({ ok: true });
+  }
+
+  // دستور ناشناخته (مثل /foobar) → راهنما، نه AI و نه مصرف سهمیه
+  if (text.startsWith("/")) {
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: `دستور «${text.split(/\s/)[0].slice(0, 30)}» را نمی‌شناسم. 🤔\n\nدستورات موجود:\n/start /quiz /smartquiz /dashboard /analysis /history /credit /courses /subjects /setname /status /help`,
       reply_markup: BOT_MENU_KEYBOARD,
     });
     return json({ ok: true });
