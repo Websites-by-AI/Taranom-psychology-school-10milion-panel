@@ -300,7 +300,7 @@ function AppContent({ navigate, location }: { navigate: any; location: any }) {
     student: [
       { title: "🏠 خانه", items: ["dashboard", "welcome", "study-planner"] },
       { title: "📅 برنامه‌ریزی", items: ["schedule", "counseling", "inperson"] },
-      { title: "✍️ تمرین و آزمون", items: ["quiz", "traps", "smart-stress-trainer", "konkur"] },
+      { title: "✍️ تمرین و آزمون", items: ["quiz", "traps", "smart-stress-trainer", "konkur", "courses"] },
       { title: "📊 کارنامه‌ام", items: ["report", "progress", "psychology"] },
       { title: "💬 مربی هوشمند", items: ["counselor"] },
       { title: "⋯ بیشتر", items: ["manova", "metacognition", "historical-db", "admin"] }
