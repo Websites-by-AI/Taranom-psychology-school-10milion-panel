@@ -3019,10 +3019,14 @@ async function handleBotUpdate(
   if (text === "/smartquiz" || text === "🤖 تست هوشمند RAG" || text === "🤖 تست هوشمند") {
     const prof = await getBotProfile(ctx.env, platform, chatId);
     if (!prof || prof.step !== "done") {
-      await upsertBotProfile(ctx.env, platform, chatId, { name: userName, field: null, grade: null, step: "field" });
-      await send("sendMessage", { chat_id: chatId, text: `برای تست هوشمند اول باید بشناسمت! 😊\n\n${fieldQuestionText(userName)}` });
+      // ثبت‌نام نیمه‌کاره را ریست نکن — از همان مرحله ادامه بده
+      if (!prof) await upsertBotProfile(ctx.env, platform, chatId, { name: userName, step: "field" });
+      const stepS = prof?.step || "field";
+      const stepMsgS = stepS === "grade" ? gradeQuestionText() : stepS === "gpa" ? gpaQuestionText() : stepS === "age" ? ageQuestionText() : stepS === "mood" ? moodQuestionText() : fieldQuestionText(userName);
+      await send("sendMessage", { chat_id: chatId, text: `برای تست هوشمند اول باید بشناسمت! 😊\n\n${stepMsgS}` });
       return json({ ok: true });
     }
+    await clearQuizFilter(ctx.env, platform, chatId); // تست هوشمند = خروج از حالت موضوعی
     const sq = await buildSmartQuiz(ctx.env, platform, chatId, prof);
     if (sq) {
       await saveBotQuizState(ctx.env, platform, chatId, sq.qi, sq.item.a);
