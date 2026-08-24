@@ -134,6 +134,40 @@ CREATE TABLE IF NOT EXISTS bot_chat_quota (
   PRIMARY KEY (platform, chat_id, day)
 );
 
+-- آمار هر سوال بانک (مرتب‌سازی/سطح‌بندی بهتر سوالات بر اساس عملکرد واقعی کاربران)
+CREATE TABLE IF NOT EXISTS question_stats (
+  qi         INTEGER PRIMARY KEY,   -- ایندکس سوال در بانک quiz-lite
+  subject    TEXT,
+  field      TEXT,
+  year       TEXT,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  correct    INTEGER NOT NULL DEFAULT 0,
+  likes      INTEGER NOT NULL DEFAULT 0,
+  dislikes   INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT
+);
+
+-- نظرات کاربران روی تک‌تک سوالات (از ربات تلگرام/بله و سایت)
+CREATE TABLE IF NOT EXISTS question_comments (
+  id         TEXT PRIMARY KEY,
+  platform   TEXT NOT NULL,          -- telegram | bale | web
+  chat_id    TEXT NOT NULL,
+  qi         INTEGER NOT NULL,
+  subject    TEXT,
+  comment    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_question_comments_qi ON question_comments (qi);
+
+-- حالت «در انتظار نظر» کاربر ربات (بعد از زدن دکمه 💬 نظر روی سوال)
+CREATE TABLE IF NOT EXISTS bot_comment_state (
+  platform   TEXT NOT NULL,
+  chat_id    TEXT NOT NULL,
+  qi         INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (platform, chat_id)
+);
+
 -- شارژهای خریداری‌شده اعتبار ربات (زرین‌پال / کارت‌به‌کارت — تایید ادمین)
 CREATE TABLE IF NOT EXISTS bot_payments (
   id         TEXT PRIMARY KEY,

@@ -146,6 +146,65 @@ export default function BotAdminPanel() {
         {actionMsg && <p className="text-xs font-black text-slate-600">{actionMsg}</p>}
         <p className="text-[9px] text-slate-400 font-bold">پست خودکار هر روز ~۱۰ صبح تهران توسط Worker انجام می‌شود؛ دکمه بالا برای انتشار فوری دستی است.</p>
       </div>
+
+      {/* 💬 بازخورد سوالات بانک: نظرات کاربران + آمار سختی */}
+      <QuestionFeedbackSection />
+    </div>
+  );
+}
+
+function QuestionFeedbackSection() {
+  const [fb, setFb] = useState<any>(null);
+  const [fbErr, setFbErr] = useState("");
+  const loadFb = useCallback(async () => {
+    try {
+      const res = await fetch("/api/question-feedback", { credentials: "include" });
+      const d = await res.json();
+      if (res.ok) setFb(d); else setFbErr(d.error || "خطا");
+    } catch (_) { setFbErr("اتصال برقرار نشد"); }
+  }, []);
+  useEffect(() => { loadFb(); }, [loadFb]);
+  const delComment = async (id: string) => {
+    await fetch("/api/question-feedback", { method: "DELETE", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    loadFb();
+  };
+  return (
+    <div className="bg-white rounded-3xl border border-slate-100 p-5 space-y-4">
+      <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">💬 بازخورد سوالات بانک (نظرات + آمار سختی از D1)</h3>
+      {fbErr && <p className="text-xs text-rose-600 font-bold">{fbErr}</p>}
+      {fb && (
+        <>
+          <div className="flex flex-wrap gap-2 text-[10px] font-black">
+            <span className="bg-indigo-50 text-indigo-700 rounded-full px-3 py-1.5">📊 {Number(fb.totals?.stats || 0).toLocaleString("fa-IR")} سوال آماردار</span>
+            <span className="bg-emerald-50 text-emerald-700 rounded-full px-3 py-1.5">💬 {Number(fb.totals?.comments || 0).toLocaleString("fa-IR")} نظر کاربران</span>
+            <span className="bg-rose-50 text-rose-700 rounded-full px-3 py-1.5">🚩 {Number(fb.totals?.flagged || 0).toLocaleString("fa-IR")} سوال پرچم‌دار (نیاز به بررسی)</span>
+          </div>
+          {(fb.flagged || []).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-black text-rose-600">🚩 سوالات مشکل‌دار (دیس‌لایک زیاد یا دقت &lt;۱۵٪):</p>
+              {fb.flagged.slice(0, 5).map((r: any) => (
+                <div key={r.qi} className="bg-rose-50/50 border border-rose-100 rounded-xl p-3 text-[10px]">
+                  <b>#{r.qi}</b> [{r.subject || "—"}] {r.q} — 👍{Number(r.likes)} 👎{Number(r.dislikes)} | {Number(r.attempts)} پاسخ، {r.attempts > 0 ? Math.round((100 * r.correct) / r.attempts) : 0}٪ درست
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            <p className="text-[11px] font-black text-slate-600">آخرین نظرات کاربران:</p>
+            {(fb.comments || []).length === 0 && <p className="text-[10px] text-slate-400">هنوز نظری ثبت نشده.</p>}
+            {(fb.comments || []).map((c: any) => (
+              <div key={c.id} className="border border-slate-100 rounded-xl p-3 text-[10px] flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-black text-slate-700">💬 {c.comment}</div>
+                  <div className="text-slate-400 mt-1">سوال #{c.qi} [{c.subject || "—"}]: {c.q}</div>
+                  <div className="text-slate-300 mt-0.5">{c.platform} • {String(c.created_at).slice(0, 16).replace("T", " ")}</div>
+                </div>
+                <button onClick={() => delComment(c.id)} className="text-rose-400 hover:text-rose-600 font-black shrink-0">حذف</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

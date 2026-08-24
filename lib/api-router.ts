@@ -2289,6 +2289,45 @@ async function buildSmartQuiz(env: Env, platform: string, chatId: string | numbe
     candidates = gpa >= 17 ? sorted.slice(0, Math.ceil(sorted.length / 2)) : sorted.slice(Math.floor(sorted.length / 2));
   }
 
+  // ۴) 📊 مرتب‌سازی با سختی واقعی (question_stats از پاسخ همه کاربران):
+  //    دقت شخصی بالا → سوالات سخت‌تر (دقت جمعی پایین)؛ دقت پایین → سوالات آسان‌تر. + حذف سوالات پرگزارش (dislikes>likes+2)
+  try {
+    if (env.DB && candidates.length > 4) {
+      const ids = candidates.map((c: any) => c.i);
+      const qmarks = ids.map(() => "?").join(",");
+      const rows: any = await env.DB.prepare(
+        `SELECT qi, attempts, correct, likes, dislikes FROM question_stats WHERE qi IN (${qmarks})`
+      ).bind(...ids).all();
+      const stats: Record<number, any> = {};
+      for (const r of rows.results || []) stats[Number(r.qi)] = r;
+      // حذف سوالات معیوب (کاربران گزارش منفی زیاد داده‌اند)
+      const clean = candidates.filter((c: any) => {
+        const s = stats[c.i];
+        return !(s && Number(s.dislikes) >= Number(s.likes) + 3);
+      });
+      if (clean.length >= 3) candidates = clean;
+      // دقت شخصی کاربر
+      const me: any = await env.DB.prepare(
+        "SELECT COUNT(*) n, COALESCE(SUM(correct),0) c FROM bot_quiz_log WHERE platform=? AND chat_id=?"
+      ).bind(platform, String(chatId)).first();
+      const myAcc = me && Number(me.n) >= 5 ? Number(me.c) / Number(me.n) : null;
+      if (myAcc !== null) {
+        const withDiff = candidates.map((c: any) => {
+          const s = stats[c.i];
+          const commAcc = s && Number(s.attempts) >= 3 ? Number(s.correct) / Number(s.attempts) : 0.5;
+          return { ...c, commAcc };
+        });
+        // کاربر قوی (>=70%) → سخت‌ترین‌ها (commAcc کم)؛ کاربر ضعیف (<40%) → آسان‌ترها
+        if (myAcc >= 0.7) withDiff.sort((a: any, b: any) => a.commAcc - b.commAcc);
+        else if (myAcc < 0.4) withDiff.sort((a: any, b: any) => b.commAcc - a.commAcc);
+        if (myAcc >= 0.7 || myAcc < 0.4) {
+          candidates = withDiff.slice(0, Math.max(3, Math.ceil(withDiff.length / 2)));
+          reason += myAcc >= 0.7 ? " + سطح سخت (آمار جمعی)" : " + سطح آسان‌تر (آمار جمعی)";
+        }
+      }
+    }
+  } catch (_) { /* silent */ }
+
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
   const base = formatBotQuiz(pick.it, pick.i, platform);
   return { text: `🤖 تست هوشمند RAG — ${reason}\n\n${base.text}`, reply_markup: base.reply_markup, qi: pick.i, item: pick.it };
@@ -2363,6 +2402,8 @@ async function gradeBotAnswer(
     : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
   const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
   await logBotQuizAnswer(env, platform, chatId, item, chosen === correct);
+  // 📊 آمار سوال (سختی واقعی بر اساس پاسخ همه کاربران) — برای مرتب‌سازی بهتر بانک
+  await bumpQuestionStat(env, qi, item, chosen === correct);
   // 🔥 امتیاز امروز — بازخورد فوری برای ادامه دادن
   let todayLine = "";
   try {
@@ -2375,16 +2416,58 @@ async function gradeBotAnswer(
       if (n > 0) todayLine = `\n🔥 امروز: ${faNum(c)} از ${faNum(n)} درست${n >= 5 && c / n >= 0.8 ? " — عالی داری پیش می‌ری! 👏" : ""}`;
     }
   } catch (_) { /* silent */ }
+  // سختی سوال از آمار جمعی (اگر حداقل ۳ نفر جواب داده باشند)
+  let diffLine = "";
+  try {
+    if (env.DB) {
+      const qs: any = await env.DB.prepare("SELECT attempts, correct FROM question_stats WHERE qi=?").bind(qi).first();
+      if (qs && Number(qs.attempts) >= 3) {
+        const pct = Math.round((100 * Number(qs.correct)) / Number(qs.attempts));
+        const label = pct >= 70 ? "🟢 آسان" : pct >= 40 ? "🟡 متوسط" : "🔴 سخت";
+        diffLine = `\n${label} — ${faNum(pct)}٪ کاربران درست زدند (${faNum(Number(qs.attempts))} پاسخ)`;
+      }
+    }
+  } catch (_) { /* silent */ }
   await send("sendMessage", {
     chat_id: chatId,
-    text: `${verdict}${src}${todayLine}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
+    text: `${verdict}${src}${todayLine}${diffLine}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
     reply_markup: {
-      inline_keyboard: [[
-        { text: "🔄 سوال بعدی", callback_data: "qz:next" },
-        { text: "📊 داشبورد", callback_data: "qz:dash" },
-      ]],
+      inline_keyboard: [
+        [
+          { text: "🔄 سوال بعدی", callback_data: "qz:next" },
+          { text: "📊 داشبورد", callback_data: "qz:dash" },
+        ],
+        [
+          { text: "👍", callback_data: `qr:up:${qi}` },
+          { text: "👎", callback_data: `qr:dn:${qi}` },
+          { text: "💬 نظر روی این سوال", callback_data: `qc:${qi}` },
+        ],
+      ],
     },
   });
+}
+
+/** آمار تجمیعی هر سوال — پایه مرتب‌سازی هوشمند بانک. */
+async function bumpQuestionStat(env: Env, qi: number, item: BotQuizItem | null, wasCorrect: boolean): Promise<void> {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(
+      "INSERT INTO question_stats (qi, subject, field, year, attempts, correct, updated_at) VALUES (?,?,?,?,1,?,?) " +
+      "ON CONFLICT(qi) DO UPDATE SET attempts = attempts + 1, correct = correct + excluded.correct, updated_at = excluded.updated_at"
+    ).bind(qi, item?.s || null, item?.f || null, item?.y || null, wasCorrect ? 1 : 0, new Date().toISOString()).run();
+  } catch (_) { /* silent */ }
+}
+
+/** ثبت لایک/دیس‌لایک سوال. */
+async function rateQuestion(env: Env, qi: number, item: BotQuizItem | null, up: boolean): Promise<void> {
+  try {
+    if (!env.DB) return;
+    const col = up ? "likes" : "dislikes";
+    await env.DB.prepare(
+      `INSERT INTO question_stats (qi, subject, field, year, ${col}, updated_at) VALUES (?,?,?,?,1,?) ` +
+      `ON CONFLICT(qi) DO UPDATE SET ${col} = ${col} + 1, updated_at = excluded.updated_at`
+    ).bind(qi, item?.s || null, item?.f || null, item?.y || null, new Date().toISOString()).run();
+  } catch (_) { /* silent */ }
 }
 
 /** Live status text (D1 user count + RAG bank size). */
@@ -2555,6 +2638,33 @@ async function handleBotUpdate(
       await send("sendMessage", { chat_id: chatId, text: cf.text, reply_markup: cf.reply_markup });
       return json({ ok: true });
     }
+    // 👍/👎 امتیاز به سوال
+    const qrM = data.match(/^qr:(up|dn):(\d+)$/);
+    if (qrM) {
+      const qi = Number(qrM[2]);
+      const bank = await getBotQuizBank(ctx.env);
+      await rateQuestion(ctx.env, qi, bank[qi] || null, qrM[1] === "up");
+      await send("sendMessage", { chat_id: chatId, text: qrM[1] === "up" ? "👍 ممنون! امتیازت به این سوال ثبت شد." : "👎 ثبت شد — اگر سوال مشکل دارد، با «💬 نظر روی این سوال» دقیقاً بگو چه ایرادی دارد تا اصلاحش کنیم." });
+      return json({ ok: true });
+    }
+    // 💬 شروع ثبت نظر روی سوال
+    const qcM = data.match(/^qc:(\d+)$/);
+    if (qcM) {
+      const qi = Number(qcM[1]);
+      try {
+        if (ctx.env.DB) {
+          await ctx.env.DB.prepare(
+            "INSERT INTO bot_comment_state (platform, chat_id, qi, created_at) VALUES (?,?,?,?) " +
+            "ON CONFLICT(platform, chat_id) DO UPDATE SET qi=excluded.qi, created_at=excluded.created_at"
+          ).bind(platform, String(chatId), qi, new Date().toISOString()).run();
+        }
+      } catch (_) { /* silent */ }
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: "💬 نظرت درباره این سوال را در یک پیام بنویس و بفرست:\n(مثلاً: «گزینه ۲ هم درست است»، «برچسب درسش اشتباه است»، «تایپش غلط دارد» یا هر پیشنهادی)\n\nبرای انصراف: /cancel",
+      });
+      return json({ ok: true });
+    }
     const subM = data.match(/^qsub:(\d+)$/);
     if (subM) {
       const prof = await getBotProfile(ctx.env, platform, chatId);
@@ -2722,6 +2832,50 @@ async function handleBotUpdate(
     await saveBotQuizState(ctx.env, platform, chatId, quiz.qi, quiz.item.a);
     await send("sendMessage", { chat_id: chatId, text: quiz.text, reply_markup: quiz.reply_markup });
     return json({ ok: true });
+  }
+
+  // 💬 اگر کاربر در حالت «ثبت نظر روی سوال» است، این پیام = نظر او
+  if (text === "/cancel") {
+    try { if (ctx.env.DB) await ctx.env.DB.prepare("DELETE FROM bot_comment_state WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).run(); } catch (_) {}
+    await send("sendMessage", { chat_id: chatId, text: "باشه، لغو شد. 👌", reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  {
+    let cState: any = null;
+    try {
+      if (ctx.env.DB) {
+        cState = await ctx.env.DB.prepare("SELECT qi, created_at FROM bot_comment_state WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).first();
+        // حالت نظر بعد از ۱۰ دقیقه منقضی می‌شود تا پیام‌های مشاوره بعدی را قورت ندهد
+        if (cState && Date.now() - Date.parse(cState.created_at) > 10 * 60 * 1000) {
+          await ctx.env.DB.prepare("DELETE FROM bot_comment_state WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).run();
+          cState = null;
+        }
+      }
+    } catch (_) { /* silent */ }
+    const isMenuBtn = ["📝 تست", "🤖 تست هوشمند", "☰ منو", "📜 تاریخچه", "💳 اعتبار", "🎬 دبیر", "📊 داشبورد", "🧠 تحلیل"].some((b) => text.startsWith(b));
+    if (cState && text.length >= 2 && !text.startsWith("/") && !isMenuBtn) {
+      const qi = Number(cState.qi);
+      try {
+        if (ctx.env.DB) {
+          const bank = await getBotQuizBank(ctx.env);
+          await ctx.env.DB.prepare("DELETE FROM bot_comment_state WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).run();
+          await ctx.env.DB.prepare(
+            "INSERT INTO question_comments (id, platform, chat_id, qi, subject, comment, created_at) VALUES (?,?,?,?,?,?,?)"
+          ).bind(randomToken(12), platform, String(chatId), qi, bank[qi]?.s || null, text.slice(0, 500), new Date().toISOString()).run();
+        }
+      } catch (_) { /* silent */ }
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: "✅ نظرت روی این سوال ثبت شد — ممنون! 🙏\nنظرات کاربران مستقیم در دیتابیس مرکزی ذخیره می‌شود و برای اصلاح بانک سوالات استفاده می‌کنیم.",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔄 سوال بعدی", callback_data: "qz:next" },
+            { text: "📊 داشبورد", callback_data: "qz:dash" },
+          ]],
+        },
+      });
+      return json({ ok: true });
+    }
   }
 
   // اعداد آزاد (معدل/سن) در میانه ثبت‌نام
@@ -4106,6 +4260,39 @@ async function counselingRequestRoute(ctx: Ctx, store: AuthStore, method: string
 }
 
 /* ----------------------------------------------------------------------------
+ * بازخورد سوالات بانک: آمار سختی + نظرات کاربران (ادمین/مشاور)
+ * ------------------------------------------------------------------------- */
+async function questionFeedbackRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  if (!ctx.env.DB) return json({ error: "D1 لازم است" }, 503);
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester || (requester.role !== "admin" && requester.role !== "counselor")) return json({ error: "دسترسی مشاور/ادمین لازم است" }, 403);
+  if (method === "GET") {
+    const bank = await getBotQuizBank(ctx.env);
+    const stats = await ctx.env.DB.prepare(
+      "SELECT qi, subject, attempts, correct, likes, dislikes FROM question_stats ORDER BY attempts DESC LIMIT 100"
+    ).all();
+    const comments = await ctx.env.DB.prepare(
+      "SELECT id, platform, chat_id, qi, subject, comment, created_at FROM question_comments ORDER BY created_at DESC LIMIT 100"
+    ).all();
+    // متن سوال را کنار هر رکورد بگذار تا پنل ادمین قابل فهم باشد
+    const statRows = (stats.results || []).map((r: any) => ({ ...r, q: bank[Number(r.qi)]?.q?.slice(0, 120) || "؟" }));
+    const commentRows = (comments.results || []).map((r: any) => ({ ...r, q: bank[Number(r.qi)]?.q?.slice(0, 120) || "؟" }));
+    // خلاصه: سوالات پرمشکل (dislike بالا یا دقت خیلی پایین با تلاش زیاد)
+    const flagged = statRows.filter((r: any) =>
+      Number(r.dislikes) >= Number(r.likes) + 2 || (Number(r.attempts) >= 5 && Number(r.correct) / Number(r.attempts) < 0.15));
+    return json({ stats: statRows, comments: commentRows, flagged, totals: { stats: statRows.length, comments: commentRows.length, flagged: flagged.length } });
+  }
+  if (method === "DELETE") {
+    const body = await readJson(ctx.request);
+    const id = String(body?.id || "");
+    if (!id) return json({ error: "id لازم است" }, 400);
+    await ctx.env.DB.prepare("DELETE FROM question_comments WHERE id=?").bind(id).run();
+    return json({ ok: true });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
+
+/* ----------------------------------------------------------------------------
  * جلسه حضوری «اسنپی» — رزرو دانش‌آموز/والد + ثبت فضای مدرسه/فضای کار اشتراکی
  * ------------------------------------------------------------------------- */
 async function inpersonBookingRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
@@ -4269,6 +4456,12 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await botAdminRoute(ctx, store, method);
+    }
+
+    if (path === "question-feedback") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await questionFeedbackRoute(ctx, store, method);
     }
 
     if (path === "counselor-students") {
