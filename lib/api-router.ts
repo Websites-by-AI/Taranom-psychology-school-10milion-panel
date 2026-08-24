@@ -2134,7 +2134,23 @@ const BOT_COURSE_TEACHERS: BotCourseTeacher[] = [
  * ۳) کلیک روی لینک → ست شدن کوکی سشن (همان سشن لاگین عادی) → ریدایرکت به داشبورد سایت. */
 const FIELD_FA_TO_EN: Record<string, string> = { "تجربی": "tajrobi", "ریاضی": "riazi", "انسانی": "ensani", "هنر": "honar", "زبان": "zaban" };
 
-async function ensureSiteUserForBot(env: Env, store: AuthStore, platform: string, chatId: string | number, prof: BotProfile): Promise<{ user: UserRow; created: boolean } | null> {
+/** رمز خوانا برای کاربر ربات (حروف/ارقام بدون ابهام O0lI). */
+function friendlyPassword(): string {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const arr = new Uint8Array(8); crypto.getRandomValues(arr);
+  return Array.from(arr).map((b) => chars[b % chars.length]).join("");
+}
+
+async function setUserPassword(env: Env, userId: string, password: string): Promise<boolean> {
+  try {
+    if (!env.DB) return false;
+    const { hash, salt } = await hashPassword(password);
+    await env.DB.prepare("UPDATE users SET password_hash=?, password_salt=? WHERE id=?").bind(hash, salt, userId).run();
+    return true;
+  } catch (_) { return false; }
+}
+
+async function ensureSiteUserForBot(env: Env, store: AuthStore, platform: string, chatId: string | number, prof: BotProfile): Promise<{ user: UserRow; created: boolean; password?: string } | null> {
   try {
     if (!env.DB) return null;
     const cid = String(chatId);
@@ -2144,8 +2160,9 @@ async function ensureSiteUserForBot(env: Env, store: AuthStore, platform: string
       const u = await store.findUserById(String(row.site_user_id));
       if (u) return { user: u, created: false };
     }
-    // ۲) ساخت حساب جدید متصل به ربات
-    const { hash, salt } = await hashPassword(randomToken(16));
+    // ۲) ساخت حساب جدید متصل به ربات — رمز خوانا که به کاربر نشان داده می‌شود
+    const plainPassword = friendlyPassword();
+    const { hash, salt } = await hashPassword(plainPassword);
     const gradeMap: Record<string, string> = {
       "هفتم (متوسطه اول)": "پایه هفتم", "هشتم (متوسطه اول)": "پایه هشتم", "نهم (متوسطه اول)": "پایه نهم",
       "دهم": "پایه دهم", "یازدهم": "پایه یازدهم", "دوازدهم": "پایه دوازدهم", "پشت کنکوری": "پشت کنکوری",
@@ -2164,7 +2181,7 @@ async function ensureSiteUserForBot(env: Env, store: AuthStore, platform: string
     };
     await store.insertUser(user);
     await env.DB.prepare("UPDATE bot_profiles SET site_user_id=? WHERE platform=? AND chat_id=?").bind(user.id, platform, cid).run();
-    return { user, created: true };
+    return { user, created: true, password: plainPassword };
   } catch (_) { return null; }
 }
 
@@ -2227,23 +2244,26 @@ async function buildSiteLoginMessage(env: Env, platform: string, chatId: string 
     res.created ? "🎉 حساب سایتت ساخته شد و به همین ربات وصل است!" : "🌐 حسابت از قبل به ربات وصل است.",
     "━━━━━━━━━━━━━━━",
     `👤 ${res.user.name}`,
-    `📚 پروفایل، کارنامه تست‌ها و اعتبارت بین ربات و سایت مشترک است (دیتابیس مرکزی).`,
+    "📚 پروفایل، کارنامه تست‌ها و اعتبارت بین ربات و سایت مشترک است.",
     "",
-    "🔑 ورود یک‌کلیکی (لینک زیر — ۱۵ دقیقه اعتبار، یک‌بارمصرف):",
-    "دکمه «🌐 ورود به سایت» را بزن؛ در مرورگر باز می‌شود و خودکار وارد داشبوردت می‌شوی.",
+    "🚀 راه ۱ — ورود یک‌کلیکی (راحت‌ترین):",
+    "دکمه «🌐 ورود به سایت» را بزن؛ بدون رمز، خودکار وارد داشبورد می‌شوی. (لینک ۱۵ دقیقه اعتبار دارد و یک‌بارمصرف است)",
     "",
-    "📖 راهنمای ورود دستی (اگر لینک را نخواستی):",
-    "۱) به hamdeltar.ir برو",
-    "۲) دکمه «ورود» → تب «ورود با رمز عبور»",
-    "۳) با ایمیل/موبایلی که در سایت ثبت می‌کنی وارد شو",
-    "(در صفحه پروفایل سایت می‌توانی موبایل و رمز دلخواه ست کنی)",
+    "🔐 راه ۲ — ورود دستی با نام کاربری و رمز:",
+    `▪️ نام کاربری: ${res.user.email}`,
   ];
+  if (res.created && res.password) {
+    lines.push(`▪️ رمز عبور: ${res.password}`, "⚠️ این رمز را همین حالا یادداشت کن — فقط همین یک‌بار نمایش داده می‌شود!");
+  } else {
+    lines.push("▪️ رمز عبور: اگر یادت نیست، دکمه «🔑 رمز جدید» را بزن تا رمز تازه بگیری.");
+  }
+  lines.push("", "مسیر ورود دستی: hamdeltar.ir → دکمه «ورود» → تب «ورود با رمز عبور» → نام کاربری و رمز بالا");
   return {
     text: lines.join("\n"),
     reply_markup: {
       inline_keyboard: [
         [{ text: "🌐 ورود به سایت (یک‌کلیکی)", url: link }],
-        [{ text: "🔄 لینک جدید", callback_data: "menu:sitelogin" }],
+        [{ text: "🔑 رمز جدید", callback_data: "site:newpass" }, { text: "🔄 لینک جدید", callback_data: "menu:sitelogin" }],
       ],
     },
   };
@@ -2768,6 +2788,25 @@ async function handleBotUpdate(
       }
       if (item === "status") { await send("sendMessage", { chat_id: chatId, text: await buildBotStatus(ctx.env, platform) }); return json({ ok: true }); }
       if (item === "help") { await send("sendMessage", { chat_id: chatId, text: BOT_HELP_TEXT }); return json({ ok: true }); }
+      return json({ ok: true });
+    }
+    if (data === "site:newpass") {
+      const prof = await getBotProfile(ctx.env, platform, chatId);
+      const store2 = getAuthStore(ctx.env);
+      if (!prof || prof.step !== "done" || !store2) {
+        await send("sendMessage", { chat_id: chatId, text: "اول ثبت‌نام ربات را کامل کن (/start) و بعد «🌐 ورود به سایت» را بزن." });
+        return json({ ok: true });
+      }
+      const acc = await ensureSiteUserForBot(ctx.env, store2, platform, chatId, prof);
+      if (!acc) { await send("sendMessage", { chat_id: chatId, text: "خطا — دوباره امتحان کن." }); return json({ ok: true }); }
+      const newPass = friendlyPassword();
+      const ok = await setUserPassword(ctx.env, acc.user.id, newPass);
+      await send("sendMessage", {
+        chat_id: chatId,
+        text: ok
+          ? `🔑 رمز جدید ساخته شد:\n\n▪️ نام کاربری: ${acc.user.email}\n▪️ رمز عبور: ${newPass}\n\n⚠️ همین حالا یادداشت کن — دیگر نمایش داده نمی‌شود.\nورود: hamdeltar.ir → «ورود» → تب «ورود با رمز عبور»`
+          : "خطا در تغییر رمز — دوباره امتحان کن.",
+      });
       return json({ ok: true });
     }
     if (data === "credit:card") {
