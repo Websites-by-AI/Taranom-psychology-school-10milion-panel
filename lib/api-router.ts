@@ -1435,7 +1435,7 @@ const BOT_FULL_MENU_INLINE = {
     [{ text: "📊 داشبورد من", callback_data: "qz:dash" }, { text: "🧠 تحلیل روانشناسی", callback_data: "menu:analysis" }],
     [{ text: "💬 مشاوره", callback_data: "menu:chat" }, { text: "📋 ثبت‌نام/تغییر رشته", callback_data: "menu:register" }],
     [{ text: "📜 تاریخچه من", callback_data: "menu:history" }, { text: "💳 اعتبار و خرید", callback_data: "menu:credit" }],
-    [{ text: "🎬 دبیر و دوره رایگان", callback_data: "menu:courses" }],
+    [{ text: "🎬 دبیر و دوره رایگان", callback_data: "menu:courses" }, { text: "🌐 ورود به سایت", callback_data: "menu:sitelogin" }],
     [{ text: "📈 وضعیت", callback_data: "menu:status" }, { text: "ℹ️ راهنما", callback_data: "menu:help" }],
   ],
 };
@@ -2128,6 +2128,127 @@ const BOT_COURSE_TEACHERS: BotCourseTeacher[] = [
   { name: "سابقی", subject: "ریاضی و آمار", fields: ["انسانی"], known: "ریاضی انسانی از پایه", free: "فیلم‌های رایگان آپارات", url: "https://www.aparat.com/result/ریاضی_انسانی_کنکور", provider: "آپارات" },
 ];
 
+/* ── 🌐 ورود یک‌کلیکی به سایت از ربات ──
+ * ۱) اگر کاربر ربات هنوز حساب سایت ندارد، خودکار در جدول users می‌سازیم (اتصال از طریق bot_profiles.site_user_id).
+ * ۲) توکن یک‌بارمصرف ۱۵ دقیقه‌ای در bot_login_tokens صادر و لینک hamdeltar.ir/api/bot-login?t=... داده می‌شود.
+ * ۳) کلیک روی لینک → ست شدن کوکی سشن (همان سشن لاگین عادی) → ریدایرکت به داشبورد سایت. */
+const FIELD_FA_TO_EN: Record<string, string> = { "تجربی": "tajrobi", "ریاضی": "riazi", "انسانی": "ensani", "هنر": "honar", "زبان": "zaban" };
+
+async function ensureSiteUserForBot(env: Env, store: AuthStore, platform: string, chatId: string | number, prof: BotProfile): Promise<{ user: UserRow; created: boolean } | null> {
+  try {
+    if (!env.DB) return null;
+    const cid = String(chatId);
+    // ۱) اتصال قبلی؟
+    const row: any = await env.DB.prepare("SELECT site_user_id FROM bot_profiles WHERE platform=? AND chat_id=?").bind(platform, cid).first();
+    if (row?.site_user_id) {
+      const u = await store.findUserById(String(row.site_user_id));
+      if (u) return { user: u, created: false };
+    }
+    // ۲) ساخت حساب جدید متصل به ربات
+    const { hash, salt } = await hashPassword(randomToken(16));
+    const gradeMap: Record<string, string> = {
+      "هفتم (متوسطه اول)": "پایه هفتم", "هشتم (متوسطه اول)": "پایه هشتم", "نهم (متوسطه اول)": "پایه نهم",
+      "دهم": "پایه دهم", "یازدهم": "پایه یازدهم", "دوازدهم": "پایه دوازدهم", "پشت کنکوری": "پشت کنکوری",
+    };
+    const user: UserRow = {
+      id: randomToken(12),
+      email: `${platform}.${cid}@bot.hamdeltar.ir`,   // شناسه یکتای داخلی — کاربر بعداً می‌تواند ایمیل/موبایل واقعی ست کند
+      mobile: null,
+      name: `${prof.name || "کاربر ربات"}${prof.last_name ? " " + prof.last_name : ""}`,
+      password_hash: hash, password_salt: salt,
+      role: "student",
+      field: FIELD_FA_TO_EN[prof.field || ""] || "tajrobi",
+      grade: gradeMap[prof.grade || ""] || "پایه دوازدهم",
+      city: null, age: prof.age || null, avatar: null, target_major: null,
+      created_at: new Date().toISOString(),
+    };
+    await store.insertUser(user);
+    await env.DB.prepare("UPDATE bot_profiles SET site_user_id=? WHERE platform=? AND chat_id=?").bind(user.id, platform, cid).run();
+    return { user, created: true };
+  } catch (_) { return null; }
+}
+
+async function makeBotLoginLink(env: Env, platform: string, chatId: string | number, userId: string): Promise<string | null> {
+  try {
+    if (!env.DB) return null;
+    const token = randomToken(24);
+    const now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO bot_login_tokens (token, platform, chat_id, user_id, expires_at, created_at) VALUES (?,?,?,?,?,?)"
+    ).bind(token, platform, String(chatId), userId, new Date(now + 15 * 60 * 1000).toISOString(), new Date(now).toISOString()).run();
+    return `${env.APP_URL || "https://hamdeltar.ir"}/api/bot-login?t=${token}`;
+  } catch (_) { return null; }
+}
+
+/** GET /api/bot-login?t=... — مصرف توکن، ست کوکی سشن، ریدایرکت به سایت. */
+async function botLoginRoute(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const url = new URL(ctx.request.url);
+  const t = url.searchParams.get("t") || "";
+  const fail = (msg: string) => new Response(
+    `<!doctype html><html dir="rtl" lang="fa"><meta charset="utf-8"><body style="font-family:Tahoma;text-align:center;padding:60px 20px;background:#f8fafc">
+     <h2>🔗 ${msg}</h2><p>از داخل ربات دوباره دکمه «🌐 ورود به سایت» را بزن تا لینک تازه بگیری.</p>
+     <a href="https://t.me/taranom_hamdeli_bot" style="color:#4f46e5">بازگشت به ربات تلگرام</a></body></html>`,
+    { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+  if (!t || !ctx.env.DB) return fail("لینک نامعتبر است");
+  const row: any = await ctx.env.DB.prepare("SELECT * FROM bot_login_tokens WHERE token=?").bind(t).first();
+  if (!row) return fail("این لینک قبلاً استفاده شده یا نامعتبر است");
+  await ctx.env.DB.prepare("DELETE FROM bot_login_tokens WHERE token=?").bind(t).run(); // یک‌بارمصرف
+  if (Date.now() > Date.parse(row.expires_at)) return fail("لینک منقضی شده (۱۵ دقیقه اعتبار دارد)");
+  const user = await store.findUserById(String(row.user_id));
+  if (!user) return fail("حساب پیدا نشد");
+  const token = randomToken(32);
+  const now = new Date();
+  await store.upsertSession({ token, user_id: user.id, created_at: now.toISOString(), expires_at: new Date(now.getTime() + SESSION_TTL_MS).toISOString() });
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "Location": "/dashboard",
+      "Set-Cookie": sessionCookieHeader(token, SESSION_TTL_MS),
+    },
+  });
+}
+
+/** پیام «🌐 ورود به سایت»: ساخت/اتصال حساب + لینک ورود یک‌کلیکی + راهنمای ورود دستی. */
+async function buildSiteLoginMessage(env: Env, platform: string, chatId: string | number): Promise<{ text: string; reply_markup: any }> {
+  const prof = await getBotProfile(env, platform, chatId);
+  if (!prof || prof.step !== "done") {
+    return {
+      text: "برای ورود به سایت اول ثبت‌نام کوتاه ربات را کامل کن (فقط ۵ سوال) — /start را بزن. 😊",
+      reply_markup: BOT_MENU_KEYBOARD,
+    };
+  }
+  const store = getAuthStore(env);
+  if (!store) return { text: "سرویس حساب‌ها موقتاً در دسترس نیست.", reply_markup: BOT_MENU_KEYBOARD };
+  const res = await ensureSiteUserForBot(env, store, platform, chatId, prof);
+  if (!res) return { text: "خطا در ساخت حساب — کمی بعد دوباره امتحان کن.", reply_markup: BOT_MENU_KEYBOARD };
+  const link = await makeBotLoginLink(env, platform, chatId, res.user.id);
+  if (!link) return { text: "خطا در ساخت لینک ورود — دوباره امتحان کن.", reply_markup: BOT_MENU_KEYBOARD };
+  const lines = [
+    res.created ? "🎉 حساب سایتت ساخته شد و به همین ربات وصل است!" : "🌐 حسابت از قبل به ربات وصل است.",
+    "━━━━━━━━━━━━━━━",
+    `👤 ${res.user.name}`,
+    `📚 پروفایل، کارنامه تست‌ها و اعتبارت بین ربات و سایت مشترک است (دیتابیس مرکزی).`,
+    "",
+    "🔑 ورود یک‌کلیکی (لینک زیر — ۱۵ دقیقه اعتبار، یک‌بارمصرف):",
+    "دکمه «🌐 ورود به سایت» را بزن؛ در مرورگر باز می‌شود و خودکار وارد داشبوردت می‌شوی.",
+    "",
+    "📖 راهنمای ورود دستی (اگر لینک را نخواستی):",
+    "۱) به hamdeltar.ir برو",
+    "۲) دکمه «ورود» → تب «ورود با رمز عبور»",
+    "۳) با ایمیل/موبایلی که در سایت ثبت می‌کنی وارد شو",
+    "(در صفحه پروفایل سایت می‌توانی موبایل و رمز دلخواه ست کنی)",
+  ];
+  return {
+    text: lines.join("\n"),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🌐 ورود به سایت (یک‌کلیکی)", url: link }],
+        [{ text: "🔄 لینک جدید", callback_data: "menu:sitelogin" }],
+      ],
+    },
+  };
+}
+
 /** 🎬 پیام «دبیر و دوره رایگان» شخصی‌سازی‌شده بر اساس رشته + ضعیف‌ترین درس کارنامه. */
 async function buildBotCourseFinder(env: Env, platform: string, chatId: string | number, subjectFilter?: string): Promise<{ text: string; reply_markup: any }> {
   const prof = await getBotProfile(env, platform, chatId);
@@ -2511,7 +2632,9 @@ const BOT_HELP_TEXT = [
   "🎬 دبیر و دوره رایگان — دبیرهای معروف هر درس + لینک دوره رایگان (آلاء/آپارات)، شخصی‌سازی با ضعیف‌ترین درست",
   "",
   "✏️ /setname نام نام‌خانوادگی — اصلاح اطلاعات ثبت‌نامی",
-  "دستورات: /start /quiz /smartquiz /dashboard /analysis /history /credit /courses /setname /status /help",
+  "🌐 ورود به سایت — حساب سایت خودکار ساخته می‌شود + لینک ورود یک‌کلیکی (پروفایل و کارنامه مشترک)",
+  "",
+  "دستورات: /start /quiz /smartquiz /dashboard /analysis /history /credit /courses /site /setname /status /help",
 ].join("\n");
 
 /** Shared update handler for Telegram-compatible bot APIs (Telegram + Bale). */
@@ -2622,6 +2745,11 @@ async function handleBotUpdate(
       if (item === "courses") {
         const cf = await buildBotCourseFinder(ctx.env, platform, chatId);
         await send("sendMessage", { chat_id: chatId, text: cf.text, reply_markup: cf.reply_markup });
+        return json({ ok: true });
+      }
+      if (item === "sitelogin") {
+        const r = await buildSiteLoginMessage(ctx.env, platform, chatId);
+        await send("sendMessage", { chat_id: chatId, text: r.text, reply_markup: r.reply_markup });
         return json({ ok: true });
       }
       if (item === "register") {
@@ -3009,6 +3137,11 @@ async function handleBotUpdate(
   }
   if (text === "/history" || text === "📜 تاریخچه" || text === "📜 تاریخچه من") {
     await send("sendMessage", { chat_id: chatId, text: await buildBotHistory(ctx.env, platform, chatId), reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  if (text === "/site" || text === "🌐 ورود به سایت") {
+    const r = await buildSiteLoginMessage(ctx.env, platform, chatId);
+    await send("sendMessage", { chat_id: chatId, text: r.text, reply_markup: r.reply_markup });
     return json({ ok: true });
   }
   if (text === "/courses" || text === "🎬 دبیر و دوره رایگان" || text === "🎬 دوره‌ها") {
@@ -4502,6 +4635,13 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await questionFeedbackRoute(ctx, store, method);
+    }
+
+    if (path === "bot-login") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      if (isGet) return await botLoginRoute(ctx, store);
+      return json({ error: "Method not allowed" }, 405);
     }
 
     if (path === "counselor-students") {

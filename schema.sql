@@ -168,6 +168,18 @@ CREATE TABLE IF NOT EXISTS bot_comment_state (
   PRIMARY KEY (platform, chat_id)
 );
 
+-- اتصال کاربر ربات به حساب سایت + توکن ورود یک‌بارمصرف (ورود یک‌کلیکی از تلگرام/بله)
+CREATE TABLE IF NOT EXISTS bot_login_tokens (
+  token      TEXT PRIMARY KEY,
+  platform   TEXT NOT NULL,
+  chat_id    TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+-- ستون اتصال پروفایل ربات به users سایت (v3):
+-- ALTER TABLE bot_profiles ADD COLUMN site_user_id TEXT;
+
 -- شارژهای خریداری‌شده اعتبار ربات (زرین‌پال / کارت‌به‌کارت — تایید ادمین)
 CREATE TABLE IF NOT EXISTS bot_payments (
   id         TEXT PRIMARY KEY,
