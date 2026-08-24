@@ -3532,6 +3532,94 @@ async function dashboardStatsRoute(ctx: Ctx, store: AuthStore): Promise<Response
 }
 
 /* ----------------------------------------------------------------------------
+ * Bot admin panel (admin-only): bots info, webhooks, channel, stats, actions
+ * ------------------------------------------------------------------------- */
+async function botAdminRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
+  const requester = await getSessionUser(ctx.request, store);
+  if (!requester || requester.role !== "admin") return json({ error: "دسترسی ادمین لازم است" }, 403);
+
+  const tgToken = ctx.env.TELEGRAM_BOT_TOKEN || "";
+  const baleToken = ctx.env.BALE_BOT_TOKEN || "";
+  const channel = ctx.env.CHANNEL_ID || "@ai_exam_iran";
+
+  if (method === "POST") {
+    const body = await readJson(ctx.request);
+    const action = String(body?.action || "");
+    if (action === "post_channel") {
+      const post = await buildChannelDailyPost(ctx.env);
+      if (!post) return json({ error: "بانک سوال در دسترس نیست" }, 503);
+      const r = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: channel, text: post.text, reply_markup: post.reply_markup }),
+        signal: AbortSignal.timeout(15000) as any,
+      });
+      const d: any = await r.json();
+      return json({ ok: !!d.ok, messageId: d.result?.message_id, error: d.description });
+    }
+    if (action === "test_message") {
+      const chatId = String(body?.chatId || "");
+      if (!chatId) return json({ error: "chatId لازم است" }, 400);
+      const r = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: "🔔 پیام تست از پنل ادمین ترنم همدلی — اتصال سالم است ✅" }),
+        signal: AbortSignal.timeout(15000) as any,
+      });
+      const d: any = await r.json();
+      return json({ ok: !!d.ok, error: d.description });
+    }
+    return json({ error: "action نامعتبر" }, 400);
+  }
+
+  // GET — گردآوری همه اطلاعات
+  const out: any = {
+    settings: {
+      channel,
+      botAdminIds: ctx.env.BOT_ADMIN_IDS || "",
+      chatDailyLimit: BOT_CHAT_DAILY_LIMIT,
+      examRagUrl: ctx.env.EXAM_RAG_URL || "",
+      telegramTokenSet: !!tgToken, baleTokenSet: !!baleToken,
+      cronWorker: "taranom-channel-poster — هر روز 06:30 UTC (~10:00 تهران)",
+    },
+    telegram: {}, bale: {}, channelInfo: {}, stats: {},
+  };
+  try {
+    const [me, wh] = await Promise.all([
+      fetch(`https://api.telegram.org/bot${tgToken}/getMe`, { signal: AbortSignal.timeout(9000) as any }).then((r) => r.json()),
+      fetch(`https://api.telegram.org/bot${tgToken}/getWebhookInfo`, { signal: AbortSignal.timeout(9000) as any }).then((r) => r.json()),
+    ]);
+    out.telegram = {
+      username: (me as any).result?.username, ok: !!(me as any).ok,
+      webhookUrl: (wh as any).result?.url, pending: (wh as any).result?.pending_update_count,
+      lastError: (wh as any).result?.last_error_message || null,
+    };
+  } catch (e: any) { out.telegram = { ok: false, error: e?.message }; }
+  try {
+    const wh: any = await fetch(`https://tapi.bale.ai/bot${baleToken}/getWebhookInfo`, { signal: AbortSignal.timeout(9000) as any }).then((r) => r.json());
+    out.bale = { ok: !!wh.ok, webhookUrl: wh.result?.url, pending: wh.result?.pending_update_count };
+  } catch (e: any) { out.bale = { ok: false, error: "tapi.bale.ai از این سرور در دسترس نیست (فقط داخل ایران)" }; }
+  try {
+    const [ch, cnt] = await Promise.all([
+      fetch(`https://api.telegram.org/bot${tgToken}/getChat?chat_id=${encodeURIComponent(channel)}`, { signal: AbortSignal.timeout(9000) as any }).then((r) => r.json()),
+      fetch(`https://api.telegram.org/bot${tgToken}/getChatMemberCount?chat_id=${encodeURIComponent(channel)}`, { signal: AbortSignal.timeout(9000) as any }).then((r) => r.json()),
+    ]);
+    out.channelInfo = { title: (ch as any).result?.title, members: (cnt as any).result, ok: !!(ch as any).ok };
+  } catch (_) { out.channelInfo = { ok: false }; }
+  try {
+    if (ctx.env.DB) {
+      const day = new Date().toISOString().slice(0, 10);
+      const s: any = await ctx.env.DB.prepare(
+        "SELECT (SELECT COUNT(*) FROM bot_profiles) profiles, (SELECT COUNT(*) FROM bot_profiles WHERE step='done') completed, (SELECT COUNT(*) FROM bot_quiz_log) answers, (SELECT COUNT(DISTINCT chat_id) FROM bot_quiz_log) quiz_users, (SELECT COALESCE(SUM(used),0) FROM bot_chat_quota WHERE day=?) chats_today"
+      ).bind(day).first();
+      const byPlatform: any = await ctx.env.DB.prepare(
+        "SELECT platform, COUNT(*) n FROM bot_profiles GROUP BY platform"
+      ).all();
+      out.stats = { ...s, byPlatform: byPlatform.results || [] };
+    }
+  } catch (_) { /* ignore */ }
+  return json(out);
+}
+
+/* ----------------------------------------------------------------------------
  * Counselor-managed students: register & delete own students only
  * ------------------------------------------------------------------------- */
 async function counselorStudentsRoute(ctx: Ctx, store: AuthStore, method: string): Promise<Response> {
@@ -3686,6 +3774,12 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await studyPlanRoute(ctx, store, method);
+    }
+
+    if (path === "bot-admin") {
+      const store = getAuthStore(ctx.env);
+      if (!store) return authUnavailable();
+      return await botAdminRoute(ctx, store, method);
     }
 
     if (path === "counselor-students") {
