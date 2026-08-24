@@ -168,6 +168,26 @@ export default function KonkurExamView({ student }: { student?: Student }) {
         </div>
       </div>
 
+      {/* 🏛 منابع رسمی و راستی‌آزمایی */}
+      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-xs text-emerald-900 leading-relaxed">
+        <p className="font-black mb-2">🏛 منابع رسمی — خودتان راستی‌آزمایی کنید</p>
+        <ul className="list-disc pr-5 space-y-1.5">
+          <li>
+            سوالات بانک از <b>دفترچه‌های رسمی کنکور سراسری ۱۳۹۸ تا ۱۴۰۴</b> استخراج شده‌اند؛ آرشیو کامل PDF دفترچه‌ها:{" "}
+            <a href="https://sosa123454321-taranom-exam-rag.static.hf.space/pdfs/manifest.json" target="_blank" rel="noreferrer" className="underline font-bold">۲۱ دفترچه رسمی (دانلود مستقیم)</a>
+          </li>
+          <li>
+            مرجع اصلی انتشار سوالات و کلید: <a href="https://www.sanjesh.org" target="_blank" rel="noreferrer" className="underline font-bold">سازمان سنجش آموزش کشور (sanjesh.org)</a>
+            {" "}— بخش «دفترچه سوالات و کلید آزمون سراسری»
+          </li>
+          <li>
+            🤖 <b>راستی‌آزمایی با هوش مصنوعی:</b> کلید همه سوالات با مدل Llama-3.3-70B دوبار حل و مقایسه شده؛ سوالاتی که کلیدشان محل اختلاف بود (۱۹ مورد) از چرخه تست خارج شده‌اند تا بازبینی انسانی شوند —{" "}
+            <a href="https://sosa123454321-taranom-exam-rag.static.hf.space/data/suspect-keys.json" target="_blank" rel="noreferrer" className="underline font-bold">گزارش عمومی موارد مشکوک</a>
+          </li>
+          <li>زیر هر تصحیح در ربات تلگرام، سال و رشته دفترچه + دکمه «📄 دفترچه رسمی PDF» نمایش داده می‌شود تا هر سوال قابل ردیابی باشد.</li>
+        </ul>
+      </div>
+
       {/* یادداشت صادقانه دربارهٔ محدودیت‌ها */}
       <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-800 leading-relaxed">
         <p className="font-black mb-1">ℹ️ چند نکتهٔ مهم</p>

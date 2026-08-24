@@ -1392,7 +1392,7 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
  * - Reply keyboard menu, live /status backed by D1
  * ------------------------------------------------------------------------- */
 
-interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; }
+interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; src?: string; kc?: string; }
 let botQuizCache: { at: number; items: BotQuizItem[] } | null = null;
 
 async function getBotQuizBank(env: Env): Promise<BotQuizItem[]> {
@@ -1401,8 +1401,10 @@ async function getBotQuizBank(env: Env): Promise<BotQuizItem[]> {
     const base = env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space";
     const resp = await fetch(`${base}/data/quiz-lite.json`, { signal: AbortSignal.timeout(8000) } as any);
     if (resp.ok) {
-      const items = (await resp.json()) as BotQuizItem[];
-      if (Array.isArray(items) && items.length > 0) {
+      const itemsAll = (await resp.json()) as BotQuizItem[];
+      // سوالاتی که کلیدشان در حال بازبینی است (kc=review) سرو نمی‌شوند
+      const items = Array.isArray(itemsAll) ? itemsAll.filter((it) => it.kc !== "review") : [];
+      if (items.length > 0) {
         botQuizCache = { at: Date.now(), items };
         return items;
       }
@@ -2570,7 +2572,7 @@ async function gradeBotAnswer(
   const verdict = chosen === correct
     ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
     : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
-  const src = item ? `\n\n📚 منبع: کنکور ${faNum(Number(item.y))} — ${item.s} (${item.f})` : "";
+  const src = item ? `\n\n📚 منبع: کنکور سراسری ${faNum(Number(item.y))} — ${item.s} (${item.f})${item.src ? "" : "\n🏛 قابل راستی‌آزمایی در سایت سنجش: sanjesh.org"}` : "";
   await logBotQuizAnswer(env, platform, chatId, item, chosen === correct);
   // 📊 آمار سوال (سختی واقعی بر اساس پاسخ همه کاربران) — برای مرتب‌سازی بهتر بانک
   await bumpQuestionStat(env, qi, item, chosen === correct);
@@ -2612,6 +2614,7 @@ async function gradeBotAnswer(
           { text: "👎", callback_data: `qr:dn:${qi}` },
           { text: "💬 نظر روی این سوال", callback_data: `qc:${qi}` },
         ],
+        ...(item?.src ? [[{ text: "📄 دفترچه رسمی این کنکور (PDF)", url: item.src }]] : []),
       ],
     },
   });
