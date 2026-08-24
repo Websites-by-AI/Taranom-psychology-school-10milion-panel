@@ -2681,7 +2681,8 @@ const BOT_HELP_TEXT = [
   "🎬 دبیر و دوره رایگان — دبیرهای معروف هر درس + لینک دوره رایگان (آلاء/آپارات)، شخصی‌سازی با ضعیف‌ترین درست",
   "",
   "✏️ /setname نام نام‌خانوادگی — اصلاح اطلاعات ثبت‌نامی",
-  "🌐 ورود به سایت — حساب سایت خودکار ساخته می‌شود + لینک ورود یک‌کلیکی (پروفایل و کارنامه مشترک)",
+  "🌐 ورود به سایت — حساب سایت خودکار + لینک ورود یک‌کلیکی + نام کاربری/رمز",
+  "🔗 /link موبایل رمز — اتصال حساب قبلی سایت (ثبت‌نامی با موبایل) به ربات: هویت واحد در همه‌جا",
   "",
   "دستورات: /start /quiz /smartquiz /dashboard /analysis /history /credit /courses /site /setname /status /help",
 ].join("\n");
@@ -3048,7 +3049,18 @@ async function handleBotUpdate(
     const newFirst = parts[0].slice(0, 40);
     const newLast = parts.slice(1).join(" ").slice(0, 60) || null;
     await upsertBotProfile(ctx.env, platform, chatId, { name: newFirst, last_name: newLast });
-    await send("sendMessage", { chat_id: chatId, text: `✅ نام به‌روزرسانی شد: ${newFirst}${newLast ? " " + newLast : ""}`, reply_markup: BOT_MENU_KEYBOARD });
+    // 🔄 سینک با حساب سایت (اگر متصل است) — نام در همه‌جا یکی می‌ماند
+    let siteSynced = false;
+    try {
+      if (ctx.env.DB) {
+        const link: any = await ctx.env.DB.prepare("SELECT site_user_id FROM bot_profiles WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).first();
+        if (link?.site_user_id) {
+          await ctx.env.DB.prepare("UPDATE users SET name=? WHERE id=?").bind(`${newFirst}${newLast ? " " + newLast : ""}`, String(link.site_user_id)).run();
+          siteSynced = true;
+        }
+      }
+    } catch (_) { /* silent */ }
+    await send("sendMessage", { chat_id: chatId, text: `✅ نام به‌روزرسانی شد: ${newFirst}${newLast ? " " + newLast : ""}${siteSynced ? "\n🌐 حساب سایتت هم همگام شد." : ""}`, reply_markup: BOT_MENU_KEYBOARD });
     return json({ ok: true });
   }
   // 📢 پست روزانه کانال — فقط ادمین ربات
@@ -3232,6 +3244,33 @@ async function handleBotUpdate(
   }
   if (text === "/history" || text === "📜 تاریخچه" || text === "📜 تاریخچه من") {
     await send("sendMessage", { chat_id: chatId, text: await buildBotHistory(ctx.env, platform, chatId), reply_markup: BOT_MENU_KEYBOARD });
+    return json({ ok: true });
+  }
+  // 🔗 /link موبایل رمز — اتصال حساب موجود سایت (ثبت‌نامی با موبایل) به همین ربات
+  if (text.startsWith("/link")) {
+    const parts = text.replace("/link", "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      await send("sendMessage", { chat_id: chatId, text: "🔗 اتصال حساب سایت به ربات:\n/link شماره‌موبایل رمزعبور\nمثال: /link 09121234567 mypass123\n\nبعد از اتصال، کارنامه و پروفایل ربات و سایت یکی می‌شود.", reply_markup: BOT_MENU_KEYBOARD });
+      return json({ ok: true });
+    }
+    const store3 = getAuthStore(ctx.env);
+    if (!store3 || !ctx.env.DB) { await send("sendMessage", { chat_id: chatId, text: "سرویس حساب‌ها در دسترس نیست." }); return json({ ok: true }); }
+    const identifier = parts[0].replace(/[۰-۹]/g, (c) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c)));
+    const password = parts[1];
+    const target = await store3.findUserByIdentifier(identifier);
+    const okPass = target ? safeEqual(await pbkdf2(password, target.password_salt), target.password_hash) : false;
+    if (!target || !okPass) {
+      await send("sendMessage", { chat_id: chatId, text: "❌ موبایل/ایمیل یا رمز اشتباه است. (همان اطلاعات ورود سایت را بفرست)", reply_markup: BOT_MENU_KEYBOARD });
+      return json({ ok: true });
+    }
+    // اتصال: پروفایل ربات به این حساب وصل می‌شود؛ حساب bot-ساخته قبلی (اگر بود و خالی بود) رها می‌شود
+    await ctx.env.DB.prepare("UPDATE bot_profiles SET site_user_id=?, name=COALESCE(?, name) WHERE platform=? AND chat_id=?")
+      .bind(target.id, target.name || null, platform, String(chatId)).run();
+    await send("sendMessage", {
+      chat_id: chatId,
+      text: `✅ حسابت وصل شد!\n👤 ${target.name}\n📱 ${target.mobile || target.email}\n\nاز الان ربات و سایت یک هویت واحدند: کارنامه، اعتبار و پروفایل مشترک. دکمه «🌐 ورود به سایت» هم با همین حساب لینک می‌دهد.`,
+      reply_markup: BOT_MENU_KEYBOARD,
+    });
     return json({ ok: true });
   }
   if (text === "/site" || text === "🌐 ورود به سایت") {
@@ -4145,6 +4184,35 @@ async function authUpdateRole(ctx: Ctx, store: AuthStore): Promise<Response> {
   return json({ ok: true, userId, role });
 }
 
+/** POST /api/auth/update-profile — ویرایش نام/موبایل/شهر توسط خود کاربر + سینک به پروفایل ربات متصل. */
+async function authUpdateProfile(ctx: Ctx, store: AuthStore): Promise<Response> {
+  const me = await getSessionUser(ctx.request, store);
+  if (!me) return json({ error: "ابتدا وارد شوید." }, 401);
+  const body = await readJson(ctx.request);
+  const name = (body?.name || "").toString().trim().slice(0, 100);
+  const mobile = (body?.mobile || "").toString().trim();
+  const city = (body?.city || "").toString().trim().slice(0, 50);
+  if (mobile && !/^09\d{9}$/.test(mobile)) return json({ error: "شماره موبایل معتبر نیست." }, 400);
+  if (mobile) {
+    const other = await store.findUserByIdentifier(mobile);
+    if (other && other.id !== me.id) return json({ error: "این موبایل به حساب دیگری متصل است." }, 409);
+  }
+  if (!ctx.env.DB) return json({ error: "D1 لازم است" }, 503);
+  await ctx.env.DB.prepare("UPDATE users SET name=COALESCE(NULLIF(?,''), name), mobile=COALESCE(NULLIF(?,''), mobile), city=COALESCE(NULLIF(?,''), city) WHERE id=?")
+    .bind(name, mobile, city, me.id).run();
+  // 🔄 سینک برعکس: نام جدید به پروفایل ربات متصل هم برود
+  try {
+    if (name) {
+      const p = name.split(/\s+/);
+      await ctx.env.DB.prepare("UPDATE bot_profiles SET name=?, last_name=? WHERE site_user_id=?")
+        .bind(p[0], p.slice(1).join(" ") || null, me.id).run();
+    }
+  } catch (_) { /* silent */ }
+  const updated = await store.findUserById(me.id);
+  return json({ ok: true, user: userToStudent(updated!) });
+}
+
+
 function validateStudyPlan(raw: any): any | null {
   if (!raw || typeof raw !== "object" || !Array.isArray(raw.schedule)) return null;
   if (raw.schedule.length < 1 || raw.schedule.length > 7) return null;
@@ -4710,6 +4778,7 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
         case "auth/list":           if (isGet)  return await authList(ctx, store); break;
         case "auth/list-all":       if (isGet)  return await authListAll(ctx, store); break;
         case "auth/update-role":    if (isPost) return await authUpdateRole(ctx, store); break;
+        case "auth/update-profile": if (isPost) return await authUpdateProfile(ctx, store); break;
       }
       return json({ error: "Method not allowed", path, method }, 405);
     }
