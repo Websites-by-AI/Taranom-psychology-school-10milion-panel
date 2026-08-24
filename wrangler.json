@@ -12,7 +12,9 @@
   ],
   "vars": {
     "HF_MODEL": "meta-llama/Llama-3.3-70B-Instruct:featherless-ai",
-    "EXAM_RAG_URL": "https://sosa123454321-taranom-exam-rag.static.hf.space"
+    "EXAM_RAG_URL": "https://sosa123454321-taranom-exam-rag.static.hf.space",
+    "CHANNEL_ID": "@ai_exam_iran",
+    "BOT_ADMIN_IDS": "93372553"
   },
   "ai": {
     "binding": "AI"
