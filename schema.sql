@@ -255,3 +255,10 @@ CREATE TABLE IF NOT EXISTS counseling_requests (
 -- ALTER TABLE users ADD COLUMN created_by TEXT;
 
 -- خلق ثبت‌نام ربات (v3): ALTER TABLE bot_profiles ADD COLUMN mood INTEGER;
+-- آرشیو متن کامل صفحات دفترچه‌های رسمی (پایه دیتابیس ۱۰ ساله)
+CREATE TABLE IF NOT EXISTS exam_pages_archive (
+  pdf  TEXT NOT NULL,
+  page INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  PRIMARY KEY (pdf, page)
+);

@@ -1392,7 +1392,7 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
  * - Reply keyboard menu, live /status backed by D1
  * ------------------------------------------------------------------------- */
 
-interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; src?: string; kc?: string; }
+interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; src?: string; kc?: string; pg?: number; }
 let botQuizCache: { at: number; items: BotQuizItem[] } | null = null;
 
 async function getBotQuizBank(env: Env): Promise<BotQuizItem[]> {
@@ -2604,7 +2604,7 @@ async function gradeBotAnswer(
   const verdict = chosen === correct
     ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
     : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
-  const src = item ? `\n\n📚 منبع: کنکور سراسری ${faNum(Number(item.y))} — ${item.s} (${item.f})${item.src ? "" : "\n🏛 قابل راستی‌آزمایی در سایت سنجش: sanjesh.org"}` : "";
+  const src = item ? `\n\n📚 منبع: کنکور سراسری ${faNum(Number(item.y))} — ${item.s} (${item.f})${item.pg ? ` — صفحه ${faNum(item.pg)} دفترچه` : ""}${item.src ? "" : "\n🏛 قابل راستی‌آزمایی در سایت سنجش: sanjesh.org"}` : "";
   await logBotQuizAnswer(env, platform, chatId, item, chosen === correct);
   // 📊 آمار سوال (سختی واقعی بر اساس پاسخ همه کاربران) — برای مرتب‌سازی بهتر بانک
   await bumpQuestionStat(env, qi, item, chosen === correct);
@@ -2646,7 +2646,7 @@ async function gradeBotAnswer(
           { text: "👎", callback_data: `qr:dn:${qi}` },
           { text: "💬 نظر روی این سوال", callback_data: `qc:${qi}` },
         ],
-        ...(item?.src ? [[{ text: "📄 دفترچه رسمی این کنکور (PDF)", url: item.src }]] : []),
+        ...(item?.src ? [[{ text: item.pg ? `📄 دفترچه رسمی (صفحه ${faNum(item.pg)})` : "📄 دفترچه رسمی این کنکور (PDF)", url: item.src + (item.pg ? `#page=${item.pg}` : "") }]] : []),
       ],
     },
   });
