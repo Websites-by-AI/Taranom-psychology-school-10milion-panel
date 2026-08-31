@@ -1392,7 +1392,7 @@ async function auditModule(ctx: Ctx, meta: RespMeta): Promise<Response> {
  * - Reply keyboard menu, live /status backed by D1
  * ------------------------------------------------------------------------- */
 
-interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; src?: string; kc?: string; pg?: number; }
+interface BotQuizItem { q: string; o: string[]; a: number; y: string; s: string; f: string; l?: string; src?: string; kc?: string; pg?: number; qn?: number; }
 let botQuizCache: { at: number; items: BotQuizItem[] } | null = null;
 
 async function getBotQuizBank(env: Env): Promise<BotQuizItem[]> {
@@ -1437,6 +1437,7 @@ const BOT_FULL_MENU_INLINE = {
     [{ text: "💬 مشاوره", callback_data: "menu:chat" }, { text: "📋 ثبت‌نام/تغییر رشته", callback_data: "menu:register" }],
     [{ text: "📜 تاریخچه من", callback_data: "menu:history" }, { text: "💳 اعتبار و خرید", callback_data: "menu:credit" }],
     [{ text: "🎬 دبیر و دوره رایگان", callback_data: "menu:courses" }, { text: "🌐 ورود به سایت", callback_data: "menu:sitelogin" }],
+    [{ text: "📈 تحلیل ساختار کنکور", callback_data: "menu:structure" }],
     [{ text: "📈 وضعیت", callback_data: "menu:status" }, { text: "ℹ️ راهنما", callback_data: "menu:help" }],
   ],
 };
@@ -1468,6 +1469,20 @@ async function getBotEmbeddings(env: Env): Promise<{ dims: number; vectors: Floa
   } catch (_) { return null; }
 }
 
+/* پروفایل‌های روند ساختار کنکور (تولیدشده از بانک + تحلیل AI، ذخیره روی HF Space) */
+let structProfCache: { at: number; profiles: any[] } | null = null;
+async function getStructureProfiles(env: Env): Promise<any[]> {
+  if (structProfCache && Date.now() - structProfCache.at < 60 * 60 * 1000) return structProfCache.profiles;
+  try {
+    const base = env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space";
+    const resp = await fetch(`${base}/data/exam-structure-profiles.json`, { signal: AbortSignal.timeout(8000) } as any);
+    if (!resp.ok) return [];
+    const data: any = await resp.json();
+    structProfCache = { at: Date.now(), profiles: data.profiles || [] };
+    return structProfCache.profiles;
+  } catch (_) { return []; }
+}
+
 function cosineSim(a: Float32Array, b: Float32Array): number {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
@@ -1491,13 +1506,19 @@ async function botRagContext(env: Env, userText: string): Promise<{ context: str
 
     // ۱) مسیر معنایی: Workers AI embeddings + بردارهای از پیش محاسبه‌شده روی HF Space
     const [emb, qVec] = await Promise.all([getBotEmbeddings(env), embedQuery(env, userText)]);
-    if (emb && qVec && emb.vectors.length === bank.length) {
-      const scored = bank.map((item, i) => ({ item, score: cosineSim(qVec, emb.vectors[i]) }))
-        .sort((a, b) => b.score - a.score).slice(0, 3).filter((x) => x.score > 0.45);
-      if (scored.length > 0) {
-        const ctxLines = scored.map(({ item }, i) =>
-          `${i + 1}) [کنکور ${item.y} — ${item.s}] ${item.q}\nگزینه‌ها: ${item.o.join(" | ")}\nپاسخ صحیح: ${item.o[item.a] || "-"}`);
-        return { context: ctxLines.join("\n\n"), hits: scored.map((x) => x.item), mode: "semantic" };
+    if (emb && qVec) {
+      if (emb.vectors.length !== bank.length) {
+        // عدم تطابق بردار/بانک = امبدینگ‌ها کهنه‌اند؛ فقط تا حداقل مشترک پیش برو (به‌جای مرگ کامل مسیر معنایی)
+        console.warn(`RAG embeddings/bank mismatch: ${emb.vectors.length} vs ${bank.length}`);
+      }
+      const n = Math.min(emb.vectors.length, bank.length);
+      const scored = [] as { item: BotQuizItem; score: number }[];
+      for (let i = 0; i < n; i++) scored.push({ item: bank[i], score: cosineSim(qVec, emb.vectors[i]) });
+      const top = scored.sort((a, b) => b.score - a.score).slice(0, 3).filter((x) => x.score > 0.45);
+      if (top.length > 0) {
+        const ctxLines = top.map(({ item }, i) =>
+          `${i + 1}) [کنکور ${item.y} — ${item.s}${item.pg ? ` ص${item.pg}` : ""}] ${item.q}\nگزینه‌ها: ${item.o.join(" | ")}\nپاسخ صحیح: ${item.o[item.a] || "-"}`);
+        return { context: ctxLines.join("\n\n"), hits: top.map((x) => x.item), mode: emb.vectors.length === bank.length ? "semantic" : "semantic-partial" };
       }
     }
 
@@ -2401,6 +2422,74 @@ async function clearQuizFilter(env: Env, platform: string, chatId: string | numb
   try { if (env.DB) await env.DB.prepare("DELETE FROM bot_quiz_filter WHERE platform=? AND chat_id=?").bind(platform, String(chatId)).run(); } catch (_) { /* silent */ }
 }
 
+/** 📈 تحلیل ساختار کنکور: توزیع سوالات درس×سال×سختی از بانک رسمی + تفسیر روند با AI. */
+async function buildExamStructureAnalysis(ctx: Ctx, platform: string, chatId: string | number, subjectFilter?: string): Promise<string> {
+  const env = ctx.env;
+  const bank = await getBotQuizBank(env);
+  const prof = await getBotProfile(env, platform, chatId);
+  const field = prof?.field || null;
+  const pool = bank.filter((it) =>
+    (!field || field === "عمومی" || it.f === field || it.f === "عمومی") &&
+    (!subjectFilter || it.s === subjectFilter));
+  if (pool.length < 3) return "برای این درس/رشته هنوز داده کافی در بانک نیست.";
+
+  // ماتریس درس×سال + سختی
+  const bySubYear: Record<string, Record<string, number>> = {};
+  const byLevel: Record<string, number> = { "آسان": 0, "متوسط": 0, "سخت": 0 };
+  const years = new Set<string>();
+  for (const it of pool) {
+    (bySubYear[it.s] = bySubYear[it.s] || {})[it.y] = (bySubYear[it.s]?.[it.y] || 0) + 1;
+    years.add(it.y);
+    if (it.l && byLevel[it.l] !== undefined) byLevel[it.l]++;
+  }
+  const yrs = [...years].sort();
+  const lines: string[] = [
+    subjectFilter ? `📈 تحلیل ساختار «${subjectFilter}»${field ? ` — رشته ${field}` : ""}` : `📈 تحلیل ساختار کنکور${field ? ` — رشته ${field}` : ""}`,
+    `(بر اساس ${faNum(pool.length)} سوال بانک رسمی، سال‌های ${yrs.map((y) => faNum(Number(y))).join("، ")})`,
+    "━━━━━━━━━━━━━━━",
+  ];
+  const subs = Object.entries(bySubYear).sort((a, b) =>
+    Object.values(b[1]).reduce((x, y) => x + y, 0) - Object.values(a[1]).reduce((x, y) => x + y, 0)).slice(0, 10);
+  for (const [sub, ymap] of subs) {
+    const tot = Object.values(ymap).reduce((a, b) => a + b, 0);
+    const trend = yrs.map((y) => `${faNum(Number(y) % 100)}:${faNum(ymap[y] || 0)}`).join(" ");
+    lines.push(`📚 ${sub} (${faNum(tot)}): ${trend}`);
+  }
+  const totL = byLevel["آسان"] + byLevel["متوسط"] + byLevel["سخت"];
+  if (totL > 0) {
+    lines.push("", `⚖️ سختی: 🟢 ${faNum(Math.round(100 * byLevel["آسان"] / totL))}٪ آسان | 🟡 ${faNum(Math.round(100 * byLevel["متوسط"] / totL))}٪ متوسط | 🔴 ${faNum(Math.round(100 * byLevel["سخت"] / totL))}٪ سخت`);
+  }
+  // آمار جمعی کاربران (دقت واقعی روی این درس‌ها)
+  try {
+    if (env.DB) {
+      const qs: any = subjectFilter
+        ? await env.DB.prepare("SELECT SUM(attempts) a, SUM(correct) c FROM question_stats WHERE subject=?").bind(subjectFilter).first()
+        : await env.DB.prepare("SELECT SUM(attempts) a, SUM(correct) c FROM question_stats" + (field ? " WHERE field=?" : "")).bind(...(field ? [field] : [])).first();
+      if (qs && Number(qs.a) >= 5) lines.push(`👥 دقت جمعی کاربران سامانه: ${faNum(Math.round(100 * Number(qs.c) / Number(qs.a)))}٪ در ${faNum(Number(qs.a))} پاسخ`);
+    }
+  } catch (_) { /* silent */ }
+  // مقایسه سال‌به‌سال کل رشته (از آمار ۲۱ دفترچه رسمی — پیش‌تولیدشده)
+  try {
+    const base = env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space";
+    const resp = await fetch(`${base}/data/exam-structure-profiles.json`, { signal: AbortSignal.timeout(8000) } as any);
+    if (resp.ok) {
+      const data: any = await resp.json();
+      if (!subjectFilter && field && data.field_comparisons?.[field]) {
+        lines.push("", `🗂 مقایسه سال‌به‌سال رشته ${field} (از ${faNum((data.booklets || []).filter((b: any) => String(b.field).startsWith(field)).length)} دفترچه رسمی):`, String(data.field_comparisons[field]).slice(0, 400));
+      }
+    }
+  } catch (_) { /* silent */ }
+  // تفسیر AI روند درس‌ها
+  try {
+    const facts = subs.map(([sub, ymap]) => `${sub}: ${yrs.map((y) => `${y}=${ymap[y] || 0}`).join(",")}`).join(" | ");
+    const sys = "شما تحلیلگر ساختار کنکور هستید. بر اساس داده‌های تعداد سوال هر مبحث در سال‌های اخیر، در حداکثر ۴ جمله فارسی: ۱) روند تغییر بودجه‌بندی ۲) کدام مباحث پرتکرارترند ۳) توصیه اولویت مطالعه. فقط از همین داده‌ها استفاده کن، عدد از خودت نساز.";
+    const race = await bestAiReply(env, sys, `توزیع سوالات (درس: سال=تعداد): ${facts}`);
+    if (race?.text) lines.push("", "🤖 تفسیر روند (هوش مصنوعی):", race.text.slice(0, 600));
+  } catch (_) { /* silent */ }
+  lines.push("", "⚠️ توجه: این تحلیل فقط بر اساس سوالات موجود در بانک ماست (نمونه، نه کل دفترچه) — بودجه‌بندی کامل را از دفترچه‌های رسمی sanjesh.org ببینید.");
+  return lines.join("\n");
+}
+
 function pickFiltered(bank: BotQuizItem[], field: string | null | undefined, subject?: string, year?: string): { qi: number; item: BotQuizItem } | null {
   const idxs = bank.map((it, i) => ({ it, i }))
     .filter(({ it }) => !field || field === "عمومی" || it.f === field || it.f === "عمومی")
@@ -2417,6 +2506,7 @@ function subjectMenuKeyboard(subs: { subject: string; count: number }[]): any {
     rows.push(subs.slice(i, i + 2).map((s, j) => ({ text: `${s.subject} (${faNum(s.count)})`, callback_data: `qsub:${i + j}` })));
   }
   rows.push([{ text: "🗓 بر اساس سال کنکور", callback_data: "menu:years" }]);
+  rows.push([{ text: "📈 تحلیل ساختار درس (سال‌به‌سال)", callback_data: "qstruct:menu" }]);
   return { inline_keyboard: rows };
 }
 
@@ -2455,8 +2545,9 @@ async function buildSmartQuiz(env: Env, platform: string, chatId: string | numbe
       getBotEmbeddings(env),
       embedQuery(env, `سوال کنکور ${f || ""} ${profile?.grade || ""}`),
     ]);
-    if (emb && qVec && emb.vectors.length === bank.length) {
-      candidates = pool.map(({ it, i }) => ({ it, i, score: cosineSim(qVec, emb.vectors[i]) }))
+    if (emb && qVec && emb.vectors.length > 0) {
+      const nv = emb.vectors.length;
+      candidates = pool.filter(({ i }) => i < nv).map(({ it, i }) => ({ it, i, score: cosineSim(qVec, emb.vectors[i]) }))
         .sort((a: any, b: any) => b.score - a.score).slice(0, 25) as any;
       reason = reason || "انتخاب معنایی RAG برای رشته تو";
     }
@@ -2604,7 +2695,7 @@ async function gradeBotAnswer(
   const verdict = chosen === correct
     ? `✅ آفرین! پاسخ درست است.\n\nگزینه ${faNum(correct + 1)}) ${correctText}`
     : `❌ پاسخ درست نبود.\n\nپاسخ صحیح: گزینه ${faNum(correct + 1)}) ${correctText}`;
-  const src = item ? `\n\n📚 منبع: کنکور سراسری ${faNum(Number(item.y))} — ${item.s} (${item.f})${item.pg ? ` — صفحه ${faNum(item.pg)} دفترچه` : ""}${item.src ? "" : "\n🏛 قابل راستی‌آزمایی در سایت سنجش: sanjesh.org"}` : "";
+  const src = item ? `\n\n📚 منبع: کنکور سراسری ${faNum(Number(item.y))} — ${item.s} (${item.f})${item.qn ? ` — سوال ${faNum(item.qn)}` : ""}${item.pg ? ` — صفحه ${faNum(item.pg)} دفترچه` : ""}${item.src ? "" : "\n🏛 قابل راستی‌آزمایی در سایت سنجش: sanjesh.org"}` : "";
   await logBotQuizAnswer(env, platform, chatId, item, chosen === correct);
   // 📊 آمار سوال (سختی واقعی بر اساس پاسخ همه کاربران) — برای مرتب‌سازی بهتر بانک
   await bumpQuestionStat(env, qi, item, chosen === correct);
@@ -2632,9 +2723,40 @@ async function gradeBotAnswer(
       }
     }
   } catch (_) { /* silent */ }
+  // 📈 بینش روند درس (از پروفایل‌های ساختار) — مشاوره بعد از تست
+  let trendLine = "";
+  try {
+    if (item) {
+      const profs = await getStructureProfiles(env);
+      const tp = profs.find((p: any) => p.subject === item.s && p.field === item.f) || profs.find((p: any) => p.subject === item.s);
+      if (!tp) {
+        // فال‌بک: آمار زنده از خود بانک — تحلیل هیچ‌وقت حذف نشود
+        try {
+          const bankT = await getBotQuizBank(env);
+          const same = bankT.filter((it) => it.s === item.s);
+          if (same.length >= 1) {
+            const ys: Record<string, number> = {};
+            for (const it of same) ys[it.y] = (ys[it.y] || 0) + 1;
+            const dist = Object.keys(ys).sort().map((y) => `${faNum(Number(y))}: ${faNum(ys[y])} سوال`).join("، ");
+            trendLine = `\n\n📈 روند «${item.s}» در بانک ما: ${dist}. سهم این درس محدود است — نکات پایه را جمع کن و تمرکز اصلی را روی درس‌های پرسوال بگذار.`;
+          }
+        } catch (_) { /* silent */ }
+      }
+      if (tp?.ai_trend) {
+        // متن کامل تا ۶۰۰ حرف؛ اگر بلندتر بود، در پایان آخرین جمله کامل ببُر (نه وسط جمله)
+        let t = String(tp.ai_trend);
+        if (t.length > 600) {
+          const cut = t.slice(0, 600);
+          const lastEnd = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("؟"), cut.lastIndexOf("!"), cut.lastIndexOf("؛"));
+          t = lastEnd > 200 ? cut.slice(0, lastEnd + 1) : cut + "…";
+        }
+        trendLine = `\n\n📈 روند «${item.s}» در کنکورهای اخیر:\n${t}`;
+      }
+    }
+  } catch (_) { /* silent */ }
   await send("sendMessage", {
     chat_id: chatId,
-    text: `${verdict}${src}${todayLine}${diffLine}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
+    text: `${verdict}${src}${todayLine}${diffLine}${trendLine}\n\n💡 «📊 داشبورد من» کارنامه‌ات را نشان می‌دهد.`,
     reply_markup: {
       inline_keyboard: [
         [
@@ -2646,7 +2768,7 @@ async function gradeBotAnswer(
           { text: "👎", callback_data: `qr:dn:${qi}` },
           { text: "💬 نظر روی این سوال", callback_data: `qc:${qi}` },
         ],
-        ...(item?.src ? [[{ text: item.pg ? `📄 دفترچه رسمی (صفحه ${faNum(item.pg)})` : "📄 دفترچه رسمی این کنکور (PDF)", url: item.src + (item.pg ? `#page=${item.pg}` : "") }]] : []),
+        ...(item?.src ? [[{ text: item.pg ? `📄 دفترچه رسمی (صفحه ${faNum(item.pg)})` : "📄 دفترچه رسمی این کنکور (PDF)", url: `${env.APP_URL || "https://hamdeltar.ir"}/api/exam-files/pdfs/${item.src.split("/").pop()}${item.pg ? `#page=${item.pg}` : ""}` }]] : []),
       ],
     },
   });
@@ -2830,6 +2952,12 @@ async function handleBotUpdate(
         return json({ ok: true });
       }
       if (item === "chat") { await send("sendMessage", { chat_id: chatId, text: "💬 سوالت را همین‌جا بنویس تا دکتر رادان جواب بدهد." }); return json({ ok: true }); }
+      if (item === "structure") {
+        await send("sendChatAction", { chat_id: chatId, action: "typing" });
+        const txt = await buildExamStructureAnalysis(ctx, platform, chatId);
+        await send("sendMessage", { chat_id: chatId, text: txt, reply_markup: BOT_MENU_KEYBOARD });
+        return json({ ok: true });
+      }
       if (item === "history") {
         await send("sendMessage", { chat_id: chatId, text: await buildBotHistory(ctx.env, platform, chatId), reply_markup: BOT_MENU_KEYBOARD });
         return json({ ok: true });
@@ -2913,6 +3041,31 @@ async function handleBotUpdate(
       await send("sendMessage", {
         chat_id: chatId,
         text: "💬 نظرت درباره این سوال را در یک پیام بنویس و بفرست:\n(مثلاً: «گزینه ۲ هم درست است»، «برچسب درسش اشتباه است»، «تایپش غلط دارد» یا هر پیشنهادی)\n\nبرای انصراف: /cancel",
+      });
+      return json({ ok: true });
+    }
+    if (data === "qstruct:menu") {
+      // انتخاب درس برای تحلیل ساختار
+      const profQ = await getBotProfile(ctx.env, platform, chatId);
+      const bankQ = await getBotQuizBank(ctx.env);
+      const subsQ = subjectsForField(bankQ, profQ?.field);
+      const rows = [] as any[];
+      for (let i = 0; i < subsQ.length; i += 2)
+        rows.push(subsQ.slice(i, i + 2).map((x, j) => ({ text: `📈 ${x.subject}`, callback_data: `qstruct:${i + j}` })));
+      await send("sendMessage", { chat_id: chatId, text: "📈 تحلیل ساختار کدام درس؟ (تعداد سوال هر سال + سختی + تفسیر AI)", reply_markup: { inline_keyboard: rows } });
+      return json({ ok: true });
+    }
+    const structM = data.match(/^qstruct:(\d+)$/);
+    if (structM) {
+      await send("sendChatAction", { chat_id: chatId, action: "typing" });
+      const profS = await getBotProfile(ctx.env, platform, chatId);
+      const bankS = await getBotQuizBank(ctx.env);
+      const subsS = subjectsForField(bankS, profS?.field);
+      const sel = subsS[Number(structM[1])];
+      const txt = await buildExamStructureAnalysis(ctx, platform, chatId, sel?.subject);
+      await send("sendMessage", {
+        chat_id: chatId, text: txt,
+        reply_markup: { inline_keyboard: [[{ text: `📝 تمرین از ${sel?.subject || "این درس"}`, callback_data: `qsub:${structM[1]}` }], [{ text: "📈 درس دیگر", callback_data: "qstruct:menu" }]] },
       });
       return json({ ok: true });
     }
@@ -3396,10 +3549,20 @@ async function handleBotUpdate(
   try {
     // ۱) بازیابی سوالات مرتبط از بانک RAG هاگینگ‌فیس برای زمینه (کاهش هالوسینیشن)
     const rag = await botRagContext(ctx.env, text);
+    // اگر بازیابی به درس مشخصی خورد، پروفایل روند همان درس هم به کانتکست اضافه شود
+    let structCtx = "";
+    try {
+      if (rag.hits.length > 0) {
+        const profs = await getStructureProfiles(ctx.env);
+        const subj = rag.hits[0].s;
+        const tp = profs.find((p: any) => p.subject === subj);
+        if (tp) structCtx = `\n\nروند ساختار درس «${subj}» در کنکورهای اخیر (از بانک رسمی): توزیع سال: ${tp.year_dist} | سختی: آسان${tp.difficulty?.["آسان"]}٪ متوسط${tp.difficulty?.["متوسط"]}٪ سخت${tp.difficulty?.["سخت"]}٪ | تحلیل: ${tp.ai_trend}`;
+      }
+    } catch (_) { /* silent */ }
     const sysBase = `شما دکتر رادان، مشاور تحصیلی ترنم همدلی در ${platform === "telegram" ? "تلگرام" : "پیام‌رسان بله"} هستید. کوتاه (حداکثر ۶ جمله)، صمیمی و همدلانه به فارسی پاسخ دهید.`;
     const sys = rag.context
-      ? `${sysBase}\n\nسوالات مرتبط از بانک رسمی کنکور (در صورت ارتباط، با ذکر سال به آن‌ها استناد کن):\n${rag.context}`
-      : sysBase;
+      ? `${sysBase}\n\nسوالات مرتبط از بانک رسمی کنکور (در صورت ارتباط، با ذکر سال به آن‌ها استناد کن):\n${rag.context}${structCtx}`
+      : sysBase + structCtx;
 
     // ۲) مسابقه موازی دو Llama-70B (هاگینگ‌فیس + Workers AI) — سریع‌ترین موفق برنده
     const race = await bestAiReply(ctx.env, sys, text);
@@ -4838,6 +5001,29 @@ export async function handleRequest(request: Request, env: Env, pathArray: strin
       const store = getAuthStore(ctx.env);
       if (!store) return authUnavailable();
       return await questionFeedbackRoute(ctx, store, method);
+    }
+
+    // پروکسی فایل‌های بانک/دفترچه‌ها روی دامنه خودمان — آدرس هاگینگ‌فیس برای کاربر نمایان نمی‌شود
+    if (path.startsWith("exam-files/")) {
+      if (!isGet) return json({ error: "Method not allowed" }, 405);
+      const sub = path.slice("exam-files/".length);
+      // فقط مسیرهای مجاز (جلوگیری از open-proxy)
+      if (!/^(pdfs|data)\/[A-Za-z0-9._-]+$/.test(sub)) return json({ error: "not found" }, 404);
+      const base = ctx.env.EXAM_RAG_URL || "https://sosa123454321-taranom-exam-rag.static.hf.space";
+      try {
+        const upstream = await fetch(`${base}/${sub}`, { signal: AbortSignal.timeout(30000) } as any, );
+        if (!upstream.ok) return json({ error: "file unavailable" }, 502);
+        const ct = sub.endsWith(".pdf") ? "application/pdf" : sub.endsWith(".json") ? "application/json; charset=utf-8" : (upstream.headers.get("content-type") || "application/octet-stream");
+        return new Response(upstream.body, {
+          status: 200,
+          headers: {
+            "Content-Type": ct,
+            "Cache-Control": "public, max-age=86400",
+            "Content-Disposition": sub.endsWith(".pdf") ? `inline; filename="${sub.split("/").pop()}"` : "inline",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      } catch (_) { return json({ error: "upstream timeout" }, 504); }
     }
 
     if (path === "public-mentors") {

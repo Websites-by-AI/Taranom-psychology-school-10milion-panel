@@ -262,3 +262,14 @@ CREATE TABLE IF NOT EXISTS exam_pages_archive (
   text TEXT NOT NULL,
   PRIMARY KEY (pdf, page)
 );
+
+-- سوالات استخراج‌شده از آرشیو دفترچه‌ها (staging — تا کلیدزنی و تایید، وارد بانک اصلی نمی‌شوند)
+CREATE TABLE IF NOT EXISTS extracted_questions (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  q       TEXT NOT NULL,
+  o1 TEXT, o2 TEXT, o3 TEXT, o4 TEXT,
+  answer  INTEGER,             -- کلید (بعد از کلیدزنی AI دومرحله‌ای)
+  year    TEXT, field TEXT, subject TEXT,
+  src_pdf TEXT, pg INTEGER, qnum INTEGER,
+  status  TEXT DEFAULT 'pending'   -- pending | keyed | verified | rejected
+);
